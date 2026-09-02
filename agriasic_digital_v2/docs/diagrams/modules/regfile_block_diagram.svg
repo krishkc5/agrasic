@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+  <title id="t">regfile module block diagram</title>
+  <desc id="d">Detailed register file diagram with write path, reset behavior, and combinational read path.</desc>
+  <defs>
+    <marker id="r1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="r2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="r3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+  </defs>
+  <rect width="5000" height="3000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: regfile</text>
+  <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+
+  <rect x="240" y="500" width="1120" height="520" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="590" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
+  <text x="300" y="635" font-family="Arial" font-size="20" fill="#fff">wr_en_i, wr_addr_i, wr_data_i</text>
+  <text x="300" y="670" font-family="Arial" font-size="20" fill="#fff">rd_addr_i</text>
+  <text x="300" y="705" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+
+  <rect x="1540" y="460" width="3180" height="1820" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1600" y="545" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Register storage core</text>
+
+  <rect x="1690" y="700" width="1280" height="420" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1750" y="790" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Write/reset process</text>
+  <text x="1750" y="835" font-family="Arial" font-size="19" fill="#212121">posedge clk / negedge rst_n</text>
+  <text x="1750" y="870" font-family="Arial" font-size="19" fill="#212121">rst_n=0: clear full array mem_q[]</text>
+  <text x="1750" y="905" font-family="Arial" font-size="19" fill="#212121">wr_en_i=1: mem_q[wr_addr] = wr_data</text>
+
+  <rect x="3200" y="700" width="1320" height="420" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3260" y="790" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Combinational read path</text>
+  <text x="3260" y="835" font-family="Arial" font-size="19" fill="#212121">rd_data_o = mem_q[rd_addr_i]</text>
+  <text x="3260" y="870" font-family="Arial" font-size="19" fill="#212121">zero-cycle lookup in current model</text>
+
+  <rect x="2200" y="1270" width="1700" height="440" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="2260" y="1360" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Output</text>
+  <text x="2260" y="1405" font-family="Arial" font-size="19" fill="#212121">rd_data_o</text>
+  <text x="2260" y="1440" font-family="Arial" font-size="19" fill="#212121">register readback for control/status plane</text>
+
+  <path d="M1360,620 L1690,620 L1690,830" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#r2)"/>
+  <text x="1390" y="596" font-family="Arial" font-size="17" fill="#212121">wr_en/addr/data</text>
+  <path d="M1360,700 L3200,700 L3200,840" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#r3)"/>
+  <text x="1390" y="726" font-family="Arial" font-size="17" fill="#212121">rd_addr_i</text>
+
+  <path d="M4520,880 L4720,880" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#r1)"/>
+  <text x="4540" y="856" font-family="Arial" font-size="17" fill="#212121">rd_data_o</text>
+  <path d="M3860,1120 L3860,1270" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#r1)"/>
+  <text x="3890" y="1210" font-family="Arial" font-size="17" fill="#212121">readback bus</text>
+
+  <rect x="240" y="2350" width="4480" height="460" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="2435" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Design notes</text>
+  <text x="300" y="2480" font-family="Arial" font-size="20" fill="#212121">- AW and DW are parameterized for register count and width scaling.</text>
+  <text x="300" y="2520" font-family="Arial" font-size="20" fill="#212121">- Full reset sweep is simple and deterministic for bring-up.</text>
+  <text x="300" y="2560" font-family="Arial" font-size="20" fill="#212121">- If timing requires, read path can be pipelined in a future revision.</text>
+</svg>

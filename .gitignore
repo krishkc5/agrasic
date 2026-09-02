@@ -1,0 +1,16 @@
+# Build artifacts
+obj_dir/
+sim_build/
+__pycache__/
+*.pyc
+
+# Firmware build outputs (regenerate with fw/build.sh)
+*.elf
+*.bin
+*.dis
+*.o
+*.a
+
+# Simulator/waveform output
+*.vcd
+*.fst

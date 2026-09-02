@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+  <title id="t">sar_controller module block diagram</title>
+  <desc id="d">Detailed block diagram for sar_controller showing request latch, conversion counter, and phase-tagged sample capture.</desc>
+  <defs>
+    <marker id="s1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="s2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="s3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+  </defs>
+  <rect width="5000" height="3000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: sar_controller</text>
+  <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+
+  <rect x="240" y="500" width="1040" height="500" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="585" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
+  <text x="300" y="630" font-family="Arial" font-size="20" fill="#fff">sample_req_i, sample_phase_i</text>
+  <text x="300" y="665" font-family="Arial" font-size="20" fill="#fff">conv_cycles_i, adc_code_i</text>
+  <text x="300" y="700" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+
+  <rect x="1460" y="460" width="3270" height="1760" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1520" y="545" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Control and capture pipeline</text>
+
+  <rect x="1600" y="690" width="760" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1660" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Request accept</text>
+  <text x="1660" y="825" font-family="Arial" font-size="19" fill="#212121">if !busy and sample_req:</text>
+  <text x="1660" y="858" font-family="Arial" font-size="19" fill="#212121">latch phase, load conv_cnt, pulse conv_start</text>
+
+  <rect x="2550" y="690" width="760" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2610" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Conversion wait</text>
+  <text x="2610" y="825" font-family="Arial" font-size="19" fill="#212121">while busy: conv_cnt decrements</text>
+  <text x="2610" y="858" font-family="Arial" font-size="19" fill="#212121">done when conv_cnt == 0</text>
+
+  <rect x="3500" y="690" width="1060" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3560" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Sample capture</text>
+  <text x="3560" y="825" font-family="Arial" font-size="19" fill="#212121">phase=1 -&gt; d_plus_o = adc_code_i</text>
+  <text x="3560" y="858" font-family="Arial" font-size="19" fill="#212121">phase=0 -&gt; d_minus_o = adc_code_i</text>
+  <text x="3560" y="891" font-family="Arial" font-size="19" fill="#212121">pulse sample_done_o, clear busy</text>
+
+  <rect x="1900" y="1170" width="2580" height="370" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1960" y="1260" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Outputs</text>
+  <text x="1960" y="1305" font-family="Arial" font-size="19" fill="#212121">conv_start_o, sample_done_o, busy_o</text>
+  <text x="1960" y="1340" font-family="Arial" font-size="19" fill="#212121">d_plus_o, d_minus_o</text>
+
+  <path d="M1280,640 L1600,640 L1600,790" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <text x="1310" y="615" font-family="Arial" font-size="17" fill="#212121">sample_req_i</text>
+  <path d="M1280,700 L1850,700" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#s3)"/>
+  <text x="1310" y="725" font-family="Arial" font-size="17" fill="#212121">sample_phase_i, conv_cycles_i</text>
+
+  <path d="M2360,860 L2550,860" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <path d="M3310,860 L3500,860" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <path d="M2980,1020 L2980,1170" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
+  <text x="3010" y="1110" font-family="Arial" font-size="17" fill="#212121">status and data</text>
+
+  <path d="M1280,770 L3500,770" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
+  <text x="1310" y="745" font-family="Arial" font-size="17" fill="#212121">adc_code_i sampling point</text>
+
+  <rect x="240" y="1700" width="4490" height="1110" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="1785" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior notes</text>
+  <text x="300" y="1835" font-family="Arial" font-size="20" fill="#212121">- One request is serviced at a time using busy_o backpressure.</text>
+  <text x="300" y="1875" font-family="Arial" font-size="20" fill="#212121">- conv_start_o is a single-cycle pulse at request accept time.</text>
+  <text x="300" y="1915" font-family="Arial" font-size="20" fill="#212121">- Conversion latency is programmable through conv_cycles_i.</text>
+  <text x="300" y="1955" font-family="Arial" font-size="20" fill="#212121">- sample_done_o strobes when D+ or D- is updated.</text>
+
+  <line x1="300" y1="2045" x2="480" y2="2045" stroke="#1565C0" stroke-width="2" marker-end="url(#s1)"/>
+  <text x="520" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1380" y1="2045" x2="1560" y2="2045" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#s2)"/>
+  <text x="1600" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2240" y1="2045" x2="2420" y2="2045" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#s3)"/>
+  <text x="2460" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+</svg>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="title desc">
+  <title id="title">AgriASIC Digital Verilog Orchestration Data Flow</title>
+  <desc id="desc">Data flow through policer-first orchestrator workflow for Verilog development, rules audit gating, and formal verification collateral generation.</desc>
+
+  <defs>
+    <marker id="arrowBlock" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/>
+    </marker>
+    <marker id="arrowOpen" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/>
+    </marker>
+    <marker id="arrowError" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#D32F2F"/>
+    </marker>
+    <marker id="arrowCfg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="5000" height="3000" fill="#FFFFFF"/>
+
+  <g id="header">
+    <text x="120" y="95" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700" fill="#212121">AgriASIC Digital: Orchestrated Verilog Workflow Data Flow</text>
+    <text x="120" y="145" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">Guideline source: orchestrator-verilog-plugin (Stage 0 -&gt; Stage 1 -&gt; Stage 2 gating)</text>
+  </g>
+
+  <g id="outer_hierarchy">
+    <rect x="80" y="220" width="4840" height="2700" rx="12" ry="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+    <text x="120" y="270" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#212121">orchestrator_verilog end-to-end flow</text>
+  </g>
+
+  <g id="input_cluster">
+    <rect x="220" y="480" width="920" height="440" rx="10" ry="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+    <text x="280" y="565" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">Inputs</text>
+    <text x="280" y="615" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">- spec goals / constraints</text>
+    <text x="280" y="655" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">- interface contracts</text>
+    <text x="280" y="695" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">- existing RTL collateral</text>
+    <text x="280" y="735" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">- rules_audit settings</text>
+  </g>
+
+  <g id="stage0">
+    <rect x="1400" y="440" width="980" height="520" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="1460" y="525" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">Stage 0: Input + Collateral Policer</text>
+    <text x="1460" y="575" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">@policer_input_and_collateral</text>
+    <text x="1460" y="620" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Outputs:</text>
+    <text x="1490" y="655" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">PASS | WARN | BLOCKED</text>
+    <text x="1490" y="690" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">normalized requirements</text>
+    <text x="1490" y="725" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">collateral readiness report</text>
+    <text x="1490" y="760" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">blocking ambiguities list</text>
+  </g>
+
+  <g id="gate0">
+    <rect x="2540" y="560" width="380" height="280" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="2620" y="645" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">Gate 0</text>
+    <text x="2590" y="690" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">PASS -&gt; Stage 1</text>
+    <text x="2590" y="725" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WARN/BLOCKED -&gt; user action</text>
+  </g>
+
+  <g id="stage1">
+    <rect x="3140" y="420" width="1500" height="600" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="3200" y="505" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">Stage 1: RTL Generation</text>
+    <text x="3200" y="555" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">@development_verilog</text>
+    <text x="3200" y="600" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Artifacts:</text>
+    <text x="3230" y="635" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">&lt;module&gt;.sv</text>
+    <text x="3230" y="670" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">&lt;module&gt;_sva.sv</text>
+    <text x="3230" y="705" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">&lt;module&gt;_SPEC.md</text>
+    <text x="3230" y="740" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">lint/synthesis collateral</text>
+    <text x="3230" y="775" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">rules audit report with ALL_RULES_FINAL_STATUS</text>
+    <text x="3230" y="810" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">must be PASS before Stage 2</text>
+  </g>
+
+  <g id="gate1">
+    <rect x="2060" y="1210" width="880" height="350" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="2120" y="1295" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">Gate 1: Rules Audit Decision</text>
+    <text x="2120" y="1345" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">Condition: ALL_RULES_FINAL_STATUS = PASS</text>
+    <text x="2120" y="1390" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">PASS -&gt; allow Stage 2 formal</text>
+    <text x="2120" y="1425" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">FAIL -&gt; loop back to Stage 1 fixes</text>
+  </g>
+
+  <g id="stage2">
+    <rect x="3180" y="1160" width="1460" height="520" rx="10" ry="10" fill="#C8E6C9" stroke="#2E7D32" stroke-width="2"/>
+    <text x="3240" y="1245" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">Stage 2: Formal Verification</text>
+    <text x="3240" y="1295" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">@development_svatb</text>
+    <text x="3240" y="1340" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Inputs: Stage 1 RTL + assertions + policer scope</text>
+    <text x="3240" y="1375" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Outputs: SVATB/Jasper collateral, constraints balance</text>
+    <text x="3240" y="1410" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Status: ready state or actionable blocker</text>
+  </g>
+
+  <g id="delivery">
+    <rect x="760" y="1900" width="3920" height="760" rx="10" ry="10" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+    <text x="830" y="1990" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#212121">Consolidated Delivery Bundle</text>
+    <text x="840" y="2050" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">1) policer decision + ambiguity resolution state</text>
+    <text x="840" y="2090" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">2) RTL generation status and artifact manifest</text>
+    <text x="840" y="2130" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">3) rules audit final status record</text>
+    <text x="840" y="2170" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">4) formal verification status and blockers</text>
+    <text x="840" y="2210" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">5) next actions for unresolved gates</text>
+
+    <rect x="840" y="2270" width="1790" height="310" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="900" y="2355" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#212121">Pass path</text>
+    <text x="900" y="2400" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Stage0 PASS -&gt; Stage1 PASS audit -&gt; Stage2 ready</text>
+    <text x="900" y="2438" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">release-quality collateral package</text>
+
+    <rect x="2760" y="2270" width="1790" height="310" rx="10" ry="10" fill="#FFFFFF" stroke="#D32F2F" stroke-width="2"/>
+    <text x="2820" y="2355" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#212121">Blocker path</text>
+    <text x="2820" y="2400" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WARN/BLOCKED at Stage0 or audit fail at Gate1</text>
+    <text x="2820" y="2438" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">user clarification/fix required before progression</text>
+  </g>
+
+  <g id="wires" fill="none" stroke-linecap="round">
+    <path d="M1140,700 L1400,700" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="1200" y="680" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">requirements data</text>
+
+    <path d="M2380,700 L2540,700" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="2410" y="680" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">gate decision</text>
+
+    <path d="M2920,700 L3140,700" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="2960" y="680" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">PASS payload</text>
+
+    <path d="M3960,1020 L3960,1210 L2940,1210" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="3990" y="1140" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">audit status + artifacts</text>
+
+    <path d="M2940,1385 L3180,1385" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="3000" y="1360" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">audit PASS</text>
+
+    <path d="M2060,1450 L1640,1450 L1640,940 L1400,940" stroke="#D32F2F" stroke-width="2" marker-end="url(#arrowError)"/>
+    <text x="1450" y="1425" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">audit FAIL -&gt; fix loop</text>
+
+    <path d="M1760,960 L1760,1840 L1310,1840 L1310,1900" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="1788" y="1620" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">policer context metadata</text>
+
+    <path d="M3890,1680 L3890,1900" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="3920" y="1815" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">formal outputs</text>
+  </g>
+
+  <g id="legend">
+    <rect x="220" y="1080" width="1720" height="580" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="280" y="1160" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">Wire Semantics</text>
+
+    <line x1="290" y1="1230" x2="500" y2="1230" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="540" y="1238" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">WIRE.DATA (artifact/payload flow)</text>
+
+    <line x1="290" y1="1310" x2="500" y2="1310" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="540" y="1318" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">WIRE.CTRL (gate decisions)</text>
+
+    <line x1="290" y1="1390" x2="500" y2="1390" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="540" y="1398" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">WIRE.CFG (audit/policer settings)</text>
+
+    <line x1="290" y1="1470" x2="500" y2="1470" stroke="#D32F2F" stroke-width="2" marker-end="url(#arrowError)"/>
+    <text x="540" y="1478" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">WIRE.ERROR (rework/blocked loop)</text>
+
+    <text x="290" y="1560" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Execution order is fixed: Stage 0 -&gt; Stage 1 -&gt; Stage 2</text>
+    <text x="290" y="1595" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">Stage 2 invocation forbidden until Gate 1 PASS.</text>
+  </g>
+</svg>

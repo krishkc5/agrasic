@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="3200" viewBox="0 0 5200 3200" role="img" aria-labelledby="title desc">
+  <title id="title">AgriASIC Digital High-Level Data Flow</title>
+  <desc id="desc">High-level digital data flow for single-die impedance sensing node showing excitation control, SAR control, measurement FSM, register file, SPI interface, and external analog/host interactions.</desc>
+
+  <defs>
+    <marker id="arrowBlock" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/>
+    </marker>
+    <marker id="arrowOpen" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/>
+    </marker>
+    <marker id="arrowInterface" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#000000"/>
+    </marker>
+    <marker id="arrowCfg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/>
+    </marker>
+    <marker id="arrowDebug" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L9,4 L1,7" fill="none" stroke="#2E7D32" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="5200" height="3200" fill="#FFFFFF"/>
+
+  <g id="header">
+    <text x="120" y="90" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700" fill="#212121">AgriASIC Digital Node: High-Level Data Flow (HL)</text>
+    <text x="120" y="140" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">Profile: HL | Palette: development-block-diagram-plugin STYLESHEET_MASTER_PALETTE.csv</text>
+  </g>
+
+  <g id="hier_wrappers">
+    <rect x="80" y="220" width="5040" height="2780" rx="12" ry="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+    <text x="120" y="270" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#212121">agriasic_top (mixed-signal)</text>
+
+    <rect x="260" y="360" width="2900" height="2320" rx="10" ry="10" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+    <text x="300" y="410" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#212121">digital_plane</text>
+
+    <rect x="3260" y="360" width="1660" height="2320" rx="10" ry="10" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+    <text x="3300" y="410" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#212121">analog_plane</text>
+  </g>
+
+  <g id="digital_modules">
+    <rect x="500" y="580" width="520" height="240" rx="10" ry="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+    <text x="540" y="640" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">u_spi</text>
+    <text x="540" y="680" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">spi_slave.sv</text>
+    <text x="540" y="715" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">mode/config readout</text>
+
+    <rect x="1220" y="580" width="560" height="240" rx="8" ry="8" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+    <text x="1260" y="640" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">u_regfile</text>
+    <text x="1260" y="680" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">regfile.sv</text>
+    <text x="1260" y="715" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">CTRL/STATUS/RESULT</text>
+
+    <rect x="940" y="980" width="760" height="320" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="990" y="1050" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">u_measurement_fsm</text>
+    <text x="990" y="1094" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">measurement_fsm.sv</text>
+    <text x="990" y="1130" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">start -&gt; busy -&gt; D+/D- accumulate -&gt; done</text>
+    <text x="990" y="1164" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">fallback control path</text>
+
+    <rect x="500" y="1450" width="640" height="280" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="550" y="1520" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">u_excitation_ctrl</text>
+    <text x="550" y="1564" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">excitation_ctrl.sv</text>
+    <text x="550" y="1600" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">divider/polarity/settle control</text>
+
+    <rect x="1380" y="1450" width="640" height="280" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="1430" y="1520" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">u_sar_controller</text>
+    <text x="1430" y="1564" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">sar_controller.sv</text>
+    <text x="1430" y="1600" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">conv_start, D+/D- capture</text>
+
+    <rect x="880" y="1920" width="1140" height="300" rx="10" ry="10" fill="#C8E6C9" stroke="#2E7D32" stroke-width="2"/>
+    <text x="930" y="1990" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#212121">optional_controller_domain</text>
+    <text x="930" y="2034" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">RV32I/SERV sequencer integration hook</text>
+    <text x="930" y="2070" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">register-programmed measurement burst orchestration</text>
+
+    <rect x="450" y="2330" width="2600" height="240" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="500" y="2400" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#212121">On-die computation path:</text>
+    <text x="1020" y="2400" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#212121">(D+ - D-) / 2 accumulation over M pairs, publish RESULT + done</text>
+  </g>
+
+  <g id="analog_modules">
+    <rect x="3500" y="620" width="1080" height="220" rx="10" ry="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+    <text x="3560" y="690" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#FFFFFF">External Refs</text>
+    <text x="3560" y="730" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#FFFFFF">VREFH, VREFL, VCM, V_EXC</text>
+
+    <rect x="3500" y="980" width="1080" height="250" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="3560" y="1060" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">Excitation Driver + Sensor</text>
+    <text x="3560" y="1100" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">bipolar switching around VCM</text>
+    <text x="3560" y="1136" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">electrode current returns to TIA</text>
+
+    <rect x="3500" y="1380" width="1080" height="220" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="3560" y="1460" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">Fixed-Gain TIA</text>
+    <text x="3560" y="1500" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">current-to-voltage conversion</text>
+
+    <rect x="3500" y="1760" width="1080" height="260" rx="10" ry="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+    <text x="3560" y="1840" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">8-bit SAR ADC</text>
+    <text x="3560" y="1880" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">CDAC + comparator + bit trials</text>
+    <text x="3560" y="1916" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">adc_code[7:0] to digital</text>
+  </g>
+
+  <g id="host_boundary">
+    <rect x="90" y="760" width="250" height="180" rx="10" ry="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+    <text x="125" y="840" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#FFFFFF">HOST</text>
+    <text x="122" y="875" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#FFFFFF">optional</text>
+  </g>
+
+  <g id="wires_interface" stroke-linecap="round" fill="none">
+    <path d="M340,850 L500,850 L500,720" stroke="#000000" stroke-width="3" marker-end="url(#arrowInterface)"/>
+    <text x="355" y="828" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">SPI cfg/read</text>
+
+    <path d="M4580,730 L4920,730 L4920,2630 L650,2630 L650,820" stroke="#000000" stroke-width="3" marker-end="url(#arrowInterface)"/>
+    <text x="4660" y="705" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">external refs</text>
+
+    <path d="M90,1160 L220,1160 L220,560 L2980,560" stroke="#000000" stroke-width="3" marker-end="url(#arrowInterface)"/>
+    <text x="120" y="1135" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">clk/reset</text>
+  </g>
+
+  <g id="wires_cfg" stroke-linecap="round" fill="none">
+    <path d="M1020,670 L1220,670" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="1070" y="650" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">cfg_wr_data</text>
+
+    <path d="M1500,820 L1500,980" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="1520" y="905" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">start/mode</text>
+
+    <path d="M1700,820 L1700,1450" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="1720" y="1130" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">sar_cfg</text>
+
+    <path d="M1380,820 L1100,820 L1100,1450" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="1118" y="1120" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">exc_cfg</text>
+  </g>
+
+  <g id="wires_ctrl" stroke-linecap="round" fill="none">
+    <path d="M1320,1300 L1320,1450" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="1342" y="1380" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">busy/start_i</text>
+
+    <path d="M940,1160 L820,1160 L820,1450" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="630" y="1140" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">busy enable</text>
+
+    <path d="M2020,1590 L3400,1590 L3400,1860" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="2480" y="1566" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">conv_start_o</text>
+
+    <path d="M1140,1580 L3400,1580 L3400,1110" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="2220" y="1548" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">exc_pol_o</text>
+
+    <path d="M1700,1300 L1700,1380" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="1720" y="1350" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">start conv</text>
+
+    <path d="M1700,1730 L1700,1920" stroke="#2E7D32" stroke-width="1.5" marker-end="url(#arrowDebug)"/>
+    <text x="1720" y="1830" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">ctrl hook</text>
+  </g>
+
+  <g id="wires_data" stroke-linecap="round" fill="none">
+    <path d="M4580,1510 L4720,1510 L4720,1890 L4580,1890" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="4600" y="1680" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">v_tia</text>
+
+    <path d="M3500,1930 L2360,1930 L2360,1550 L2020,1550" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="2440" y="1906" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">adc_code[7:0]</text>
+
+    <path d="M1380,1550 L1300,1550 L1300,1300" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="1150" y="1460" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">D+</text>
+
+    <path d="M1380,1640 L1380,1280" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="1400" y="1400" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">D-</text>
+
+    <path d="M1700,1120 L2300,1120 L2300,680 L1780,680" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="1840" y="1094" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">result_data</text>
+
+    <path d="M1700,1200 L2260,1200 L2260,760 L1780,760" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="1830" y="1240" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#212121">done/status</text>
+  </g>
+
+  <g id="legend">
+    <rect x="3320" y="2380" width="1550" height="520" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="2"/>
+    <text x="3380" y="2450" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#212121">Legend</text>
+
+    <line x1="3390" y1="2510" x2="3550" y2="2510" stroke="#1565C0" stroke-width="2" marker-end="url(#arrowBlock)"/>
+    <text x="3580" y="2518" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WIRE.DATA</text>
+
+    <line x1="3390" y1="2570" x2="3550" y2="2570" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#arrowOpen)"/>
+    <text x="3580" y="2578" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WIRE.CTRL</text>
+
+    <line x1="3390" y1="2630" x2="3550" y2="2630" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#arrowCfg)"/>
+    <text x="3580" y="2638" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WIRE.CFG</text>
+
+    <line x1="3390" y1="2690" x2="3550" y2="2690" stroke="#000000" stroke-width="3" marker-end="url(#arrowInterface)"/>
+    <text x="3580" y="2698" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#212121">WIRE.INTERFACE</text>
+
+    <rect x="4220" y="2490" width="600" height="120" rx="8" ry="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="2"/>
+    <text x="4250" y="2565" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#2E7D32">HANDSHAKE: SPI / start-done</text>
+
+    <rect x="4220" y="2650" width="600" height="120" rx="8" ry="8" fill="#FCE4EC" stroke="#880E4F" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="4250" y="2725" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#880E4F">CSR_CFG: register config plane</text>
+  </g>
+</svg>

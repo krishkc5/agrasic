@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">AgriASIC Digital Design - SPI Protocol and Register Map</title>
+  <desc id="desc">Slide 5: command framing, response bytes, error flags, and register map.</desc>
+
+  <rect x="0" y="0" width="1920" height="1080" fill="#F8FAFC"/>
+  <text x="80" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="48" font-weight="700" fill="#0F172A">SPI Control Plane and Error Semantics</text>
+
+  <rect x="70" y="130" width="1780" height="900" rx="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+
+  <rect x="120" y="190" width="780" height="350" rx="12" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="155" y="250" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0F172A">Command Framing</text>
+  <text x="155" y="284" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#334155">Used by the RV32I program loader and external host debug path</text>
+  <text x="155" y="300" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#1E293B">Byte0: [bit7 RW] [bit6:3 ADDR] [bit2:0 RSV=000]</text>
+  <text x="155" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#1E293B">Byte1: write payload or read dummy clocks out response/data</text>
+  <text x="155" y="372" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#1E293B">Fixed transaction size: 2 bytes</text>
+  <text x="155" y="408" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#1E293B">Invalid Byte0 still consumes Byte1 (RX_WAIT_DROP)</text>
+  <text x="155" y="444" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#1E293B">Goal: deterministic parser re-alignment for next command</text>
+
+  <rect x="120" y="570" width="780" height="390" rx="12" fill="#F0FDF4" stroke="#BBF7D0"/>
+  <text x="155" y="630" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0F172A">Response Byte Definitions</text>
+  <text x="155" y="664" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#334155">RV32I firmware reads the same status/result bytes as the external SPI host</text>
+  <text x="155" y="680" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#166534">0xA5 : ACK write accepted</text>
+  <text x="155" y="716" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#166534">0x5A : NACK write rejected (read-only target)</text>
+  <text x="155" y="752" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#991B1B">0xE1 : Invalid command (RSV bits non-zero)</text>
+  <text x="155" y="788" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#991B1B">0xE2 : Invalid register address</text>
+  <text x="155" y="824" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#1E293B">CTRL[7] write-one clears sticky error flags</text>
+
+  <rect x="950" y="190" width="830" height="770" rx="12" fill="#FFFBEB" stroke="#FDE68A"/>
+  <text x="985" y="250" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0F172A">Register Map and STATUS Encoding</text>
+
+  <text x="985" y="305" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x0 REG_CTRL      RW  bit0=start pulse, bit7=clear errors</text>
+  <text x="985" y="340" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x1 REG_PAIR_LOG2 RW  M = 2^pair_log2</text>
+  <text x="985" y="375" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x2 REG_SETTLE    RW  settle cycles</text>
+  <text x="985" y="410" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x3 REG_DIVIDER   RW  excitation divider</text>
+  <text x="985" y="445" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x4 REG_CONV      RW  conversion latency cycles</text>
+  <text x="985" y="480" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x5 REG_STATUS    RO  [7]prot [6]addr [5]ro_wr [1]done [0]busy</text>
+  <text x="985" y="515" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x6 REG_RESULT_LO RO  result[7:0]</text>
+  <text x="985" y="550" font-family="Consolas, monospace" font-size="22" fill="#1E293B">0x7 REG_RESULT_HI RO  result[15:8]</text>
+
+  <rect x="985" y="600" width="760" height="320" rx="10" fill="#FFFFFF" stroke="#D1D5DB"/>
+  <text x="1015" y="650" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#0F172A">Error Handling Policy</text>
+  <text x="1015" y="700" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Detect command legality at Byte0 decode in core clock domain.</text>
+  <text x="1015" y="735" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Set sticky status bits for post-mortem debug visibility.</text>
+  <text x="1015" y="770" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Keep parser aligned by consuming Byte1 on invalid Byte0.</text>
+  <text x="1015" y="805" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Permit recovery by software clear and re-issue valid command.</text>
+  <text x="1015" y="840" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Do not mutate config/result state on rejected operations.</text>
+</svg>

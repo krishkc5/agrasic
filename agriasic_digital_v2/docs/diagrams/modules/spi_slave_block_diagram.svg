@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+  <title id="t">spi_slave module block diagram</title>
+  <desc id="d">Detailed SPI mode-0 slave module diagram showing SCLK-domain shifters and CLK-domain rx_valid synchronization.</desc>
+  <defs>
+    <marker id="p1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="p2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="p3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+  </defs>
+  <rect width="5000" height="3000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: spi_slave</text>
+  <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+
+  <rect x="240" y="470" width="1160" height="520" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="560" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Top interface pins</text>
+  <text x="300" y="605" font-family="Arial" font-size="20" fill="#fff">SCLK domain: sclk_i, cs_n_i, mosi_i, miso_o</text>
+  <text x="300" y="640" font-family="Arial" font-size="20" fill="#fff">CLK domain: clk, rst_n, rx_data_o, rx_valid_o</text>
+  <text x="300" y="675" font-family="Arial" font-size="20" fill="#fff">tx_data_i reload source</text>
+
+  <rect x="1600" y="430" width="1480" height="860" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1660" y="510" font-family="Arial" font-size="30" font-weight="700" fill="#212121">SCLK domain logic</text>
+  <text x="1660" y="560" font-family="Arial" font-size="20" fill="#212121">rx_shift_q, tx_shift_q, bit_cnt_q</text>
+  <text x="1660" y="595" font-family="Arial" font-size="20" fill="#212121">on cs_n high: preload tx_shift from tx_data_i</text>
+  <text x="1660" y="630" font-family="Arial" font-size="20" fill="#212121">on each sclk edge: shift MOSI in, MISO out</text>
+  <text x="1660" y="665" font-family="Arial" font-size="20" fill="#212121">on 8th bit: latch byte, toggle rx_done_tgl</text>
+
+  <rect x="3250" y="430" width="1480" height="860" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3310" y="510" font-family="Arial" font-size="30" font-weight="700" fill="#212121">CLK domain synchronizer</text>
+  <text x="3310" y="560" font-family="Arial" font-size="20" fill="#212121">rx_done_meta -&gt; rx_done_sync -&gt; rx_done_sync_qq</text>
+  <text x="3310" y="595" font-family="Arial" font-size="20" fill="#212121">edge detect by XOR(sync, sync_qq)</text>
+  <text x="3310" y="630" font-family="Arial" font-size="20" fill="#212121">pulse rx_valid_o and capture rx_data_o</text>
+
+  <rect x="1600" y="1420" width="3130" height="540" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1660" y="1510" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Protocol-level behavior</text>
+  <text x="1660" y="1555" font-family="Arial" font-size="20" fill="#212121">SPI mode-0 byte framing; each 8 SCLK edges produce one rx_valid pulse in clk domain.</text>
+  <text x="1660" y="1590" font-family="Arial" font-size="20" fill="#212121">MISO continuously reflects tx_shift MSB and reloads from tx_data_i per byte.</text>
+  <text x="1660" y="1625" font-family="Arial" font-size="20" fill="#212121">No address decode inside module; higher layer consumes rx_data and drives tx_data.</text>
+
+  <path d="M1400,590 L1600,590" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#p2)"/>
+  <text x="1430" y="566" font-family="Arial" font-size="17" fill="#212121">sclk/cs/mosi</text>
+  <path d="M1400,670 L3000,670" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#p3)"/>
+  <text x="1430" y="695" font-family="Arial" font-size="17" fill="#212121">tx_data_i</text>
+
+  <path d="M3080,860 L3250,860" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#p2)"/>
+  <text x="3110" y="836" font-family="Arial" font-size="17" fill="#212121">rx_done_tgl, rx_data_sclk</text>
+  <path d="M4730,840 L4880,840" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#p1)"/>
+  <text x="4740" y="815" font-family="Arial" font-size="17" fill="#212121">rx_data_o, rx_valid_o</text>
+
+  <path d="M2480,760 L2480,1420" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#p1)"/>
+  <text x="2510" y="1100" font-family="Arial" font-size="17" fill="#212121">byte stream</text>
+  <path d="M4100,760 L4100,1420" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#p1)"/>
+  <text x="4130" y="1100" font-family="Arial" font-size="17" fill="#212121">valid pulse</text>
+
+  <rect x="240" y="2100" width="4490" height="720" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="2185" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Design notes</text>
+  <text x="300" y="2235" font-family="Arial" font-size="20" fill="#212121">- CDC bridge uses toggle synchronization to avoid missing byte-complete events.</text>
+  <text x="300" y="2275" font-family="Arial" font-size="20" fill="#212121">- SCLK logic is independent of core clk; integration must constrain CDC paths.</text>
+  <text x="300" y="2315" font-family="Arial" font-size="20" fill="#212121">- For multi-byte commands, upper layer should assemble bytes into address/data frames.</text>
+
+  <line x1="300" y1="2395" x2="480" y2="2395" stroke="#1565C0" stroke-width="2" marker-end="url(#p1)"/>
+  <text x="520" y="2403" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1250" y1="2395" x2="1430" y2="2395" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#p2)"/>
+  <text x="1470" y="2403" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2100" y1="2395" x2="2280" y2="2395" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#p3)"/>
+  <text x="2320" y="2403" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+</svg>

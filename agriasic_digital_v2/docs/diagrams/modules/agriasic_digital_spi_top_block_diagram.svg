@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="3200" viewBox="0 0 5200 3200" role="img" aria-labelledby="title desc">
+  <title id="title">agriasic_digital_spi_top detailed block diagram</title>
+  <desc id="desc">Detailed diagram for SPI-controlled top wrapper connecting spi_slave, regfile, command decode FSM, and agriasic_digital_top core.</desc>
+
+  <defs>
+    <marker id="mData" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="mCtrl" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="mCfg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+    <marker id="mIf" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#000000"/></marker>
+  </defs>
+
+  <rect width="5200" height="3200" fill="#ffffff"/>
+  <text x="120" y="95" font-family="Arial" font-size="40" font-weight="700" fill="#212121">Module: agriasic_digital_spi_top</text>
+  <text x="120" y="145" font-family="Arial" font-size="22" fill="#212121">SPI command plane + register map + measurement core integration</text>
+
+  <rect x="80" y="220" width="5040" height="2880" rx="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+
+  <rect x="240" y="500" width="920" height="360" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="585" font-family="Arial" font-size="30" font-weight="700" fill="#ffffff">External SPI + ADC pins</text>
+  <text x="300" y="630" font-family="Arial" font-size="20" fill="#ffffff">sclk_i, cs_n_i, mosi_i, miso_o</text>
+  <text x="300" y="665" font-family="Arial" font-size="20" fill="#ffffff">adc_code_i</text>
+  <text x="300" y="700" font-family="Arial" font-size="20" fill="#ffffff">conv_start_o, exc_pol_o, busy_o, done_o, result_o</text>
+
+  <rect x="1400" y="460" width="980" height="450" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1460" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_spi_slave</text>
+  <text x="1460" y="590" font-family="Arial" font-size="20" fill="#212121">mode-0 byte shift + CDC toggle</text>
+  <text x="1460" y="625" font-family="Arial" font-size="19" fill="#212121">rx_data_o, rx_valid_o</text>
+  <text x="1460" y="658" font-family="Arial" font-size="19" fill="#212121">tx_data_i for read response</text>
+
+  <rect x="2600" y="460" width="1200" height="620" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2660" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Command decode FSM</text>
+  <text x="2660" y="590" font-family="Arial" font-size="20" fill="#212121">RX_WAIT_CMD / RX_WAIT_WDATA</text>
+  <text x="2660" y="625" font-family="Arial" font-size="19" fill="#212121">cmd[7]=RW, cmd[6:3]=addr</text>
+  <text x="2660" y="658" font-family="Arial" font-size="19" fill="#212121">READ: select tx byte</text>
+  <text x="2660" y="691" font-family="Arial" font-size="19" fill="#212121">WRITE: capture payload byte</text>
+  <text x="2660" y="724" font-family="Arial" font-size="19" fill="#212121">CTRL bit0 generates start pulse</text>
+  <text x="2660" y="757" font-family="Arial" font-size="19" fill="#212121">CFG regs update pair/settle/div/conv</text>
+
+  <rect x="1400" y="1100" width="980" height="520" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1460" y="1185" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_regfile</text>
+  <text x="1460" y="1230" font-family="Arial" font-size="20" fill="#212121">AW=4, DW=32</text>
+  <text x="1460" y="1265" font-family="Arial" font-size="19" fill="#212121">host writes + status/result mirror</text>
+  <text x="1460" y="1298" font-family="Arial" font-size="19" fill="#212121">read access for SPI responses</text>
+  <text x="1460" y="1331" font-family="Arial" font-size="19" fill="#212121">addr map 0..7</text>
+
+  <rect x="2600" y="1200" width="2200" height="700" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2660" y="1285" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_core: agriasic_digital_top</text>
+  <text x="2660" y="1330" font-family="Arial" font-size="20" fill="#212121">start pulse + cfg_* inputs from command plane</text>
+  <text x="2660" y="1365" font-family="Arial" font-size="20" fill="#212121">runs settle/sample/accumulate sequencing</text>
+  <text x="2660" y="1400" font-family="Arial" font-size="20" fill="#212121">outputs busy/done/result + analog controls</text>
+
+  <rect x="2600" y="2020" width="2200" height="540" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="2660" y="2105" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Register map (byte-oriented)</text>
+  <text x="2660" y="2150" font-family="Arial" font-size="20" fill="#212121">0x0 CTRL(start pulse), 0x1 pair_log2, 0x2 settle, 0x3 divider, 0x4 conv</text>
+  <text x="2660" y="2185" font-family="Arial" font-size="20" fill="#212121">0x5 STATUS(done,busy), 0x6 RESULT_LO, 0x7 RESULT_HI</text>
+  <text x="2660" y="2220" font-family="Arial" font-size="20" fill="#212121">READ: cmd byte then dummy byte to shift out response</text>
+
+  <path d="M1160,610 L1400,610" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
+  <text x="1190" y="586" font-family="Arial" font-size="17" fill="#212121">SPI pins</text>
+
+  <path d="M2380,620 L2600,620" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#mCtrl)"/>
+  <text x="2410" y="596" font-family="Arial" font-size="17" fill="#212121">rx_data, rx_valid</text>
+  <path d="M2600,690 L2380,690" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="2410" y="716" font-family="Arial" font-size="17" fill="#212121">tx_data</text>
+
+  <path d="M3200,1080 L2000,1080 L2000,1100" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
+  <text x="2550" y="1056" font-family="Arial" font-size="17" fill="#212121">wr_en/addr/data</text>
+
+  <path d="M2380,1360 L2600,1360" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="2410" y="1336" font-family="Arial" font-size="17" fill="#212121">rd_data[7:0]</text>
+
+  <path d="M3300,1080 L3300,1200" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
+  <text x="3330" y="1140" font-family="Arial" font-size="17" fill="#212121">cfg_* + start</text>
+
+  <path d="M1160,700 L2600,700 L2600,1480" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="1190" y="724" font-family="Arial" font-size="17" fill="#212121">adc_code_i</text>
+
+  <path d="M4800,1440 L4960,1440" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
+  <text x="4700" y="1416" font-family="Arial" font-size="17" fill="#212121">conv/exc/status/result</text>
+
+  <rect x="240" y="2060" width="2200" height="900" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="2145" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Flow summary</text>
+  <text x="300" y="2190" font-family="Arial" font-size="20" fill="#212121">1) SPI byte stream enters u_spi_slave.</text>
+  <text x="300" y="2225" font-family="Arial" font-size="20" fill="#212121">2) Command FSM decodes RW/address and updates cfg/start or read response byte.</text>
+  <text x="300" y="2260" font-family="Arial" font-size="20" fill="#212121">3) Core executes measurement and reports done/result.</text>
+  <text x="300" y="2295" font-family="Arial" font-size="20" fill="#212121">4) Wrapper mirrors status/result bytes for SPI readback.</text>
+
+  <line x1="300" y1="2385" x2="480" y2="2385" stroke="#1565C0" stroke-width="2" marker-end="url(#mData)"/>
+  <text x="520" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1240" y1="2385" x2="1420" y2="2385" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#mCtrl)"/>
+  <text x="1460" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2060" y1="2385" x2="2240" y2="2385" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#mCfg)"/>
+  <text x="2280" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <line x1="300" y1="2450" x2="480" y2="2450" stroke="#000000" stroke-width="3" marker-end="url(#mIf)"/>
+  <text x="520" y="2458" font-family="Arial" font-size="18" fill="#212121">WIRE.INTERFACE</text>
+</svg>

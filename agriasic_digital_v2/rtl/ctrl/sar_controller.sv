@@ -1,0 +1,76 @@
+// -----------------------------------------------------------------------------
+// Module: sar_controller
+// Purpose:
+//   Bridges digital measurement sequencing to ADC conversion control.
+//
+// Functionality:
+//   - Accepts one sample request at a time.
+//   - Asserts conv_start_o for one cycle when a request is accepted.
+//   - Waits a programmable conversion latency and captures adc_code_i.
+//   - Stores captured code in D+ or D- register based on sample_phase_i.
+//   - Pulses sample_done_o when a capture completes.
+//
+// sample_phase_i encoding:
+//   1'b1: positive phase sample (D+)
+//   1'b0: negative phase sample (D-)
+// -----------------------------------------------------------------------------
+module sar_controller #(
+  parameter int unsigned ADC_WIDTH = 8
+) (
+  input  logic                 clk,
+  input  logic                 rst_n,
+  input  logic                 sample_req_i,
+  input  logic                 sample_phase_i,
+  input  logic [7:0]           conv_cycles_i,
+  input  logic [ADC_WIDTH-1:0] adc_code_i,
+  output logic                 conv_start_o,
+  output logic                 sample_done_o,
+  output logic                 busy_o,
+  output logic [ADC_WIDTH-1:0] d_plus_o,
+  output logic [ADC_WIDTH-1:0] d_minus_o
+);
+
+  logic       phase_q;
+  logic [7:0] conv_cnt_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      conv_start_o  <= 1'b0;
+      sample_done_o <= 1'b0;
+      busy_o        <= 1'b0;
+      phase_q       <= 1'b0;
+      conv_cnt_q    <= 8'd0;
+      d_plus_o      <= '0;
+      d_minus_o     <= '0;
+    end else begin
+      conv_start_o  <= 1'b0;
+      sample_done_o <= 1'b0;
+
+      // Do not accept a new request in the same cycle a completion is being
+      // reported. The measurement FSM holds sample_req_i high until it observes
+      // sample_done_o, so without this guard every sample immediately triggers a
+      // second, spurious conversion. That extra conversion latches the ADC after
+      // the excitation polarity has already flipped, corrupting d_plus/d_minus
+      // and driving the accumulated contribution to zero.
+      if (!busy_o && sample_req_i && !sample_done_o) begin
+        busy_o       <= 1'b1;
+        phase_q      <= sample_phase_i;
+        conv_cnt_q   <= conv_cycles_i;
+        conv_start_o <= 1'b1;
+      end else if (busy_o) begin
+        if (conv_cnt_q == 8'd0) begin
+          if (phase_q) begin
+            d_plus_o <= adc_code_i;
+          end else begin
+            d_minus_o <= adc_code_i;
+          end
+          busy_o        <= 1'b0;
+          sample_done_o <= 1'b1;
+        end else begin
+          conv_cnt_q <= conv_cnt_q - 8'd1;
+        end
+      end
+    end
+  end
+
+endmodule

@@ -1,0 +1,214 @@
+// -----------------------------------------------------------------------------
+// Module: agriasic_rv32i_control_shell
+// Purpose:
+//   Reference controller shell for the RV32I programming architecture.
+//   This is a synthesizable stand-in for the on-die RV32I + ROM control path
+//   shown in the reference architecture diagram.
+//
+// Notes:
+//   - The shell sequences configuration, start, and completion handling.
+//   - The measurement FSM remains the real-time timing engine.
+//   - The ROM is a tiny control-policy image; the actual RV32I core can be
+//     dropped in later behind the same top-level interface.
+// -----------------------------------------------------------------------------
+module agriasic_rv32i_control_shell #(
+  parameter int unsigned ADC_WIDTH = 8
+) (
+  input  logic                 clk,
+  input  logic                 rst_n,
+  input  logic                 start_i,
+  input  logic                 measurement_done_i,
+  input  logic [15:0]          measurement_result_i,
+
+  output logic                 busy_o,
+  output logic                 done_o,
+  output logic                 start_pulse_o,
+  output logic                 clear_errors_o,
+
+  output logic [3:0]           cfg_pair_log2_o,
+  output logic [7:0]           cfg_settle_cycles_o,
+  output logic [7:0]           cfg_exc_divider_o,
+  output logic [7:0]           cfg_conv_cycles_o,
+  output logic [15:0]          result_o
+);
+
+  localparam logic [7:0] OP_LOAD_CFG = 8'h01;
+  localparam logic [7:0] OP_START    = 8'h02;
+  localparam logic [7:0] OP_WAIT     = 8'h03;
+  localparam logic [7:0] OP_CAPTURE  = 8'h04;
+  localparam logic [7:0] OP_HALT     = 8'hFF;
+
+  // ROM image: opcode in [31:24], cfg address in [23:16], data in [7:0].
+  logic [31:0] program_rom [0:5];
+
+  typedef enum logic [2:0] {
+    S_IDLE,
+    S_EXEC,
+    S_WAIT_MEAS,
+    S_DONE
+  } state_t;
+
+  state_t      state_q;
+  logic [2:0]  pc_q;
+  logic        start_req_q;
+  logic        start_req_d;
+  logic [15:0] result_q;
+  logic [3:0]  cfg_pair_log2_q;
+  logic [7:0]  cfg_settle_q;
+  logic [7:0]  cfg_divider_q;
+  logic [7:0]  cfg_conv_q;
+
+  initial begin
+    program_rom[0] = {OP_LOAD_CFG, 8'h00, 8'h02, 8'h00}; // pair_log2 = 2
+    program_rom[1] = {OP_LOAD_CFG, 8'h01, 8'h02, 8'h00}; // settle = 2
+    program_rom[2] = {OP_LOAD_CFG, 8'h02, 8'h00, 8'h00}; // divider = 0
+    program_rom[3] = {OP_LOAD_CFG, 8'h03, 8'h01, 8'h00}; // conv = 1
+    program_rom[4] = {OP_START,    8'h00, 8'h00, 8'h00};
+    program_rom[5] = {OP_WAIT,     8'h00, 8'h00, 8'h00};
+  end
+
+  assign cfg_pair_log2_o     = cfg_pair_log2_q;
+  assign cfg_settle_cycles_o = cfg_settle_q;
+  assign cfg_exc_divider_o   = cfg_divider_q;
+  assign cfg_conv_cycles_o   = cfg_conv_q;
+  assign result_o            = result_q;
+
+  always_comb begin
+    start_pulse_o   = 1'b0;
+    clear_errors_o  = 1'b0;
+    start_req_d     = start_req_q;
+    busy_o          = 1'b0;
+    done_o          = 1'b0;
+
+    unique case (state_q)
+      S_IDLE: begin
+        if (start_req_q) begin
+          busy_o = 1'b1;
+        end
+      end
+
+      S_EXEC: begin
+        busy_o = 1'b1;
+        unique case (program_rom[pc_q][31:24])
+          OP_LOAD_CFG: begin
+            busy_o = 1'b1;
+          end
+          OP_START: begin
+            start_pulse_o = 1'b1;
+          end
+          OP_WAIT: begin
+            busy_o = 1'b1;
+          end
+          OP_CAPTURE: begin
+            busy_o = 1'b1;
+          end
+          OP_HALT: begin
+            busy_o = 1'b0;
+            done_o  = 1'b1;
+          end
+          default: begin
+            busy_o = 1'b0;
+            done_o  = 1'b1;
+          end
+        endcase
+      end
+
+      S_WAIT_MEAS: begin
+        busy_o = 1'b1;
+      end
+
+      S_DONE: begin
+        done_o = 1'b1;
+      end
+
+      default: begin
+        busy_o = 1'b0;
+      end
+    endcase
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      state_q         <= S_IDLE;
+      pc_q            <= 3'd0;
+      start_req_q     <= 1'b0;
+      result_q        <= 16'd0;
+      cfg_pair_log2_q <= 4'd2;
+      cfg_settle_q    <= 8'd2;
+      cfg_divider_q   <= 8'd0;
+      cfg_conv_q      <= 8'd1;
+    end else begin
+      start_req_q <= start_i;
+
+      unique case (state_q)
+        S_IDLE: begin
+          if (start_i && !start_req_q) begin
+            pc_q    <= 3'd0;
+            result_q <= 16'd0;
+            state_q <= S_EXEC;
+          end
+        end
+
+        S_EXEC: begin
+          unique case (program_rom[pc_q][31:24])
+            OP_LOAD_CFG: begin
+              unique case (program_rom[pc_q][23:16])
+                8'h00: cfg_pair_log2_q <= program_rom[pc_q][7:0][3:0];
+                8'h01: cfg_settle_q    <= program_rom[pc_q][7:0];
+                8'h02: cfg_divider_q   <= program_rom[pc_q][7:0];
+                8'h03: cfg_conv_q      <= program_rom[pc_q][7:0];
+                default: begin
+                end
+              endcase
+              pc_q <= pc_q + 3'd1;
+            end
+
+            OP_START: begin
+              pc_q <= pc_q + 3'd1;
+              state_q <= S_WAIT_MEAS;
+            end
+
+            OP_WAIT: begin
+              if (measurement_done_i) begin
+                pc_q <= pc_q + 3'd1;
+                state_q <= S_EXEC;
+              end
+            end
+
+            OP_CAPTURE: begin
+              result_q <= measurement_result_i;
+              pc_q <= pc_q + 3'd1;
+            end
+
+            OP_HALT: begin
+              state_q <= S_DONE;
+            end
+
+            default: begin
+              state_q <= S_DONE;
+            end
+          endcase
+        end
+
+        S_WAIT_MEAS: begin
+          if (measurement_done_i) begin
+            result_q <= measurement_result_i;
+            state_q <= S_EXEC;
+            pc_q <= pc_q + 3'd1;
+          end
+        end
+
+        S_DONE: begin
+          if (!start_i) begin
+            state_q <= S_IDLE;
+          end
+        end
+
+        default: begin
+          state_q <= S_IDLE;
+        end
+      endcase
+    end
+  end
+
+endmodule

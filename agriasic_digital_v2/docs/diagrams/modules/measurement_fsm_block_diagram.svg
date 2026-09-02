@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+  <title id="t">measurement_fsm module block diagram</title>
+  <desc id="d">Detailed state and dataflow diagram for measurement_fsm including settle, sample, accumulate, and loop phases.</desc>
+  <defs>
+    <marker id="m1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="m2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="m3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+  </defs>
+  <rect width="5000" height="3000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: measurement_fsm</text>
+
+  <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <text x="120" y="235" font-family="Arial" font-size="22" font-weight="700" fill="#212121">Fallback measurement sequencer with programmable averaging depth</text>
+
+  <rect x="260" y="470" width="980" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="320" y="550" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
+  <text x="320" y="595" font-family="Arial" font-size="20" fill="#fff">start_i, pair_log2_i</text>
+  <text x="320" y="630" font-family="Arial" font-size="20" fill="#fff">settled_i, sar_done_i</text>
+  <text x="320" y="665" font-family="Arial" font-size="20" fill="#fff">d_plus_i, d_minus_i</text>
+  <text x="320" y="700" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+
+  <rect x="1450" y="430" width="3240" height="1540" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1500" y="500" font-family="Arial" font-size="28" font-weight="700" fill="#212121">State engine</text>
+
+  <rect x="1560" y="610" width="390" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1610" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_IDLE</text>
+  <text x="1610" y="720" font-family="Arial" font-size="18" fill="#212121">wait start</text>
+
+  <rect x="2080" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2130" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SETTLE_P</text>
+  <text x="2130" y="720" font-family="Arial" font-size="18" fill="#212121">exc_phase=1</text>
+
+  <rect x="2670" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2720" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SAMPLE_P</text>
+  <text x="2720" y="720" font-family="Arial" font-size="18" fill="#212121">request D+</text>
+
+  <rect x="3260" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3310" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SETTLE_N</text>
+  <text x="3310" y="720" font-family="Arial" font-size="18" fill="#212121">exc_phase=0</text>
+
+  <rect x="3850" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3900" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SAMPLE_N</text>
+  <text x="3900" y="720" font-family="Arial" font-size="18" fill="#212121">request D-</text>
+
+  <rect x="2250" y="980" width="540" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2300" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_ACCUM</text>
+  <text x="2300" y="1100" font-family="Arial" font-size="18" fill="#212121">acc += (D+ - D-) / 2</text>
+  <text x="2300" y="1133" font-family="Arial" font-size="18" fill="#212121">pair_count++</text>
+
+  <rect x="2970" y="980" width="560" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3020" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_LOOP</text>
+  <text x="3020" y="1100" font-family="Arial" font-size="18" fill="#212121">pair_count &gt;= pair_target ?</text>
+
+  <rect x="3690" y="980" width="470" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3740" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_DONE</text>
+  <text x="3740" y="1100" font-family="Arial" font-size="18" fill="#212121">done_o=1</text>
+
+  <path d="M1950,720 L2080,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2550,720 L2670,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3140,720 L3260,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3730,720 L3850,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M4080,830 L4080,980" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2790,1100 L2970,1100" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3530,1100 L3690,1100" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3190,980 L3190,890 L2310,890 L2310,830" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <text x="3230" y="940" font-family="Arial" font-size="17" fill="#212121">loop continue</text>
+
+  <rect x="260" y="1030" width="980" height="420" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="320" y="1110" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Outputs</text>
+  <text x="320" y="1155" font-family="Arial" font-size="20" fill="#212121">exc_enable_o, exc_set_phase_o, exc_phase_o</text>
+  <text x="320" y="1190" font-family="Arial" font-size="20" fill="#212121">sample_req_o, sample_phase_o</text>
+  <text x="320" y="1225" font-family="Arial" font-size="20" fill="#212121">busy_o, done_o, result_o</text>
+
+  <path d="M1240,1230 L2250,1230" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#m1)"/>
+  <text x="1280" y="1208" font-family="Arial" font-size="17" fill="#212121">result datapath</text>
+  <path d="M1240,560 L1560,560 L1560,700" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#m3)"/>
+  <text x="1265" y="535" font-family="Arial" font-size="17" fill="#212121">pair_target from pair_log2</text>
+
+  <rect x="260" y="1660" width="4430" height="1150" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="320" y="1740" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Detailed behavior</text>
+  <text x="320" y="1790" font-family="Arial" font-size="20" fill="#212121">- pair_target = 1 &lt;&lt; pair_log2 (clamped to counter width)</text>
+  <text x="320" y="1830" font-family="Arial" font-size="20" fill="#212121">- each completed pair contributes signed pair_delta into accumulator</text>
+  <text x="320" y="1870" font-family="Arial" font-size="20" fill="#212121">- done_o remains asserted until start_i is released</text>
+  <text x="320" y="1910" font-family="Arial" font-size="20" fill="#212121">- exc_enable_o is active through all non-idle states</text>
+  <text x="320" y="1950" font-family="Arial" font-size="20" fill="#212121">- sample requests are phase-tagged to separate D+ and D- capture paths</text>
+
+  <line x1="320" y1="2030" x2="500" y2="2030" stroke="#1565C0" stroke-width="2" marker-end="url(#m1)"/>
+  <text x="540" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1260" y1="2030" x2="1440" y2="2030" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#m2)"/>
+  <text x="1480" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2140" y1="2030" x2="2320" y2="2030" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#m3)"/>
+  <text x="2360" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+</svg>

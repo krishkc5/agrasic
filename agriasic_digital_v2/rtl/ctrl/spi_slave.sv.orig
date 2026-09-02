@@ -1,0 +1,89 @@
+// -----------------------------------------------------------------------------
+// Module: spi_slave
+// Purpose:
+//   SPI mode-0 byte-serial slave (CPOL=0, CPHA=0) for control-plane exchange.
+//
+// Functionality:
+//   - Captures MOSI on rising edges of sclk_i while cs_n_i is low.
+//   - Shifts out MISO from an internal TX shift register.
+//   - Emits one rx_valid_o pulse in clk domain for each completed byte.
+//   - Reloads TX shift register from tx_data_i when a byte completes.
+//
+// Integration intent:
+//   Address decoding and register mapping remain top-level responsibilities.
+// -----------------------------------------------------------------------------
+module spi_slave #(
+  parameter int unsigned DATA_W = 8
+) (
+  input  logic              clk,
+  input  logic              rst_n,
+  input  logic              sclk_i,
+  input  logic              cs_n_i,
+  input  logic              mosi_i,
+  output logic              miso_o,
+  output logic [DATA_W-1:0] rx_data_o,
+  output logic              rx_valid_o,
+  input  logic [DATA_W-1:0] tx_data_i
+);
+
+  logic [DATA_W-1:0] rx_shift_q;
+  logic [DATA_W-1:0] tx_shift_q;
+  logic [DATA_W-1:0] rx_data_sclk_q;
+  logic [2:0]        bit_cnt_q;
+  logic              rx_done_tgl_q;
+
+  logic rx_done_meta_q;
+  logic rx_done_sync_q;
+  logic rx_done_sync_qq;
+
+  // Shift logic in SCLK domain.
+  always_ff @(posedge sclk_i or posedge cs_n_i or negedge rst_n) begin
+    if (!rst_n) begin
+      rx_shift_q     <= '0;
+      tx_shift_q     <= '0;
+      rx_data_sclk_q <= '0;
+      bit_cnt_q      <= 3'd0;
+      rx_done_tgl_q  <= 1'b0;
+      miso_o         <= 1'b0;
+    end else if (cs_n_i) begin
+      bit_cnt_q  <= 3'd0;
+      tx_shift_q <= tx_data_i;
+      miso_o     <= tx_data_i[DATA_W-1];
+    end else begin
+      rx_shift_q <= {rx_shift_q[DATA_W-2:0], mosi_i};
+      miso_o     <= tx_shift_q[DATA_W-1];
+      tx_shift_q <= {tx_shift_q[DATA_W-2:0], 1'b0};
+
+      if (bit_cnt_q == 3'd7) begin
+        bit_cnt_q      <= 3'd0;
+        rx_data_sclk_q <= {rx_shift_q[DATA_W-2:0], mosi_i};
+        rx_done_tgl_q  <= ~rx_done_tgl_q;
+        tx_shift_q     <= tx_data_i;
+      end else begin
+        bit_cnt_q <= bit_cnt_q + 3'd1;
+      end
+    end
+  end
+
+  // Pulse transfer into clk domain.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rx_done_meta_q <= 1'b0;
+      rx_done_sync_q <= 1'b0;
+      rx_done_sync_qq <= 1'b0;
+      rx_data_o      <= '0;
+      rx_valid_o     <= 1'b0;
+    end else begin
+      rx_done_meta_q  <= rx_done_tgl_q;
+      rx_done_sync_q  <= rx_done_meta_q;
+      rx_done_sync_qq <= rx_done_sync_q;
+
+      rx_valid_o <= 1'b0;
+      if (rx_done_sync_q ^ rx_done_sync_qq) begin
+        rx_data_o  <= rx_data_sclk_q;
+        rx_valid_o <= 1'b1;
+      end
+    end
+  end
+
+endmodule

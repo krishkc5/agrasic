@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="3200" viewBox="0 0 5200 3200" role="img" aria-labelledby="title desc">
+  <title id="title">agriasic_digital_spi_top protocol flow</title>
+  <desc id="desc">Protocol-focused flow diagram for SPI command decode, ACK/NACK generation, and sticky error flags in REG_STATUS.</desc>
+  <defs>
+    <marker id="d" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
+    <marker id="c" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
+    <marker id="e" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#D32F2F"/></marker>
+    <marker id="g" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
+  </defs>
+
+  <rect width="5200" height="3200" fill="#ffffff"/>
+  <text x="120" y="95" font-family="Arial" font-size="40" font-weight="700" fill="#212121">SPI Protocol Hardening Flow</text>
+  <text x="120" y="145" font-family="Arial" font-size="22" fill="#212121">Module: agriasic_digital_spi_top</text>
+
+  <rect x="80" y="220" width="5040" height="2880" rx="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+
+  <rect x="220" y="460" width="980" height="380" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="280" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#ffffff">Incoming SPI stream</text>
+  <text x="280" y="590" font-family="Arial" font-size="20" fill="#ffffff">Byte0: cmd [RW|ADDR|RSV]</text>
+  <text x="280" y="625" font-family="Arial" font-size="20" fill="#ffffff">Byte1: data or dummy</text>
+
+  <rect x="1420" y="420" width="1160" height="460" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1480" y="505" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Command checks</text>
+  <text x="1480" y="550" font-family="Arial" font-size="20" fill="#212121">1) reserved bits [2:0] must be 0</text>
+  <text x="1480" y="585" font-family="Arial" font-size="20" fill="#212121">2) address must be in 0x0..0x7</text>
+  <text x="1480" y="620" font-family="Arial" font-size="20" fill="#212121">3) write to RO regs rejected</text>
+  <text x="1480" y="655" font-family="Arial" font-size="20" fill="#212121">4) CTRL bit7 clears sticky errors</text>
+
+  <rect x="2820" y="420" width="960" height="460" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2880" y="505" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Response byte mux</text>
+  <text x="2880" y="550" font-family="Arial" font-size="20" fill="#212121">READ valid -> reg byte</text>
+  <text x="2880" y="585" font-family="Arial" font-size="20" fill="#212121">WRITE valid -> 0xA5 (ACK)</text>
+  <text x="2880" y="620" font-family="Arial" font-size="20" fill="#212121">WRITE RO -> 0x5A (NACK)</text>
+  <text x="2880" y="655" font-family="Arial" font-size="20" fill="#212121">Bad cmd -> 0xE1, Bad addr -> 0xE2</text>
+
+  <rect x="4020" y="420" width="980" height="460" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="4080" y="505" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Status flags (REG_STATUS)</text>
+  <text x="4080" y="550" font-family="Arial" font-size="20" fill="#212121">bit7 protocol_err</text>
+  <text x="4080" y="585" font-family="Arial" font-size="20" fill="#212121">bit6 bad_addr</text>
+  <text x="4080" y="620" font-family="Arial" font-size="20" fill="#212121">bit5 illegal_write_ro</text>
+  <text x="4080" y="655" font-family="Arial" font-size="20" fill="#212121">bit1 done, bit0 busy</text>
+
+  <rect x="740" y="1120" width="3760" height="760" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="800" y="1205" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Decision flow</text>
+  <text x="820" y="1260" font-family="Arial" font-size="21" fill="#212121">A) If cmd[2:0] != 0 -> set protocol_err, response=0xE1</text>
+  <text x="820" y="1300" font-family="Arial" font-size="21" fill="#212121">B) Else if addr invalid -> set bad_addr, response=0xE2</text>
+  <text x="820" y="1340" font-family="Arial" font-size="21" fill="#212121">C) Else READ -> response=data byte from selected register</text>
+  <text x="820" y="1380" font-family="Arial" font-size="21" fill="#212121">D) Else WRITE to RO -> set illegal_write_ro, response=0x5A</text>
+  <text x="820" y="1420" font-family="Arial" font-size="21" fill="#212121">E) Else WRITE valid -> apply update, response=0xA5</text>
+  <text x="820" y="1460" font-family="Arial" font-size="21" fill="#212121">F) CTRL[7]=1 write clears bits [7:5] in status</text>
+
+  <rect x="740" y="1980" width="3760" height="960" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="800" y="2065" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Read/Write examples</text>
+  <text x="820" y="2120" font-family="Arial" font-size="21" fill="#212121">WRITE pair_log2=2: cmd=0x08, data=0x02 -> response 0xA5</text>
+  <text x="820" y="2160" font-family="Arial" font-size="21" fill="#212121">READ status: cmd=0xA8, dummy=0x00 -> response status byte</text>
+  <text x="820" y="2200" font-family="Arial" font-size="21" fill="#212121">BAD cmd: cmd=0x03 (reserved bits set) -> response 0xE1 + status[7]=1</text>
+  <text x="820" y="2240" font-family="Arial" font-size="21" fill="#212121">BAD addr: cmd=0x78 (write addr=0xF) -> response 0xE2 + status[6]=1</text>
+  <text x="820" y="2280" font-family="Arial" font-size="21" fill="#212121">RO write: cmd=0x28 (write STATUS) -> response 0x5A + status[5]=1</text>
+  <text x="820" y="2320" font-family="Arial" font-size="21" fill="#212121">Clear errors: write CTRL with data 0x80 -> status[7:5]=0</text>
+
+  <path d="M1200,620 L1420,620" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#c)"/>
+  <path d="M2580,620 L2820,620" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#d)"/>
+  <path d="M3780,620 L4020,620" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#d)"/>
+
+  <path d="M2000,880 L2000,1120" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#c)"/>
+  <path d="M3300,880 L3300,1120" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#d)"/>
+  <path d="M4510,880 L4510,1120" stroke="#D32F2F" stroke-width="2" fill="none" marker-end="url(#e)"/>
+
+  <line x1="820" y1="2420" x2="1000" y2="2420" stroke="#1565C0" stroke-width="2" marker-end="url(#d)"/>
+  <text x="1040" y="2428" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1760" y1="2420" x2="1940" y2="2420" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#c)"/>
+  <text x="1980" y="2428" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2560" y1="2420" x2="2740" y2="2420" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#g)"/>
+  <text x="2780" y="2428" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <line x1="3440" y1="2420" x2="3620" y2="2420" stroke="#D32F2F" stroke-width="2" marker-end="url(#e)"/>
+  <text x="3660" y="2428" font-family="Arial" font-size="18" fill="#212121">WIRE.ERROR</text>
+</svg>

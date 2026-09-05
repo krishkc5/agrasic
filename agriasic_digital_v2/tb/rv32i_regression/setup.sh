@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
-SRC="/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Parent dir holding both agriasic_digital_v2 and the external cis5710 class repo.
+# Override with AGRIASIC_SRC_ROOT if the class repo lives elsewhere.
+SRC="${AGRIASIC_SRC_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 W="$HOME/agriasic_regression"
 echo "staging into $W"
 rm -rf "$W"

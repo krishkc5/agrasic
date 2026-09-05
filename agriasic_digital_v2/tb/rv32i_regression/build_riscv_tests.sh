@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
-SRC="/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN/cis5710-tjammula/riscv-tests"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_ROOT="${AGRIASIC_SRC_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
+# Override with RISCV_TESTS_SRC if the riscv-tests checkout lives elsewhere.
+SRC="${RISCV_TESTS_SRC:-$SRC_ROOT/cis5710-tjammula/riscv-tests}"
+if [ ! -d "$SRC" ]; then
+  echo "ERROR: riscv-tests not found at: $SRC" >&2
+  echo "Set RISCV_TESTS_SRC to your riscv-tests checkout (external to this repo)." >&2
+  exit 1
+fi
 DST="$HOME/riscv-tests"
 
 # Build in WSL's native fs: /mnt/c is slow, and the Windows checkout has CRLF

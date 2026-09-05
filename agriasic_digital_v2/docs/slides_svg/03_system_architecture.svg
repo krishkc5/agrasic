@@ -62,7 +62,7 @@
   <text x="1515" y="630" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#0F172A">Sensor</text>
 
   <rect x="1430" y="695" width="290" height="95" rx="8" fill="#FFFFFF" stroke="#A3A3A3"/>
-  <text x="1460" y="755" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#0F172A">Optional Host / RV32I core</text>
+  <text x="1460" y="755" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#0F172A">Host / RV32I policy layer</text>
 
   <line x1="1320" y1="370" x2="1430" y2="370" stroke="#D1D5DB" stroke-width="2" marker-end="url(#arrow)"/>
   <line x1="1320" y1="500" x2="1430" y2="500" stroke="#D1D5DB" stroke-width="2" marker-end="url(#arrow)"/>

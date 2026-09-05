@@ -1,12 +1,12 @@
 #!/bin/bash
 # Final verification sweep across every level of the design.
-R="/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN/agriasic_digital_v2/tb/rv32i_regression"
+R="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=================================================="
 echo "1. FULL CHIP LINT (RV32I top)"
 echo "=================================================="
 bash "$R/lint_top.sh" 2>&1 | grep -E "^%Error|^%Warning-" | head -6
-echo "(only pre-existing measurement_fsm width warnings expected)"
+echo "(lint is expected to be clean -- no output above this line)"
 
 echo ""
 echo "=================================================="
@@ -22,6 +22,36 @@ bash "$R/spi_smoke.sh" 2>&1 | grep -E "SPI_TOP_SMOKE_PASS|SPI_TOP_.*FAIL|##" | t
 
 echo ""
 echo "=================================================="
-echo "4. END-TO-END FIRMWARE + MEASUREMENT"
+echo "4. SAR BIT-TRIAL UNIT TEST (Rev 4.3 Phase 1)"
 echo "=================================================="
-bash "$R/e2e.sh" 2>&1 | grep -E "^\[TB\]" | tail -12
+bash "$R/sar_bit_trial.sh" 2>&1 | grep -E "^\[TB\]|SAR_|ASSERT_FAIL" | tail -14
+
+echo ""
+echo "=================================================="
+echo "5. EXCITATION FREE-RUNNING PHASE GENERATOR (Rev 4.3 Phase 4)"
+echo "=================================================="
+bash "$R/excitation_drive.sh" 2>&1 | grep -E "^\[TB\]|EXCITATION_|ASSERT_FAIL|BREAK_|WRONG_" | tail -8
+
+echo ""
+echo "=================================================="
+echo "6. RESET SYNCHRONIZER (Rev 4.3 Phase 2.1)"
+echo "=================================================="
+bash "$R/rst_sync_check.sh" 2>&1 | grep -E "^\[TB\]|RST_SYNC_" | tail -10
+
+echo ""
+echo "=================================================="
+echo "7. SPI CLK-DOMAIN REWORK (Rev 4.3 Phase 3)"
+echo "=================================================="
+bash "$R/spi_domain_crossing.sh" 2>&1 | grep -E "^\[TB\]|SPI_XCROSS|SPI_DOMAIN_CROSSING_" | tail -10
+
+echo ""
+echo "=================================================="
+echo "8. SETTLE TIMING REGRESSION (Rev 4.3 defects 1 and 2)"
+echo "=================================================="
+bash "$R/settle_check.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_" | tail -8
+
+echo ""
+echo "=================================================="
+echo "9. END-TO-END FIRMWARE + MEASUREMENT (incl. core clock enable, Phase 2.2)"
+echo "=================================================="
+bash "$R/e2e.sh" 2>&1 | grep -E "^\[TB\]" | tail -13

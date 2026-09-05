@@ -21,8 +21,8 @@
   <text x="155" y="710" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">1. Drop optional debug routing/registers</text>
   <text x="155" y="746" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">2. Reduce program/data memory footprint</text>
   <text x="155" y="782" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">3. Replace or shrink the optional controller before touching FSM timing</text>
-  <text x="155" y="818" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">4. Keep FSM-only sequencing as final protected baseline</text>
-  <text x="155" y="854" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">5. Keep only essential divider options if timing closes late</text>
+  <text x="155" y="818" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">4. Keep a protected FSM-only timing baseline if the RV32I layer slips</text>
+  <text x="155" y="854" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#CBD5E1">5. Keep only essential divider and phase-step options if timing closes late</text>
 
   <rect x="940" y="190" width="860" height="770" rx="12" fill="#172554" stroke="#1D4ED8"/>
   <text x="980" y="250" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#DBEAFE">Must-Preserve Minimum Feature Set</text>
@@ -40,7 +40,7 @@
   <text x="1015" y="702" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#CBD5E1">- Smoke TB with positive and negative protocol checks</text>
   <text x="1015" y="736" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#CBD5E1">- Protocol flow diagrams for review and design walkthrough</text>
   <text x="1015" y="770" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#CBD5E1">- Requirement trace matrix and acceptance criteria (MAS doc)</text>
-  <text x="1015" y="804" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#CBD5E1">- Programming wrapper collateral for the optional RV32I layer</text>
+  <text x="1015" y="804" font-family="Segoe UI, Arial, sans-serif" font-size="21" fill="#CBD5E1">- RV32I + ROM policy collateral for the phase-locked control layer</text>
 
   <text x="80" y="1050" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#94A3B8">This slide supports go/no-go decisions at weekly design reviews.</text>
 </svg>

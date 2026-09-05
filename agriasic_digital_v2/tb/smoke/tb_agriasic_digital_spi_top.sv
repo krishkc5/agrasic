@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------
 module tb_agriasic_digital_spi_top;
   localparam int unsigned ADC_WIDTH = 8;
-  localparam int unsigned EXPECTED_RESULT = 16'd240;
+  localparam int unsigned EXPECTED_RESULT = 16'd480;
 
   localparam logic [3:0] REG_CTRL      = 4'h0;
   localparam logic [3:0] REG_PAIR_LOG2 = 4'h1;
@@ -31,9 +31,14 @@ module tb_agriasic_digital_spi_top;
   logic cs_n_i;
   logic mosi_i;
   logic miso_o;
-  logic [ADC_WIDTH-1:0] adc_code_i;
+  logic miso_oe_o;
   logic conv_start_o;
-  logic exc_pol_o;
+  logic exc_drive_p_o;
+  logic exc_drive_n_o;
+  logic adc_enable_o;
+  logic adc_sample_o;
+  logic [ADC_WIDTH-1:0] adc_dac_o;
+  logic adc_comp_i;
   logic busy_o;
   logic done_o;
   logic [15:0] result_o;
@@ -53,9 +58,14 @@ module tb_agriasic_digital_spi_top;
     .cs_n_i(cs_n_i),
     .mosi_i(mosi_i),
     .miso_o(miso_o),
-    .adc_code_i(adc_code_i),
+    .miso_oe_o(miso_oe_o),
     .conv_start_o(conv_start_o),
-    .exc_pol_o(exc_pol_o),
+    .exc_drive_p_o(exc_drive_p_o),
+    .exc_drive_n_o(exc_drive_n_o),
+    .adc_enable_o(adc_enable_o),
+    .adc_sample_o(adc_sample_o),
+    .adc_dac_o(adc_dac_o),
+    .adc_comp_i(adc_comp_i),
     .busy_o(busy_o),
     .done_o(done_o),
     .result_o(result_o)
@@ -63,14 +73,18 @@ module tb_agriasic_digital_spi_top;
 
   always #5 clk = ~clk;
 
-  // When conversion starts, drive a deterministic ADC code pair.
+  // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See
+  // sar_controller's header for the adc_comp_i convention this implements.
+  // Rev 4.3 Phase 4: excitation free-runs, so exc_drive_p_o can move during a
+  // single multi-cycle conversion. Latch the target on adc_sample_o (real
+  // track-and-hold), don't re-derive it live from the drive signal.
+  logic [ADC_WIDTH-1:0] adc_target_held_q;
   always_ff @(posedge clk) begin
-    if (!rst_n) begin
-      adc_code_i <= '0;
-    end else if (conv_start_o) begin
-      adc_code_i <= exc_pol_o ? 8'd180 : 8'd60;
+    if (adc_sample_o) begin
+      adc_target_held_q <= exc_drive_p_o ? 8'd180 : 8'd60;
     end
   end
+  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   task automatic spi_transfer_byte(
     input  logic [7:0] tx,
@@ -81,13 +95,13 @@ module tb_agriasic_digital_spi_top;
       rx = 8'h00;
       for (b = 7; b >= 0; b--) begin
         mosi_i = tx[b];
-        #20;
+        #80;
         sclk_i = 1'b1;
-        #10;
+        #40;
         rx[b] = miso_o;
-        #10;
+        #40;
         sclk_i = 1'b0;
-        #20;
+        #80;
       end
     end
   endtask
@@ -99,11 +113,11 @@ module tb_agriasic_digital_spi_top;
       cmd = {1'b0, addr, 3'b000};
       cs_n_i = 1'b0;
       spi_transfer_byte(cmd, throw_away);
-      #120;
+      #480;
       spi_transfer_byte(data, throw_away);
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -112,11 +126,11 @@ module tb_agriasic_digital_spi_top;
     begin
       cs_n_i = 1'b0;
       spi_transfer_byte(cmd, throw_away);
-      #120;
+      #480;
       spi_transfer_byte(data, throw_away);
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -126,11 +140,11 @@ module tb_agriasic_digital_spi_top;
     begin
       cs_n_i = 1'b0;
       spi_transfer_byte(cmd, rx_cmd_phase);
-      #120;
+      #480;
       spi_transfer_byte(8'h00, throw_away);
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -141,11 +155,11 @@ module tb_agriasic_digital_spi_top;
       cmd = {1'b1, addr, 3'b000};
       cs_n_i = 1'b0;
       spi_transfer_byte(cmd, throw_away);
-      #120;
+      #480;
       spi_transfer_byte(8'h00, data);
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -160,11 +174,25 @@ module tb_agriasic_digital_spi_top;
       done_o |-> !busy_o;
   endproperty
 
+  // Rev 4.3 DR-021: MISO output enable must track cs_n exactly, once
+  // synchronized. Phase 3 moved cs_n through a 2FF synchronizer inside
+  // spi_slave, so miso_oe_o now lags the raw testbench-driven cs_n_i by that
+  // latency -- checking against the internal synchronized signal (which is
+  // what miso_oe_o is actually, combinationally, derived from) is the
+  // correct comparison, not a relaxation of the check.
+  property p_miso_oe_tracks_cs;
+    @(posedge clk) disable iff (!rst_n)
+      miso_oe_o == !dut.u_spi_slave.cs_n_sync_q;
+  endproperty
+
   assert property (p_conv_start_single_cycle)
     else $error("ASSERT_FAIL: conv_start_o must be single-cycle pulse");
 
   assert property (p_done_not_busy)
     else $error("ASSERT_FAIL: done_o and busy_o cannot be high together");
+
+  assert property (p_miso_oe_tracks_cs)
+    else $error("ASSERT_FAIL: miso_oe_o must equal ~cs_n_i");
 
   initial begin
     clk      = 1'b0;
@@ -172,7 +200,6 @@ module tb_agriasic_digital_spi_top;
     sclk_i   = 1'b0;
     cs_n_i   = 1'b1;
     mosi_i   = 1'b0;
-    adc_code_i = '0;
 
     repeat (6) @(posedge clk);
     rst_n = 1'b1;

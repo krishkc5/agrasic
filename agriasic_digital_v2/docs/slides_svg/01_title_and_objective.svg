@@ -24,8 +24,8 @@
   <text x="230" y="515" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">1. Runs autonomous measurement sequencing on-die</text>
   <text x="230" y="550" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">2. Controls excitation timing and SAR conversion handshakes</text>
   <text x="230" y="585" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">3. Exposes a robust SPI control/status interface</text>
-  <text x="230" y="620" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">4. Keeps FSM-only fallback viable for schedule safety</text>
-  <text x="230" y="655" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">5. Adds an optional RV32I programming layer above the FSM</text>
+  <text x="230" y="620" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">4. Keeps the FSM as the permanent inner-loop timing engine</text>
+  <text x="230" y="655" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">5. Uses a free-running excitation phase generator with RV32I policy control</text>
   <text x="230" y="690" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">6. Supports RTL-to-GDS closure in 11-week window</text>
 
   <rect x="960" y="360" width="790" height="220" rx="12" fill="#DBEAFE"/>
@@ -38,7 +38,7 @@
   <text x="995" y="670" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0F172A">Design Baseline in Rev 4.1</text>
   <text x="995" y="720" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">On-die: excitation timing, fixed-gain TIA path control, SAR sequencing, SPI, result accumulation.</text>
   <text x="995" y="755" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">External: VREFH/VREFL/VCM/V_EXC, master clock, power source, electrodes.</text>
-  <text x="995" y="790" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">Digital implementation: measurement FSM with optional RV32I programming support.</text>
+  <text x="995" y="790" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">Digital implementation: phase-locked FSM plus RV32I + ROM policy control.</text>
 
   <text x="180" y="900" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#475569">Source basis: high-level design rev4.1 + implementation plan + timing checklist + current RTL.</text>
 </svg>

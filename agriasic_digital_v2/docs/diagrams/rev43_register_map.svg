@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="720" viewBox="0 0 1240 720" role="img" aria-labelledby="t d">
+  <title id="t">Rev 4.3 register map and indexed result readout</title>
+  <desc id="d">The SPI command byte allocates bit 6 to 3 for the register address, giving 16 registers. Six 16-bit accumulators plus temperature is thirteen result bytes, which will not fit as fixed registers. Rev 4.3 adds REG_RESULT_IDX, which auto-increments on each read of REG_RESULT_DATA, so a burst read is a sequence of unchanged two-byte transactions.</desc>
+  <defs>
+    <style>
+      .title { font: 700 25px sans-serif; fill: #0f172a; }
+      .sub   { font: 400 14px sans-serif; fill: #475569; }
+      .h     { font: 700 16px sans-serif; fill: #0f172a; }
+      .lbl   { font: 700 13.5px sans-serif; fill: #111827; }
+      .sml   { font: 400 12px sans-serif; fill: #4b5563; }
+      .mono  { font: 400 12.5px ui-monospace, "Courier New", monospace; fill: #1f2937; }
+      .monoW { font: 700 12.5px ui-monospace, "Courier New", monospace; fill: #ffffff; }
+      .new   { font: 700 11.5px sans-serif; fill: #15803d; }
+      .rw    { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.8; }
+      .ro    { fill: #fef3c7; stroke: #d97706; stroke-width: 1.8; }
+      .idx   { fill: #dcfce7; stroke: #16a34a; stroke-width: 2.4; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+      .byteI { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.8; }
+      .byteQ { fill: #fce7f3; stroke: #db2777; stroke-width: 1.8; }
+      .byteT { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.8; }
+      .arr   { stroke: #16a34a; stroke-width: 2.4; fill: none; marker-end: url(#g); }
+    </style>
+    <marker id="g" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#16a34a"/></marker>
+  </defs>
+
+  <rect width="1240" height="720" fill="#ffffff"/>
+  <text x="40" y="42" class="title">Rev 4.3 register map — indexed result readout</text>
+  <text x="40" y="66" class="sub">SPI command bit[6:3] gives only 16 addresses. Thirteen result bytes cannot sit alongside control as fixed registers.</text>
+
+  <!-- ============ register table ============ -->
+  <rect x="40" y="92" width="560" height="454" rx="12" class="panel"/>
+  <text x="60" y="122" class="h">Address map</text>
+
+  <g transform="translate(60,138)">
+    <rect x="0" y="0"   width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="22" class="mono">0x0  REG_CTRL        RW</text>
+    <text x="270" y="22" class="sml">start, error clear, core enable</text>
+
+    <rect x="0" y="40"  width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="62" class="mono">0x1  REG_PAIR_LOG2   RW</text>
+    <text x="270" y="62" class="sml">M = 2^value, constrain to ≤ 6</text>
+
+    <rect x="0" y="80"  width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="102" class="mono">0x2  REG_SETTLE      RW</text>
+    <text x="270" y="102" class="sml">settle after freq/phase change</text>
+
+    <rect x="0" y="120" width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="142" class="mono">0x3  REG_FREQ_SEL    RW</text>
+    <text x="270" y="142" class="sml">divider ratio N — see GAP-1</text>
+
+    <rect x="0" y="160" width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="182" class="mono">0x4  REG_PHASE_IDX   RW</text>
+    <text x="270" y="182" class="sml">index into the 16-state counter</text>
+    <text x="497" y="182" class="new">NEW</text>
+
+    <rect x="0" y="200" width="520" height="34" rx="6" class="rw"/>
+    <text x="12" y="222" class="mono">0x5  REG_CONV        RW</text>
+    <text x="270" y="222" class="sml">SAR conversion cycles</text>
+
+    <rect x="0" y="240" width="520" height="34" rx="6" class="ro"/>
+    <text x="12" y="262" class="mono">0x6  REG_STATUS      RO</text>
+    <text x="270" y="262" class="sml">busy, done, overrange, errors</text>
+
+    <rect x="0" y="280" width="520" height="34" rx="6" class="idx"/>
+    <text x="12" y="302" class="mono">0x7  REG_RESULT_IDX  RW</text>
+    <text x="270" y="302" class="sml">auto-increments on data read</text>
+    <text x="497" y="302" class="new">NEW</text>
+
+    <rect x="0" y="320" width="520" height="34" rx="6" class="idx"/>
+    <text x="12" y="342" class="mono">0x8  REG_RESULT_DATA RO</text>
+    <text x="270" y="342" class="sml">byte at the current index</text>
+    <text x="497" y="342" class="new">NEW</text>
+
+    <rect x="0" y="360" width="520" height="34" rx="6" class="ro"/>
+    <text x="12" y="382" class="mono">0x9  REG_ID          RO</text>
+    <text x="270" y="382" class="sml">design and revision identifier</text>
+  </g>
+
+  <!-- ============ result vector ============ -->
+  <rect x="640" y="92" width="560" height="454" rx="12" class="panel"/>
+  <text x="660" y="122" class="h">Result set — 13 bytes behind one address</text>
+  <text x="660" y="146" class="sml">REG_RESULT_IDX walks bytes, not words.</text>
+
+  <g transform="translate(660,170)">
+    <!-- I/Q for three frequency points -->
+    <text x="0" y="14" class="lbl">~1 kHz</text>
+    <rect x="90"  y="0" width="76" height="30" rx="5" class="byteI"/><text x="128" y="20" class="mono" text-anchor="middle">I lo</text>
+    <rect x="172" y="0" width="76" height="30" rx="5" class="byteI"/><text x="210" y="20" class="mono" text-anchor="middle">I hi</text>
+    <rect x="254" y="0" width="76" height="30" rx="5" class="byteQ"/><text x="292" y="20" class="mono" text-anchor="middle">Q lo</text>
+    <rect x="336" y="0" width="76" height="30" rx="5" class="byteQ"/><text x="374" y="20" class="mono" text-anchor="middle">Q hi</text>
+    <text x="424" y="20" class="sml">idx 0–3</text>
+
+    <text x="0" y="60" class="lbl">~100 kHz</text>
+    <rect x="90"  y="46" width="76" height="30" rx="5" class="byteI"/><text x="128" y="66" class="mono" text-anchor="middle">I lo</text>
+    <rect x="172" y="46" width="76" height="30" rx="5" class="byteI"/><text x="210" y="66" class="mono" text-anchor="middle">I hi</text>
+    <rect x="254" y="46" width="76" height="30" rx="5" class="byteQ"/><text x="292" y="66" class="mono" text-anchor="middle">Q lo</text>
+    <rect x="336" y="46" width="76" height="30" rx="5" class="byteQ"/><text x="374" y="66" class="mono" text-anchor="middle">Q hi</text>
+    <text x="424" y="66" class="sml">idx 4–7</text>
+
+    <text x="0" y="106" class="lbl">10 MHz</text>
+    <rect x="90"  y="92" width="76" height="30" rx="5" class="byteI"/><text x="128" y="112" class="mono" text-anchor="middle">I lo</text>
+    <rect x="172" y="92" width="76" height="30" rx="5" class="byteI"/><text x="210" y="112" class="mono" text-anchor="middle">I hi</text>
+    <rect x="254" y="92" width="76" height="30" rx="5" class="byteQ"/><text x="292" y="112" class="mono" text-anchor="middle">Q lo</text>
+    <rect x="336" y="92" width="76" height="30" rx="5" class="byteQ"/><text x="374" y="112" class="mono" text-anchor="middle">Q hi</text>
+    <text x="424" y="112" class="sml">idx 8–11</text>
+
+    <text x="0" y="152" class="lbl">temp</text>
+    <rect x="90"  y="138" width="76" height="30" rx="5" class="byteT"/><text x="128" y="158" class="mono" text-anchor="middle">PTAT</text>
+    <text x="424" y="158" class="sml">idx 12</text>
+  </g>
+
+  <!-- burst read sequence -->
+  <text x="660" y="380" class="h">Burst read — protocol unchanged</text>
+  <g transform="translate(660,396)">
+    <rect x="0" y="0" width="150" height="34" rx="6" class="rw"/>
+    <text x="75" y="22" class="mono" text-anchor="middle">write IDX = 0</text>
+    <path d="M154,17 L186,17" class="arr"/>
+    <rect x="190" y="0" width="150" height="34" rx="6" class="idx"/>
+    <text x="265" y="22" class="mono" text-anchor="middle">read DATA</text>
+    <path d="M344,17 L376,17" class="arr"/>
+    <rect x="380" y="0" width="150" height="34" rx="6" class="idx"/>
+    <text x="455" y="22" class="mono" text-anchor="middle">read DATA</text>
+
+    <path d="M265,38 L265,58 L455,58 L455,40" class="arr"/>
+    <text x="360" y="76" class="sml" text-anchor="middle">index auto-increments — no rewrite between bytes</text>
+  </g>
+  <text x="660" y="512" class="sml">Each step is an ordinary two-byte transaction. Response codes</text>
+  <text x="660" y="530" class="sml">0xA5 / 0x5A / 0xE1 / 0xE2 are retained unchanged.</text>
+
+  <!-- ============ footer note ============ -->
+  <rect x="40" y="566" width="1160" height="126" rx="12" class="panel"/>
+  <text x="60" y="596" class="h">Why an indexed port rather than more registers</text>
+  <text x="60" y="622" class="sml">Six 16-bit accumulators (3 frequency points × I/Q) plus temperature is ~13 result bytes. Mapped as fixed LO/HI pairs they would</text>
+  <text x="60" y="640" class="sml">consume 13 of the 16 available addresses, leaving no room for control. The indexed port costs two addresses total and leaves the</text>
+  <text x="60" y="658" class="sml">two-byte SPI framing untouched, so no host-side protocol change is required — only a different read sequence.</text>
+  <text x="60" y="682" class="sml">Open: REG_FREQ_SEL may hold a preset selector or raw N. Either way the divider counter must be ≥14 bits to reach 1 kHz (GAP-1).</text>
+</svg>

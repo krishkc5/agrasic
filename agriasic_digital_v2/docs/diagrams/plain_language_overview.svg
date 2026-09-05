@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" role="img" aria-labelledby="t d">
+  <title id="t">How the chip tells water from nutrients, in pictures</title>
+  <desc id="d">Four-panel illustration for non-engineers. Panel 1: two probes push current back and forth through soil containing water and salt. Panel 2: the push is tried at three speeds, slow, medium and fast, because nutrients react mostly to slow speeds while water reacts about the same at every speed. Panel 3: inside the chip, one worker keeps perfect timing and another worker decides when and how often to measure, and their results are added together. Panel 4: the chip hands raw numbers to an outside device; figuring out what the numbers mean happens later, elsewhere.</desc>
+  <defs>
+    <style>
+      .title  { font: 700 24px sans-serif; fill: #0f172a; }
+      .sub    { font: 400 14px sans-serif; fill: #64748b; }
+      .head   { font: 700 15px sans-serif; fill: #1e293b; }
+      .cap    { font: 400 12.5px sans-serif; fill: #475569; }
+      .capB   { font: 700 12.5px sans-serif; fill: #334155; }
+      .tiny   { font: 400 11px sans-serif; fill: #64748b; }
+      .panel  { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1.5; }
+      .soil   { fill: #c99a63; }
+      .soilD  { fill: #b0824c; }
+      .probe  { fill: #94a3b8; stroke: #64748b; stroke-width: 1.5; }
+      .drop   { fill: #38bdf8; stroke: #0284c7; stroke-width: 1; }
+      .salt   { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; }
+      .arrow  { stroke: #7c3aed; stroke-width: 2.6; fill: none; marker-end: url(#av); }
+      .flow   { stroke: #94a3b8; stroke-width: 2.5; fill: none; marker-end: url(#af); }
+      .feed   { stroke: #94a3b8; stroke-width: 2; fill: none; }
+      .wave1  { stroke: #16a34a; stroke-width: 3; fill: none; }
+      .wave2  { stroke: #d97706; stroke-width: 3; fill: none; }
+      .wave3  { stroke: #dc2626; stroke-width: 3; fill: none; }
+      .chip   { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
+      .worker { fill: #ffffff; stroke: #7c3aed; stroke-width: 1.8; }
+      .device { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .screen { fill: #0f172a; }
+      .digit  { font: 700 11px ui-monospace, monospace; fill: #4ade80; }
+    </style>
+    <marker id="av" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7c3aed"/></marker>
+    <marker id="af" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#94a3b8"/></marker>
+  </defs>
+
+  <rect width="1240" height="560" fill="#ffffff"/>
+  <text x="40" y="34" class="title">How the chip tells water from nutrients</text>
+  <text x="40" y="55" class="sub">A picture version of the plain-language overview — no circuit diagrams needed.</text>
+
+  <!-- panel backgrounds are drawn first so nothing painted after them can be
+       occluded by a neighboring panel's background -->
+  <rect x="40" y="86" width="260" height="428" rx="14" class="panel"/>
+  <rect x="336" y="86" width="264" height="428" rx="14" class="panel"/>
+  <rect x="636" y="86" width="264" height="428" rx="14" class="panel"/>
+  <rect x="936" y="86" width="264" height="428" rx="14" class="panel"/>
+
+  <!-- connecting arrows between panels -->
+  <path d="M300,300 L336,300" class="flow"/>
+  <path d="M600,300 L636,300" class="flow"/>
+  <path d="M900,300 L936,300" class="flow"/>
+
+  <!-- ================= PANEL 1 : probes in soil ================= -->
+  <text x="170" y="114" class="head" text-anchor="middle">1. Zap the soil, both ways</text>
+
+  <!-- soil block -->
+  <rect x="70" y="220" width="200" height="120" rx="10" class="soil"/>
+  <ellipse cx="105" cy="255" rx="5" ry="5" class="soilD"/>
+  <ellipse cx="150" cy="290" rx="5" ry="5" class="soilD"/>
+  <ellipse cx="200" cy="250" rx="5" ry="5" class="soilD"/>
+  <ellipse cx="230" cy="300" rx="5" ry="5" class="soilD"/>
+  <ellipse cx="90" cy="310" rx="5" ry="5" class="soilD"/>
+
+  <!-- water drops -->
+  <path d="M120,265 C126,272 126,280 120,284 C114,280 114,272 120,265 Z" class="drop"/>
+  <path d="M195,285 C201,292 201,300 195,304 C189,300 189,292 195,285 Z" class="drop"/>
+
+  <!-- salt crystals (tiny diamonds) -->
+  <rect x="150" y="248" width="10" height="10" class="salt" transform="rotate(45 155 253)"/>
+  <rect x="215" y="278" width="10" height="10" class="salt" transform="rotate(45 220 283)"/>
+
+  <!-- probes -->
+  <rect x="108" y="150" width="10" height="90" rx="4" class="probe"/>
+  <rect x="222" y="150" width="10" height="90" rx="4" class="probe"/>
+  <text x="113" y="142" class="tiny" text-anchor="middle">probe</text>
+  <text x="227" y="142" class="tiny" text-anchor="middle">probe</text>
+
+  <!-- back-and-forth arrow -->
+  <path d="M120,175 C160,150 180,150 220,175" class="arrow"/>
+  <path d="M220,192 C180,217 160,217 120,192" class="arrow"/>
+
+  <text x="170" y="365" class="capB" text-anchor="middle">Push current in, then reverse it</text>
+  <text x="170" y="384" class="cap" text-anchor="middle">Whatever looks the same both ways</text>
+  <text x="170" y="401" class="cap" text-anchor="middle">is the chip's own error — it cancels.</text>
+  <text x="170" y="418" class="cap" text-anchor="middle">What's left over came from the soil.</text>
+
+  <!-- legend: small drawn icons, not emoji, so it renders everywhere -->
+  <path d="M92,438 C96,443 96,448 92,451 C88,448 88,443 92,438 Z" class="drop"/>
+  <text x="102" y="448" class="tiny">water</text>
+  <rect x="150" y="440" width="9" height="9" class="salt" transform="rotate(45 154.5 444.5)"/>
+  <text x="164" y="448" class="tiny">dissolved nutrients</text>
+
+  <!-- ================= PANEL 2 : three speeds ================= -->
+  <text x="468" y="114" class="head" text-anchor="middle">2. Try three speeds</text>
+
+  <text x="360" y="150" class="capB">slow</text>
+  <path d="M358,177 Q398,142 438,177 Q478,212 518,177 Q558,142 578,159" class="wave1"/>
+  <text x="468" y="205" class="cap" text-anchor="middle">salty soil reacts strongly</text>
+
+  <text x="360" y="255" class="capB">medium</text>
+  <path d="M358,280 Q373,258 388,280 Q403,302 418,280 Q433,258 448,280 Q463,302 478,280 Q493,258 508,280 Q523,302 538,280 Q553,258 568,280 Q578,292 578,280" class="wave2"/>
+
+  <text x="360" y="345" class="capB">fast</text>
+  <path d="M358,370 Q366,354 374,370 Q382,386 390,370 Q398,354 406,370 Q414,386 422,370 Q430,354 438,370 Q446,386 454,370 Q462,354 470,370 Q478,386 486,370 Q494,354 502,370 Q510,386 518,370 Q526,354 534,370 Q542,386 550,370 Q558,354 566,370 Q574,386 578,378" class="wave3"/>
+  <text x="468" y="400" class="cap" text-anchor="middle">water reacts about</text>
+  <text x="468" y="416" class="cap" text-anchor="middle">the same either way</text>
+
+  <text x="468" y="448" class="capB" text-anchor="middle">Comparing slow vs. fast</text>
+  <text x="468" y="465" class="cap" text-anchor="middle">tells "wet" from "salty" apart —</text>
+  <text x="468" y="481" class="cap" text-anchor="middle">like knocking a wall in different</text>
+  <text x="468" y="497" class="cap" text-anchor="middle">spots to find wood vs. drywall.</text>
+
+  <!-- ================= PANEL 3 : two workers ================= -->
+  <text x="768" y="114" class="head" text-anchor="middle">3. Two workers inside the chip</text>
+
+  <rect x="660" y="134" width="216" height="248" rx="12" class="chip"/>
+  <text x="768" y="156" class="tiny" text-anchor="middle" font-weight="700">the digital half of the chip</text>
+
+  <!-- worker 1: timing (stopwatch), centered at 708 -->
+  <circle cx="708" cy="207" r="28" class="worker"/>
+  <circle cx="708" cy="209" r="20" fill="none" stroke="#7c3aed" stroke-width="1.6"/>
+  <line x1="708" y1="209" x2="708" y2="196" stroke="#7c3aed" stroke-width="2.2"/>
+  <line x1="708" y1="209" x2="717" y2="209" stroke="#7c3aed" stroke-width="2.2"/>
+  <rect x="704" y="183" width="8" height="6" rx="2" fill="#7c3aed"/>
+  <text x="708" y="252" class="cap" text-anchor="middle">keeps perfect</text>
+  <text x="708" y="267" class="cap" text-anchor="middle">timing</text>
+
+  <!-- worker 2: decision maker (tiny dot grid), centered at 828 -->
+  <rect x="800" y="179" width="56" height="56" rx="10" class="worker"/>
+  <circle cx="814" cy="195" r="3.2" fill="#7c3aed"/>
+  <circle cx="828" cy="195" r="3.2" fill="#7c3aed"/>
+  <circle cx="842" cy="195" r="3.2" fill="#7c3aed"/>
+  <circle cx="814" cy="207" r="3.2" fill="#7c3aed"/>
+  <circle cx="828" cy="207" r="3.2" fill="#7c3aed"/>
+  <circle cx="842" cy="207" r="3.2" fill="#7c3aed"/>
+  <circle cx="821" cy="219" r="3.2" fill="#7c3aed"/>
+  <circle cx="835" cy="219" r="3.2" fill="#7c3aed"/>
+  <text x="828" y="252" class="cap" text-anchor="middle">decides when</text>
+  <text x="828" y="267" class="cap" text-anchor="middle">&amp; how often</text>
+
+  <text x="768" y="288" class="tiny" text-anchor="middle">(this second worker is optional)</text>
+
+  <!-- both feed the adder, well below the captions above -->
+  <path d="M708,297 L708,325 L750,325" class="feed"/>
+  <path d="M828,297 L828,325 L786,325" class="feed"/>
+  <circle cx="768" cy="343" r="19" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+  <text x="768" y="350" font-size="19" font-weight="700" fill="#16a34a" text-anchor="middle">Σ</text>
+
+  <text x="768" y="400" class="capB" text-anchor="middle">Adds many readings together</text>
+  <text x="768" y="418" class="cap" text-anchor="middle">— noise cancels out, the way</text>
+  <text x="768" y="434" class="cap" text-anchor="middle">averaging ten guesses beats</text>
+  <text x="768" y="450" class="cap" text-anchor="middle">any single guess.</text>
+
+  <!-- ================= PANEL 4 : hand off ================= -->
+  <text x="1068" y="114" class="head" text-anchor="middle">4. Hand off the raw numbers</text>
+
+  <!-- small chip icon -->
+  <rect x="965" y="200" width="70" height="70" rx="8" class="chip"/>
+  <text x="1000" y="240" class="tiny" text-anchor="middle" font-weight="700">chip</text>
+
+  <path d="M1038,235 L1080,235" class="arrow"/>
+
+  <!-- receiving device -->
+  <rect x="1085" y="190" width="80" height="100" rx="10" class="device"/>
+  <rect x="1097" y="204" width="56" height="34" rx="4" class="screen"/>
+  <text x="1125" y="226" class="digit" text-anchor="middle">12 · 34</text>
+  <circle cx="1125" cy="266" r="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+  <text x="1125" y="270" font-size="9" fill="#2563eb" text-anchor="middle">?</text>
+  <text x="1125" y="300" class="tiny" text-anchor="middle">gateway / computer</text>
+
+  <text x="1068" y="345" class="capB" text-anchor="middle">The chip only measures.</text>
+  <text x="1068" y="364" class="cap" text-anchor="middle">"30% water, moderate</text>
+  <text x="1068" y="381" class="cap" text-anchor="middle">nutrients" is worked out</text>
+  <text x="1068" y="398" class="cap" text-anchor="middle">afterward, in software,</text>
+  <text x="1068" y="415" class="cap" text-anchor="middle">on the receiving end —</text>
+  <text x="1068" y="432" class="cap" text-anchor="middle">not on the chip itself.</text>
+
+  <text x="620" y="540" class="tiny" text-anchor="middle">See section 1.2 for the full plain-language explanation, and sections 4.6 / 6.11 for how the digital half actually implements this.</text>
+</svg>

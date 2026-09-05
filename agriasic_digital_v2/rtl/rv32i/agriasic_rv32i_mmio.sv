@@ -13,7 +13,13 @@
 //   0x8000_0000  CTRL       W   bit0 = start, bit7 = clear sticky errors
 //   0x8000_0004  PAIR_LOG2  RW  [3:0]
 //   0x8000_0008  SETTLE     RW  [7:0]
-//   0x8000_000C  DIVIDER    RW  [7:0]
+//   0x8000_000C  DIVIDER    RW  [13:0] (Rev 4.3 Phase 4.2: widened from [7:0],
+//                                       see GAP-1. Native 32-bit MMIO writes
+//                                       have no byte-framing constraint, so
+//                                       firmware can reach the full 14-bit
+//                                       range today -- unlike the SPI/prog
+//                                       host paths, which stay 8-bit-windowed
+//                                       until Phase 6 formalizes the encoding)
 //   0x8000_0010  CONV       RW  [7:0]
 //   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done
 //   0x8000_0018  RESULT     R   [15:0] signed accumulator
@@ -46,7 +52,7 @@ module agriasic_rv32i_mmio #(
   output logic        clear_errors_o,
   output logic [3:0]  cfg_pair_log2_o,
   output logic [7:0]  cfg_settle_cycles_o,
-  output logic [7:0]  cfg_exc_divider_o,
+  output logic [13:0] cfg_exc_divider_o,
   output logic [7:0]  cfg_conv_cycles_o,
 
   // Status inputs from the measurement engine.
@@ -101,7 +107,7 @@ module agriasic_rv32i_mmio #(
   // --------------------------------------------------------------------------
   logic [3:0] cfg_pair_log2_q;
   logic [7:0] cfg_settle_q;
-  logic [7:0] cfg_divider_q;
+  logic [13:0] cfg_divider_q;
   logic [7:0] cfg_conv_q;
 
   assign cfg_pair_log2_o     = cfg_pair_log2_q;
@@ -113,7 +119,7 @@ module agriasic_rv32i_mmio #(
     if (!rst_n) begin
       cfg_pair_log2_q <= 4'd2;
       cfg_settle_q    <= 8'd2;
-      cfg_divider_q   <= 8'd0;
+      cfg_divider_q   <= 14'd0;
       cfg_conv_q      <= 8'd1;
       start_pulse_o   <= 1'b0;
       clear_errors_o  <= 1'b0;
@@ -130,7 +136,7 @@ module agriasic_rv32i_mmio #(
           end
           REG_PAIR_LOG2: cfg_pair_log2_q <= wdata_i[3:0];
           REG_SETTLE:    cfg_settle_q    <= wdata_i[7:0];
-          REG_DIVIDER:   cfg_divider_q   <= wdata_i[7:0];
+          REG_DIVIDER:   cfg_divider_q   <= wdata_i[13:0];
           REG_CONV:      cfg_conv_q      <= wdata_i[7:0];
           // STATUS and RESULT are read-only; writes are ignored.
           default: begin
@@ -185,7 +191,7 @@ module agriasic_rv32i_mmio #(
     unique case (periph_reg)
       REG_PAIR_LOG2: periph_rdata = {28'd0, cfg_pair_log2_q};
       REG_SETTLE:    periph_rdata = {24'd0, cfg_settle_q};
-      REG_DIVIDER:   periph_rdata = {24'd0, cfg_divider_q};
+      REG_DIVIDER:   periph_rdata = {18'd0, cfg_divider_q};
       REG_CONV:      periph_rdata = {24'd0, cfg_conv_q};
       REG_STATUS:    periph_rdata = {30'd0, meas_done_q, meas_busy_q};
       REG_RESULT:    periph_rdata = {{16{result_i[15]}}, result_i};

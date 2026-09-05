@@ -1,5 +1,7 @@
 #!/bin/bash
-cd "/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN/agriasic_digital_v2/rtl"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$BASE/rtl"
 echo "=== control shell hierarchy ==="
 verilator --lint-only --timing -Irv32i --top-module agriasic_rv32i_control_shell \
   agriasic_rv32i_control_shell.sv \

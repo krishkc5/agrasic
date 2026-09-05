@@ -6,16 +6,16 @@ This document defines the digital implementation track for the single-die impeda
 ## Digital goals
 1. Deliver autonomous on-die measurement sequencing so the host is optional.
 2. Harden a digital macro through the automated RTL-to-GDS flow within the schedule.
-3. Preserve an always-viable fallback path (FSM-only build) if CPU area or schedule risk materializes.
-4. Ensure clean digital/analog contracts for excitation timing, SAR conversion control, and result handoff.
+3. Keep the measurement FSM as the permanent inner-loop timing engine while the core handles sweep policy.
+4. Ensure clean digital/analog contracts for excitation timing, SAR conversion control, raw accumulation, and result handoff.
 
 ## In-scope digital blocks
-- Measurement FSM (mandatory baseline and fallback)
-- Excitation digital controller (divider, polarity, settle controls)
+- Measurement FSM (mandatory permanent timing engine)
+- Excitation digital controller (free-running divider, phase counter, settle controls)
 - SAR conversion controller
 - SPI slave interface
-- Register map and status/control plane
-- Optional controller integration hook (reference RV32I or SERV fallback)
+- Register map, status/control plane, and indexed result readout
+- RV32I + ROM policy/control shell for sweep and host management
 
 ## Out-of-scope for first implementation
 - New CPU architectural features beyond stripped control needs

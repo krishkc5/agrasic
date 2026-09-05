@@ -6,9 +6,9 @@
 //
 // ADC model: returns a fixed code per excitation polarity, so the expected
 // result is exact.
-//   D+ = 200, D- = 100  ->  contribution = (200-100)/2 = 50 per pair
-//   pair_log2 = 2       ->  4 pairs      -> accumulator = 200
-//   firmware averages 4 identical measurements -> 200
+//   D+ = 200, D- = 100  ->  contribution = 200-100 = 100 per pair (raw)
+//   pair_log2 = 2       ->  4 pairs      -> accumulator = 400
+//   firmware averages 4 identical measurements -> 400
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ns
 
@@ -19,19 +19,29 @@ module tb_agriasic_rv32i_e2e;
   logic clk = 1'b0;
   logic rst_n;
   logic start_i;
-  logic [ADC_WIDTH-1:0] adc_code_i;
 
-  logic conv_start_o, exc_pol_o, busy_o, done_o;
+  logic conv_start_o, exc_drive_p_o, exc_drive_n_o, busy_o, done_o;
+  logic adc_enable_o, adc_sample_o;
+  logic [ADC_WIDTH-1:0] adc_dac_o;
+  logic adc_comp_i;
   logic [15:0] result_o;
   logic [3:0]  cfg_pair_log2_o;
   logic [7:0]  cfg_settle_cycles_o, cfg_exc_divider_o, cfg_conv_cycles_o;
 
   always #5 clk = ~clk;
 
-  // Deterministic ADC model keyed on excitation polarity.
-  always_comb begin
-    adc_code_i = exc_pol_o ? 8'd200 : 8'd100;
+  // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See
+  // sar_controller's header for the adc_comp_i convention this implements.
+  // Rev 4.3 Phase 4: excitation free-runs, so exc_drive_p_o can move during a
+  // single multi-cycle conversion. Latch the target on adc_sample_o (real
+  // track-and-hold), don't re-derive it live from the drive signal.
+  logic [ADC_WIDTH-1:0] adc_target_held_q;
+  always_ff @(posedge clk) begin
+    if (adc_sample_o) begin
+      adc_target_held_q <= exc_drive_p_o ? 8'd200 : 8'd100;
+    end
   end
+  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   agriasic_digital_rv32i_top #(
     .ADC_WIDTH(ADC_WIDTH)
@@ -39,9 +49,13 @@ module tb_agriasic_rv32i_e2e;
     .clk                 (clk),
     .rst_n               (rst_n),
     .start_i             (start_i),
-    .adc_code_i          (adc_code_i),
     .conv_start_o        (conv_start_o),
-    .exc_pol_o           (exc_pol_o),
+    .exc_drive_p_o       (exc_drive_p_o),
+    .exc_drive_n_o       (exc_drive_n_o),
+    .adc_enable_o        (adc_enable_o),
+    .adc_sample_o        (adc_sample_o),
+    .adc_dac_o           (adc_dac_o),
+    .adc_comp_i          (adc_comp_i),
     .busy_o              (busy_o),
     .done_o              (done_o),
     .result_o            (result_o),
@@ -97,6 +111,30 @@ module tb_agriasic_rv32i_e2e;
     end
   end
 
+  // --------------------------------------------------------------------------
+  // Rev 4.3 Phase 2.2: core clock enable must actually freeze the core.
+  //
+  // This reaches into the real trigger path (core_clk_en, driven by
+  // start_pulse_o/measurement_done_i) rather than forcing a synthetic freeze,
+  // so it verifies the mechanism this firmware run genuinely exercises four
+  // times (once per measurement), not an artificial scenario.
+  // --------------------------------------------------------------------------
+  wire        core_clk_en_mon = dut.u_control_shell.core_clk_en;
+  wire [31:0] pc_mon          = dut.u_control_shell.u_core.f_pc_current;
+
+  int unsigned frozen_cycles;
+  always_ff @(posedge clk) begin
+    if (!rst_n) frozen_cycles <= 0;
+    else if (!core_clk_en_mon) frozen_cycles <= frozen_cycles + 1;
+  end
+
+  property p_frozen_pc_holds;
+    @(posedge clk) disable iff (!rst_n)
+      !core_clk_en_mon |=> $stable(pc_mon);
+  endproperty
+  assert property (p_frozen_pc_holds)
+    else $error("CLK_EN_FAIL: PC changed while core_clk_en was low");
+
   initial begin
     errors  = 0;
     rst_n   = 1'b0;
@@ -130,9 +168,9 @@ module tb_agriasic_rv32i_e2e;
              cfg_pair_log2_o, cfg_settle_cycles_o, cfg_exc_divider_o, cfg_conv_cycles_o);
 
     check_word("OUT_COUNT",   W_COUNT,   32'd4);
-    check_word("OUT_AVERAGE", W_AVERAGE, 32'd200);
+    check_word("OUT_AVERAGE", W_AVERAGE, 32'd400);
     for (int i = 0; i < 4; i++) begin
-      check_word($sformatf("OUT_SAMPLES[%0d]", i), W_SAMPLES + i, 32'd200);
+      check_word($sformatf("OUT_SAMPLES[%0d]", i), W_SAMPLES + i, 32'd400);
     end
 
     if (cfg_pair_log2_o !== 4'd2) begin
@@ -143,6 +181,10 @@ module tb_agriasic_rv32i_e2e;
       $error("measurements_seen = %0d, expected 4", measurements_seen);
       errors++;
     end
+
+    $display("[TB] core_clk_en held low for %0d cycles across %0d measurements (%0s)",
+             frozen_cycles, measurements_seen,
+             (frozen_cycles > 0) ? "freeze mechanism exercised" : "WARNING: never froze");
 
     if (errors == 0) $display("[TB] PASS -- all checks passed");
     else             $display("[TB] FAIL -- %0d error(s)", errors);

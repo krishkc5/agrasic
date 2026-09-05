@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="940" viewBox="0 0 1240 940" role="img" aria-labelledby="t d">
+  <title id="t">The six wires between digital and analog</title>
+  <desc id="d">Three-panel illustration for non-engineers. Panel 1: two mutually-exclusive drive wires push current through the soil, with a brief off-pause whenever they swap direction. Panel 2: an enable wire wakes the analog sensing circuit up for the duration of one reading, and a sample wire freezes the value at one instant. Panel 3: an eight-round guessing game between digital and analog narrows an 8-bit number down to the exact reading, each round asking analog whether the true value is at least as big as digital's current guess.</desc>
+  <defs>
+    <style>
+      .title  { font: 700 24px sans-serif; fill: #0f172a; }
+      .sub    { font: 400 14px sans-serif; fill: #64748b; }
+      .head   { font: 700 15px sans-serif; fill: #1e293b; }
+      .cap    { font: 400 12.5px sans-serif; fill: #475569; }
+      .capB   { font: 700 12.5px sans-serif; fill: #334155; }
+      .tiny   { font: 400 11px sans-serif; fill: #64748b; }
+      .mono   { font: 700 13px ui-monospace, "Courier New", monospace; fill: #1e293b; }
+      .monoS  { font: 400 11.5px ui-monospace, "Courier New", monospace; fill: #475569; }
+      .panel  { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1.5; }
+      .digitalBox { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
+      .analogBox  { fill: #fdeade; stroke: #e07a4b; stroke-width: 2; }
+      .wireOut { stroke: #7c3aed; stroke-width: 2.6; fill: none; marker-end: url(#av); }
+      .wireIn  { stroke: #e07a4b; stroke-width: 2.6; fill: none; marker-end: url(#ao); }
+      .flow   { stroke: #94a3b8; stroke-width: 2.5; fill: none; marker-end: url(#af); }
+      .keep   { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.6; }
+      .drop   { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.6; }
+      .final  { fill: #dbeafe; stroke: #2563eb; stroke-width: 2.2; }
+      .yes    { font: 700 12px sans-serif; fill: #15803d; }
+      .no     { font: 700 12px sans-serif; fill: #b91c1c; }
+    </style>
+    <marker id="av" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7c3aed"/></marker>
+    <marker id="ao" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#e07a4b"/></marker>
+    <marker id="af" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#94a3b8"/></marker>
+  </defs>
+
+  <rect width="1240" height="940" fill="#ffffff"/>
+  <text x="40" y="34" class="title">The six wires between digital and analog</text>
+  <text x="40" y="55" class="sub">Everything digital and analog say to each other during one reading — purple wires carry digital's instructions out, orange carries analog's one answer back.</text>
+
+  <!-- panel backgrounds -->
+  <rect x="40" y="80" width="330" height="500" rx="14" class="panel"/>
+  <rect x="400" y="80" width="330" height="500" rx="14" class="panel"/>
+  <rect x="760" y="80" width="440" height="500" rx="14" class="panel"/>
+
+  <path d="M370,330 L398,330" class="flow"/>
+  <path d="M730,330 L758,330" class="flow"/>
+
+  <!-- ================= PANEL 1: drive wires ================= -->
+  <text x="205" y="108" class="head" text-anchor="middle">1. Push the current — two wires,</text>
+  <text x="205" y="126" class="head" text-anchor="middle">never both on</text>
+
+  <rect x="70" y="155" width="120" height="70" rx="8" class="digitalBox"/>
+  <text x="130" y="195" class="cap" text-anchor="middle" font-weight="700">excitation_ctrl</text>
+
+  <rect x="230" y="155" width="110" height="70" rx="8" class="analogBox"/>
+  <text x="285" y="195" class="cap" text-anchor="middle" font-weight="700">soil probes</text>
+
+  <text x="209" y="168" class="tiny" text-anchor="middle">drive_p</text>
+  <path d="M190,176 L228,176" class="wireOut"/>
+  <text x="209" y="200" class="tiny" text-anchor="middle">drive_n</text>
+  <path d="M190,208 L228,208" class="wireOut"/>
+
+  <text x="70" y="245" class="capB">Only one wire is ever "on."</text>
+  <text x="70" y="264" class="cap">Like a two-way light switch —</text>
+  <text x="70" y="282" class="cap">except every time it flips, there's</text>
+  <text x="70" y="300" class="cap">a brief instant where BOTH are off.</text>
+  <text x="70" y="326" class="cap" font-weight="700">Why: with one wire and two voltage</text>
+  <text x="70" y="344" class="cap">levels, a switching glitch could</text>
+  <text x="70" y="362" class="cap">short both directions together.</text>
+  <text x="70" y="380" class="cap">Two separate wires make that</text>
+  <text x="70" y="398" class="cap">physically impossible, not just</text>
+  <text x="70" y="416" class="cap">unlikely.</text>
+
+  <text x="70" y="450" class="capB">Owned by: excitation_ctrl</text>
+  <text x="70" y="470" class="tiny">(also runs the "wait for it to</text>
+  <text x="70" y="486" class="tiny">settle" timer before reading)</text>
+
+  <!-- ================= PANEL 2: enable + sample ================= -->
+  <text x="565" y="108" class="head" text-anchor="middle">2. Wake up, then</text>
+  <text x="565" y="126" class="head" text-anchor="middle">freeze the reading</text>
+
+  <rect x="430" y="155" width="120" height="70" rx="8" class="digitalBox"/>
+  <text x="490" y="185" class="cap" text-anchor="middle" font-weight="700">sar_controller</text>
+  <text x="490" y="203" class="tiny" text-anchor="middle">(digital)</text>
+
+  <rect x="590" y="155" width="110" height="70" rx="8" class="analogBox"/>
+  <text x="645" y="185" class="cap" text-anchor="middle" font-weight="700">sensing</text>
+  <text x="645" y="203" class="cap" text-anchor="middle" font-weight="700">circuit</text>
+
+  <text x="569" y="168" class="tiny" text-anchor="middle">enable</text>
+  <path d="M550,176 L588,176" class="wireOut"/>
+  <text x="569" y="200" class="tiny" text-anchor="middle">sample</text>
+  <path d="M550,208 L588,208" class="wireOut"/>
+
+  <text x="430" y="245" class="capB">enable = "wake up and stay on"</text>
+  <text x="430" y="264" class="cap">Held on for the whole reading,</text>
+  <text x="430" y="282" class="cap">then off — like a sensor that</text>
+  <text x="430" y="300" class="cap">sleeps between uses to save power.</text>
+
+  <text x="430" y="332" class="capB">sample = "freeze it, right now"</text>
+  <text x="430" y="351" class="cap">One short pulse — a camera-shutter</text>
+  <text x="430" y="369" class="cap">click. The signal has to hold still</text>
+  <text x="430" y="387" class="cap">for the eight-round guessing game</text>
+  <text x="430" y="405" class="cap">in panel 3, not keep moving.</text>
+
+  <text x="430" y="450" class="capB">Owned by: sar_controller</text>
+  <text x="430" y="470" class="tiny">(also runs the guessing game</text>
+  <text x="430" y="486" class="tiny">and hands the final number to the</text>
+  <text x="430" y="502" class="tiny">conductor in panel 3's footer)</text>
+
+  <!-- ================= PANEL 3: guessing game ================= -->
+  <text x="980" y="108" class="head" text-anchor="middle">3. The guessing game — 8 rounds to one 8-bit number</text>
+  <text x="980" y="128" class="cap" text-anchor="middle">Real example: the true reading is 180. Digital finds it in exactly 8 yes/no answers.</text>
+
+  <g transform="translate(790,145)">
+    <!-- header row -->
+    <text x="0"   y="14" class="tiny" font-weight="700">round</text>
+    <text x="45"  y="14" class="tiny" font-weight="700">digital guesses</text>
+    <text x="195" y="14" class="tiny" font-weight="700">analog says</text>
+    <text x="300" y="14" class="tiny" font-weight="700">best so far</text>
+
+    <!-- round 1: guess 128, keep -->
+    <rect x="0" y="24" width="380" height="28" rx="5" class="keep"/>
+    <text x="8"   y="42" class="mono">1</text>
+    <text x="45"  y="42" class="monoS">is it &#8805; 128?</text>
+    <text x="195" y="42" class="yes">YES (comp=1)</text>
+    <text x="305" y="42" class="mono">128</text>
+
+    <!-- round 2: guess 192, drop -->
+    <rect x="0" y="56" width="380" height="28" rx="5" class="drop"/>
+    <text x="8"   y="74" class="mono">2</text>
+    <text x="45"  y="74" class="monoS">is it &#8805; 192?</text>
+    <text x="195" y="74" class="no">no (comp=0)</text>
+    <text x="305" y="74" class="mono">128</text>
+
+    <!-- round 3: guess 160, keep -->
+    <rect x="0" y="88" width="380" height="28" rx="5" class="keep"/>
+    <text x="8"   y="106" class="mono">3</text>
+    <text x="45"  y="106" class="monoS">is it &#8805; 160?</text>
+    <text x="195" y="106" class="yes">YES (comp=1)</text>
+    <text x="305" y="106" class="mono">160</text>
+
+    <!-- round 4: guess 176, keep -->
+    <rect x="0" y="120" width="380" height="28" rx="5" class="keep"/>
+    <text x="8"   y="138" class="mono">4</text>
+    <text x="45"  y="138" class="monoS">is it &#8805; 176?</text>
+    <text x="195" y="138" class="yes">YES (comp=1)</text>
+    <text x="305" y="138" class="mono">176</text>
+
+    <!-- round 5: guess 184, drop -->
+    <rect x="0" y="152" width="380" height="28" rx="5" class="drop"/>
+    <text x="8"   y="170" class="mono">5</text>
+    <text x="45"  y="170" class="monoS">is it &#8805; 184?</text>
+    <text x="195" y="170" class="no">no (comp=0)</text>
+    <text x="305" y="170" class="mono">176</text>
+
+    <!-- round 6: guess 180, keep -->
+    <rect x="0" y="184" width="380" height="28" rx="5" class="keep"/>
+    <text x="8"   y="202" class="mono">6</text>
+    <text x="45"  y="202" class="monoS">is it &#8805; 180?</text>
+    <text x="195" y="202" class="yes">YES (comp=1)</text>
+    <text x="305" y="202" class="mono">180</text>
+
+    <!-- round 7: guess 182, drop -->
+    <rect x="0" y="216" width="380" height="28" rx="5" class="drop"/>
+    <text x="8"   y="234" class="mono">7</text>
+    <text x="45"  y="234" class="monoS">is it &#8805; 182?</text>
+    <text x="195" y="234" class="no">no (comp=0)</text>
+    <text x="305" y="234" class="mono">180</text>
+
+    <!-- round 8: guess 181, drop -->
+    <rect x="0" y="248" width="380" height="28" rx="5" class="drop"/>
+    <text x="8"   y="266" class="mono">8</text>
+    <text x="45"  y="266" class="monoS">is it &#8805; 181?</text>
+    <text x="195" y="266" class="no">no (comp=0)</text>
+    <text x="305" y="266" class="mono">180</text>
+
+    <!-- final -->
+    <rect x="0" y="286" width="380" height="34" rx="6" class="final"/>
+    <text x="190" y="308" class="mono" text-anchor="middle" font-size="14">final reading = 180, exactly right, in 8 rounds</text>
+  </g>
+
+  <text x="780" y="480" class="cap">Each round: digital proposes a number on 8 "guess" wires (</text>
+  <text x="780" y="498" class="cap">the more it fits, the higher the guess; each round only changes</text>
+  <text x="780" y="516" class="cap">one bit, from the most important bit down to the least). Analog</text>
+  <text x="780" y="534" class="cap">answers on ONE wire: 1 = "at least that," 0 = "less than that."</text>
+  <text x="780" y="552" class="cap">Eight yes/no answers pin down one of 256 possible values exactly —</text>
+  <text x="780" y="570" class="cap">the same trick as a "guess the number 0-255" game where every</text>
+  <text x="780" y="588" class="cap">guess halves what's left, so 8 guesses always finish it.</text>
+
+  <!-- ================= footer: the conductor ================= -->
+  <rect x="40" y="620" width="1160" height="230" rx="14" class="panel"/>
+  <text x="620" y="650" class="head" text-anchor="middle">The conductor: measurement_fsm</text>
+  <text x="620" y="670" class="cap" text-anchor="middle">Owns none of the six wires directly — it tells the other two components what to do, and when, in order:</text>
+
+  <g transform="translate(90,695)">
+    <rect x="0"   y="0" width="150" height="70" rx="8" class="digitalBox"/>
+    <text x="75" y="28" class="cap" text-anchor="middle" font-weight="700">1. Command</text>
+    <text x="75" y="46" class="cap" text-anchor="middle">"push current</text>
+    <text x="75" y="62" class="cap" text-anchor="middle">forward"</text>
+
+    <path d="M154,35 L196,35" class="flow"/>
+
+    <rect x="200" y="0" width="150" height="70" rx="8" class="digitalBox"/>
+    <text x="275" y="28" class="cap" text-anchor="middle" font-weight="700">2. Wait</text>
+    <text x="275" y="46" class="cap" text-anchor="middle">for it to settle</text>
+    <text x="275" y="62" class="cap" text-anchor="middle">(panel 1's timer)</text>
+
+    <path d="M354,35 L396,35" class="flow"/>
+
+    <rect x="400" y="0" width="150" height="70" rx="8" class="digitalBox"/>
+    <text x="475" y="28" class="cap" text-anchor="middle" font-weight="700">3. Read</text>
+    <text x="475" y="46" class="cap" text-anchor="middle">run the guessing</text>
+    <text x="475" y="62" class="cap" text-anchor="middle">game &#8594; get D+</text>
+
+    <path d="M554,35 L596,35" class="flow"/>
+
+    <rect x="600" y="0" width="150" height="70" rx="8" class="digitalBox"/>
+    <text x="675" y="28" class="cap" text-anchor="middle" font-weight="700">4. Reverse</text>
+    <text x="675" y="46" class="cap" text-anchor="middle">push current</text>
+    <text x="675" y="62" class="cap" text-anchor="middle">backward</text>
+
+    <path d="M754,35 L796,35" class="flow"/>
+
+    <rect x="800" y="0" width="150" height="70" rx="8" class="digitalBox"/>
+    <text x="875" y="28" class="cap" text-anchor="middle" font-weight="700">5. Read again</text>
+    <text x="875" y="46" class="cap" text-anchor="middle">same game &#8594;</text>
+    <text x="875" y="62" class="cap" text-anchor="middle">get D-</text>
+
+    <path d="M0,90 L0,105 L950,105 L950,90" class="flow" fill="none"/>
+    <path d="M475,105 L475,120" class="flow"/>
+
+    <rect x="325" y="120" width="300" height="60" rx="8" class="final"/>
+    <text x="475" y="145" class="cap" text-anchor="middle" font-weight="700">6. Subtract and add to the running total</text>
+    <text x="475" y="163" class="cap" text-anchor="middle">D+ minus D- cancels the chip's own bias.</text>
+  </g>
+
+  <text x="620" y="925" class="tiny" text-anchor="middle" font-style="italic">Steps 1-6 repeat M times (a few dozen), then the running total is handed to the outside world over SPI. See sections 4.6, 6.1, 6.3, 6.5-6.6, and 6.11 for the engineering detail.</text>
+</svg>

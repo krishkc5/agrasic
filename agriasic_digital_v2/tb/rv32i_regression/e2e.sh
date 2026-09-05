@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
-BASE="/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN/agriasic_digital_v2"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
 W="$HOME/agriasic_e2e"
 rm -rf "$W"; mkdir -p "$W"
 cd "$W"
@@ -16,7 +17,7 @@ verilator --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALE
   --top-module tb_agriasic_rv32i_e2e \
   -o sim_e2e \
   tb_agriasic_rv32i_e2e.sv \
-  agriasic_digital_rv32i_top.sv agriasic_rv32i_control_shell.sv agriasic_digital_top.sv \
+  agriasic_digital_rv32i_top.sv agriasic_rv32i_control_shell.sv agriasic_digital_top.sv rst_sync.sv \
   measurement_fsm.sv excitation_ctrl.sv sar_controller.sv \
   agriasic_rv32i_core.sv agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv \
   2>&1 | tail -20

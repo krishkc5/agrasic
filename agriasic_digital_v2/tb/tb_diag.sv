@@ -2,19 +2,34 @@
 module tb_diag;
   logic clk = 1'b0;
   logic rst_n, start_i;
-  logic [7:0] adc_code_i;
-  logic conv_start_o, exc_pol_o, busy_o, done_o;
+  logic conv_start_o, exc_drive_p_o, exc_drive_n_o, busy_o, done_o;
+  logic adc_enable_o, adc_sample_o;
+  logic [7:0] adc_dac_o;
+  logic adc_comp_i;
   logic [15:0] result_o;
   logic [3:0] cfg_pair_log2_o;
   logic [7:0] cfg_settle_cycles_o, cfg_exc_divider_o, cfg_conv_cycles_o;
 
   always #5 clk = ~clk;
-  always_comb adc_code_i = exc_pol_o ? 8'd200 : 8'd100;
+
+  // Behavioral comparator model -- see sar_controller's header for the
+  // adc_comp_i convention this implements.
+  // Rev 4.3 Phase 4: latch the target on adc_sample_o (track-and-hold);
+  // exc_drive_p_o can move during a multi-cycle conversion now.
+  logic [7:0] adc_target_held_q;
+  always_ff @(posedge clk) begin
+    if (adc_sample_o) begin
+      adc_target_held_q <= exc_drive_p_o ? 8'd200 : 8'd100;
+    end
+  end
+  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   agriasic_digital_rv32i_top dut (
-    .clk(clk), .rst_n(rst_n), .start_i(start_i), .adc_code_i(adc_code_i),
-    .conv_start_o(conv_start_o), .exc_pol_o(exc_pol_o), .busy_o(busy_o),
-    .done_o(done_o), .result_o(result_o),
+    .clk(clk), .rst_n(rst_n), .start_i(start_i),
+    .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
+    .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o),
+    .adc_dac_o(adc_dac_o), .adc_comp_i(adc_comp_i),
+    .busy_o(busy_o), .done_o(done_o), .result_o(result_o),
     .cfg_pair_log2_o(cfg_pair_log2_o), .cfg_settle_cycles_o(cfg_settle_cycles_o),
     .cfg_exc_divider_o(cfg_exc_divider_o), .cfg_conv_cycles_o(cfg_conv_cycles_o));
 

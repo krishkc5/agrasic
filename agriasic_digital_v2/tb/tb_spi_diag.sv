@@ -9,23 +9,34 @@ module tb_spi_diag;
   localparam logic [3:0] REG_DIVIDER   = 4'h3;
   localparam logic [3:0] REG_CONV      = 4'h4;
 
-  logic clk, rst_n, sclk_i, cs_n_i, mosi_i, miso_o;
-  logic [ADC_WIDTH-1:0] adc_code_i;
-  logic conv_start_o, exc_pol_o, busy_o, done_o;
+  logic clk, rst_n, sclk_i, cs_n_i, mosi_i, miso_o, miso_oe_o;
+  logic conv_start_o, exc_drive_p_o, exc_drive_n_o, busy_o, done_o;
+  logic adc_enable_o, adc_sample_o;
+  logic [ADC_WIDTH-1:0] adc_dac_o;
+  logic adc_comp_i;
   logic [15:0] result_o;
 
   agriasic_digital_spi_top #(.ADC_WIDTH(ADC_WIDTH)) dut (
     .clk(clk), .rst_n(rst_n), .sclk_i(sclk_i), .cs_n_i(cs_n_i),
-    .mosi_i(mosi_i), .miso_o(miso_o), .adc_code_i(adc_code_i),
-    .conv_start_o(conv_start_o), .exc_pol_o(exc_pol_o),
+    .mosi_i(mosi_i), .miso_o(miso_o), .miso_oe_o(miso_oe_o),
+    .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
+    .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o),
+    .adc_dac_o(adc_dac_o), .adc_comp_i(adc_comp_i),
     .busy_o(busy_o), .done_o(done_o), .result_o(result_o));
 
   always #5 clk = ~clk;
 
+  // Behavioral comparator model -- see sar_controller's header for the
+  // adc_comp_i convention this implements.
+  // Rev 4.3 Phase 4: latch the target on adc_sample_o (track-and-hold);
+  // exc_drive_p_o can move during a multi-cycle conversion now.
+  logic [ADC_WIDTH-1:0] adc_target_held_q;
   always_ff @(posedge clk) begin
-    if (!rst_n) adc_code_i <= '0;
-    else if (conv_start_o) adc_code_i <= exc_pol_o ? 8'd180 : 8'd60;
+    if (adc_sample_o) begin
+      adc_target_held_q <= exc_drive_p_o ? 8'd180 : 8'd60;
+    end
   end
+  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   int unsigned start_pulses, rx_valids, done_pulses;
   always_ff @(posedge clk) begin
@@ -42,7 +53,7 @@ module tb_spi_diag;
     int b;
     begin
       for (b = 7; b >= 0; b--) begin
-        mosi_i = tx[b]; #20; sclk_i = 1'b1; #10; #10; sclk_i = 1'b0; #20;
+        mosi_i = tx[b]; #80; sclk_i = 1'b1; #40; #40; sclk_i = 1'b0; #80;
       end
     end
   endtask
@@ -54,14 +65,14 @@ module tb_spi_diag;
     begin
       cs_n_i = 1'b0;
       xfer({1'b1, addr, 3'b000});
-      #120;
+      #480;
       // capture MISO while clocking the dummy byte
       for (b = 7; b >= 0; b--) begin
-        mosi_i = 1'b0; #20; sclk_i = 1'b1; #10; rd_byte[b] = miso_o; #10; sclk_i = 1'b0; #20;
+        mosi_i = 1'b0; #80; sclk_i = 1'b1; #40; rd_byte[b] = miso_o; #40; sclk_i = 1'b0; #80;
       end
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -69,11 +80,11 @@ module tb_spi_diag;
     begin
       cs_n_i = 1'b0;
       xfer({1'b0, addr, 3'b000});
-      #120;
+      #480;
       xfer(data);
-      #60;
+      #240;
       cs_n_i = 1'b1;
-      #200;
+      #800;
     end
   endtask
 
@@ -93,7 +104,7 @@ module tb_spi_diag;
              dut.cfg_pair_log2_q, dut.cfg_settle_q, dut.cfg_divider_q, dut.cfg_conv_q);
 
     // --- replicate the smoke test's error-injection sequence ---
-    cs_n_i = 1'b0; xfer(8'h03); #120; xfer(8'h55); #60; cs_n_i = 1'b1; #200;
+    cs_n_i = 1'b0; xfer(8'h03); #480; xfer(8'h55); #240; cs_n_i = 1'b1; #800;
     $display("after invalid-cmd:  rx_valids=%0d rx_state=%0d flags[proto,addr,wr]=%b%b%b busy=%b",
              rx_valids, dut.rx_state_q, dut.status_protocol_err_q,
              dut.status_bad_addr_q, dut.status_illegal_wr_q, busy_o);
@@ -115,8 +126,8 @@ module tb_spi_diag;
     $display("  fsm_state=%0d busy=%b done=%b",
              dut.u_core.u_measurement_fsm.state_q, busy_o, done_o);
 
-    repeat (300) @(posedge clk);
-    $display("=== after 300 more cycles ===");
+    repeat (1000) @(posedge clk);
+    $display("=== after 1000 more cycles ===");
     $display("  start_pulses=%0d done_pulses=%0d fsm_state=%0d busy=%b result=%0d",
              start_pulses, done_pulses,
              dut.u_core.u_measurement_fsm.state_q, busy_o, $signed(result_o));

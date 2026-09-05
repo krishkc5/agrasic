@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="800" viewBox="0 0 1240 800" role="img" aria-labelledby="t d">
+  <title id="t">AgriASIC Rev 4.3 phase-locked architecture</title>
+  <desc id="d">Block diagram of the Rev 4.3 single-die impedance sensing node. The free-running excitation generator exports a 16-state phase counter to the measurement FSM, which strobes the SAR ADC on phase match and accumulates into I and Q. The RV32I core runs sweep policy only and is clock-enabled off during accumulation bursts.</desc>
+  <defs>
+    <style>
+      .title  { font: 700 25px sans-serif; fill: #0f172a; }
+      .sub    { font: 400 14px sans-serif; fill: #475569; }
+      .lbl    { font: 700 15px sans-serif; fill: #111827; }
+      .sml    { font: 400 12px sans-serif; fill: #4b5563; }
+      .key    { font: 700 13px sans-serif; fill: #6d28d9; }
+      .cap    { font: 400 12.5px sans-serif; fill: #475569; }
+      .analog { fill: #fdeade; stroke: #e07a4b; stroke-width: 2; }
+      .digital{ fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
+      .hybrid { fill: #fdeade; stroke: #7c3aed; stroke-width: 2.5; stroke-dasharray: 7 4; }
+      .ext    { fill: #e5e7eb; stroke: #6b7280; stroke-width: 2; }
+      .die    { fill: none; stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 9 6; }
+      .flow   { stroke: #475569; stroke-width: 2.2; fill: none; marker-end: url(#a); }
+      .phase  { stroke: #7c3aed; stroke-width: 3.4; fill: none; marker-end: url(#ap); }
+    </style>
+    <marker id="a" markerWidth="11" markerHeight="9" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#475569"/>
+    </marker>
+    <marker id="ap" markerWidth="11" markerHeight="9" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1240" height="800" fill="#ffffff"/>
+
+  <text x="40" y="42" class="title">Rev 4.3 — Phase-Locked Measurement Engine</text>
+  <text x="40" y="66" class="sub">Excitation is free-running; the sampler locks to its phase. This inversion is the structural change from Rev 4.2.</text>
+
+  <!-- die boundary -->
+  <rect x="228" y="96" width="962" height="566" rx="14" class="die"/>
+  <text x="248" y="122" class="sml">ASIC die</text>
+
+  <!-- external: electrodes -->
+  <rect x="40" y="330" width="150" height="92" rx="9" class="ext"/>
+  <text x="115" y="371" class="lbl" text-anchor="middle">Electrodes</text>
+  <text x="115" y="392" class="sml" text-anchor="middle">soil probe</text>
+
+  <!-- ============ analog / hybrid column ============ -->
+  <rect x="278" y="146" width="330" height="92" rx="9" class="hybrid"/>
+  <text x="443" y="180" class="lbl" text-anchor="middle">Excitation generator</text>
+  <text x="443" y="201" class="sml" text-anchor="middle">free-running divider + 16-state</text>
+  <text x="443" y="219" class="sml" text-anchor="middle">phase counter · f_exc = f_clk/(16·N)</text>
+
+  <rect x="278" y="276" width="330" height="86" rx="9" class="analog"/>
+  <text x="443" y="309" class="lbl" text-anchor="middle">Wideband TIA</text>
+  <text x="443" y="332" class="sml" text-anchor="middle">10 MHz closed loop, I to V</text>
+  <text x="443" y="350" class="sml" text-anchor="middle">R_F ≈ 10 kΩ, C_F ≈ 0.5 pF</text>
+
+  <rect x="278" y="400" width="330" height="86" rx="9" class="analog"/>
+  <text x="443" y="433" class="lbl" text-anchor="middle">8-bit SAR ADC</text>
+  <text x="443" y="456" class="sml" text-anchor="middle">fast-aperture T/H, &lt; 5 ns</text>
+  <text x="443" y="474" class="sml" text-anchor="middle">bit trials driven by the FSM</text>
+
+  <rect x="278" y="524" width="330" height="80" rx="9" class="analog"/>
+  <text x="443" y="555" class="lbl" text-anchor="middle">Temp sense (PTAT)</text>
+  <text x="443" y="578" class="sml" text-anchor="middle">via ADC test mux, read during</text>
+  <text x="443" y="596" class="sml" text-anchor="middle">frequency-change settling</text>
+
+  <!-- ============ digital column ============ -->
+  <rect x="812" y="146" width="352" height="92" rx="9" class="digital"/>
+  <text x="988" y="180" class="lbl" text-anchor="middle">Measurement FSM</text>
+  <text x="988" y="201" class="sml" text-anchor="middle">phase-index compare → strobe,</text>
+  <text x="988" y="219" class="sml" text-anchor="middle">SAR handshake, sign per phase</text>
+
+  <rect x="812" y="276" width="352" height="86" rx="9" class="digital"/>
+  <text x="988" y="309" class="lbl" text-anchor="middle">I/Q accumulators</text>
+  <text x="988" y="332" class="sml" text-anchor="middle">two signed 16-bit, raw diffs</text>
+  <text x="988" y="350" class="sml" text-anchor="middle">shadow snapshot on done</text>
+
+  <rect x="812" y="400" width="352" height="86" rx="9" class="digital"/>
+  <text x="988" y="433" class="lbl" text-anchor="middle">RV32I core + ROM</text>
+  <text x="988" y="456" class="sml" text-anchor="middle">sweep policy only; clock-enabled</text>
+  <text x="988" y="474" class="sml" text-anchor="middle">OFF during accumulation bursts</text>
+
+  <rect x="812" y="524" width="352" height="80" rx="9" class="digital"/>
+  <text x="988" y="555" class="lbl" text-anchor="middle">SPI slave + regfile</text>
+  <text x="988" y="578" class="sml" text-anchor="middle">indexed result readout,</text>
+  <text x="988" y="596" class="sml" text-anchor="middle">freq/phase control, error policy</text>
+
+  <!-- ============ external bottom rail ============ -->
+  <rect x="278" y="690" width="886" height="62" rx="9" class="ext"/>
+  <text x="721" y="716" class="lbl" text-anchor="middle">External refs, host, 160 MHz clock</text>
+  <text x="721" y="737" class="sml" text-anchor="middle">VREFH, VREFL, VCM, V_EXC</text>
+
+  <!-- ============ flows ============ -->
+  <!-- electrodes <-> excitation drive -->
+  <path d="M190,358 L258,358 L258,192 L276,192" class="flow"/>
+  <text x="196" y="350" class="sml">drive</text>
+  <!-- electrodes -> TIA (return current) -->
+  <path d="M190,394 L258,394 L258,319 L276,319" class="flow"/>
+  <text x="196" y="412" class="sml">return current</text>
+
+  <!-- TIA -> ADC -->
+  <path d="M443,364 L443,398" class="flow"/>
+  <!-- temp -> ADC (test mux) -->
+  <path d="M443,522 L443,490" class="flow"/>
+  <text x="455" y="512" class="sml">test mux</text>
+
+  <!-- THE key arrow: phase reference -->
+  <path d="M610,192 L810,192" class="phase"/>
+  <text x="710" y="181" class="key" text-anchor="middle">phase[3:0]</text>
+  <text x="710" y="212" class="sml" text-anchor="middle">16 states, 4 used</text>
+
+  <!-- ADC <-> FSM bit trials -->
+  <path d="M610,428 L700,428 L700,215 L810,215" class="flow"/>
+  <text x="628" y="420" class="sml">adc_dac / adc_comp</text>
+
+  <!-- FSM -> accumulators -->
+  <path d="M988,240 L988,274" class="flow"/>
+  <!-- accumulators -> regfile (results) -->
+  <path d="M1172,319 L1196,319 L1196,564 L1166,564" class="flow"/>
+  <!-- core <-> regfile -->
+  <path d="M988,488 L988,522" class="flow"/>
+  <!-- clock rail -->
+  <path d="M721,688 L721,610" class="flow"/>
+
+  <!-- ============ legend ============ -->
+  <rect x="40" y="500" width="26" height="16" rx="3" class="analog"/>
+  <text x="74" y="513" class="cap">analog on die</text>
+  <rect x="40" y="530" width="26" height="16" rx="3" class="digital"/>
+  <text x="74" y="543" class="cap">digital on die</text>
+  <rect x="40" y="560" width="26" height="16" rx="3" class="hybrid"/>
+  <text x="74" y="573" class="cap">joint (Krishna + Taarana)</text>
+  <rect x="40" y="590" width="26" height="16" rx="3" class="ext"/>
+  <text x="74" y="603" class="cap">external</text>
+
+  <text x="40" y="700" class="cap">Core-to-FSM configuration writes and FSM-to-core status reads</text>
+  <text x="40" y="720" class="cap">run through the register block and are omitted for clarity.</text>
+  <text x="40" y="748" class="cap">Fallback: if 160 MHz will not close, drop to 8 phase</text>
+  <text x="40" y="766" class="cap">steps at 80 MHz — still I and Q at 45° resolution.</text>
+</svg>

@@ -22,6 +22,19 @@
 //   start_i is asserted, matching the previous shell's IDLE -> run -> IDLE
 //   behavior. Holding the core in reset between measurements is also the
 //   power-saving state for a solar/battery node.
+//
+// Core clock enable (Rev 4.3 Phase 2.2):
+//   The core has nothing to do while a measurement is in flight -- the
+//   measurement FSM owns that window entirely. From the cycle after firmware
+//   issues start_pulse_o (so the triggering MMIO store itself completes
+//   normally) until measurement_done_i asserts, core_clk_en is held low and
+//   every register in DatapathPipelined (and the register file) holds. This
+//   is automatic and needs no firmware cooperation: firmware does not poll
+//   for completion, it simply resumes the cycle after done_i, by which point
+//   result_q below already holds the fresh result.
+//   "Clock enable, not a gated clock" (MAS section 8.1): clk itself is never
+//   ANDed with anything here. core_clk_en is an ordinary synchronous enable
+//   input threaded into the core's own always_ff blocks.
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ns
 
@@ -41,7 +54,7 @@ module agriasic_rv32i_control_shell #(
 
   output logic [3:0]           cfg_pair_log2_o,
   output logic [7:0]           cfg_settle_cycles_o,
-  output logic [7:0]           cfg_exc_divider_o,
+  output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
   output logic [7:0]           cfg_conv_cycles_o,
   output logic [15:0]          result_o
 );
@@ -84,9 +97,33 @@ module agriasic_rv32i_control_shell #(
 
   logic        core_halt;
 
+  // --------------------------------------------------------------------------
+  // Core clock enable -- see the header note.
+  //
+  // meas_inflight_q is set the cycle after start_pulse_o (letting the
+  // triggering store complete at full speed) and cleared the cycle
+  // measurement_done_i asserts, so the core resumes exactly when a fresh
+  // result is ready.
+  // --------------------------------------------------------------------------
+  logic meas_inflight_q;
+  logic core_clk_en;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      meas_inflight_q <= 1'b0;
+    end else if (start_pulse_o) begin
+      meas_inflight_q <= 1'b1;
+    end else if (measurement_done_i) begin
+      meas_inflight_q <= 1'b0;
+    end
+  end
+
+  assign core_clk_en = !meas_inflight_q;
+
   DatapathPipelined u_core (
     .clk                          (clk),
     .rst                          (core_rst),
+    .clk_en_i                     (core_clk_en),
     .pc_to_imem                   (pc_to_imem),
     .insn_from_imem               (insn_from_imem),
     .addr_to_dmem                 (addr_to_dmem),

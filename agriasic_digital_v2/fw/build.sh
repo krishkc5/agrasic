@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd "/mnt/c/Users/taara/UPENN SR FALL/SR DESIGN/agriasic_digital_v2/fw"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CC=riscv64-unknown-elf-gcc
 # -Wno-array-bounds: GCC cannot reason about absolute addresses and reports a

@@ -17,13 +17,13 @@
   <text x="145" y="444" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">R5. SPI mode-0 control plane with deterministic 2-byte framing</text>
   <text x="145" y="480" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">R6. Sticky protocol error observability through STATUS bits</text>
   <text x="145" y="516" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">R7. Reset-safe behavior across all digital blocks</text>
-  <text x="145" y="552" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">R8. Optional RV32I programming layer above the FSM baseline</text>
+  <text x="145" y="552" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">R8. Phase-locked FSM plus RV32I + ROM policy control over the inner loop</text>
 
   <text x="145" y="586" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#0F172A">Timing/Area/Schedule Constraints</text>
   <text x="145" y="634" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C1. 11-week trial GDS target, hard Week-4 feature gate</text>
   <text x="145" y="670" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C2. 8-bit SAR path, fixed-gain TIA assumption for first silicon</text>
   <text x="145" y="706" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C3. Memory/compiler availability resolved in Week 1</text>
-  <text x="145" y="742" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C4. Maintain runnable FSM-only fallback path</text>
+  <text x="145" y="742" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C4. Keep a protected FSM-only timing baseline in the descope ladder</text>
   <text x="145" y="778" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C5. SPI/status protocol must support debug and field triage</text>
   <text x="145" y="814" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">C6. Keep the programming layer thin; do not place hard timing in firmware</text>
 
@@ -36,7 +36,7 @@
   <text x="1015" y="417" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- SAR controller + conversion complete capture</text>
   <text x="1015" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- SPI slave + register map + ACK/NACK/error bytes</text>
   <text x="1015" y="489" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Status/result mirroring and smoke-level self-check TB</text>
-  <text x="1015" y="525" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Optional RV32I programming wrapper over the same measurement core</text>
+  <text x="1015" y="525" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- Phase-locked measurement FSM with free-running excitation and RV32I policy layer</text>
 
   <text x="1015" y="565" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="700" fill="#991B1B">Out of Scope (First Implementation)</text>
   <text x="1015" y="605" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#1E293B">- On-die excitation amplitude DAC</text>

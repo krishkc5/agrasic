@@ -28,13 +28,27 @@ module agriasic_digital_spi_top #(
   input  logic                 cs_n_i,
   input  logic                 mosi_i,
   output logic                 miso_o,
-  input  logic [ADC_WIDTH-1:0] adc_code_i,
+  output logic                 miso_oe_o,
   output logic                 conv_start_o,
-  output logic                 exc_pol_o,
+  output logic                 exc_drive_p_o,
+  output logic                 exc_drive_n_o,
+  output logic                 adc_enable_o,
+  output logic                 adc_sample_o,
+  output logic [ADC_WIDTH-1:0] adc_dac_o,
+  input  logic                 adc_comp_i,
   output logic                 busy_o,
   output logic                 done_o,
   output logic [15:0]          result_o
 );
+
+  // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
+  // Everything internal runs off rst_n_sync, released synchronously to clk.
+  logic rst_n_sync;
+  rst_sync u_rst_sync (
+    .clk     (clk),
+    .rst_n_i (rst_n),
+    .rst_n_o (rst_n_sync)
+  );
 
   localparam logic [3:0] REG_CTRL      = 4'h0;
   localparam logic [3:0] REG_PAIR_LOG2 = 4'h1;
@@ -85,10 +99,16 @@ module agriasic_digital_spi_top #(
 
   logic start_pulse_q;
 
-  logic [3:0] cfg_pair_log2_q;
-  logic [7:0] cfg_settle_q;
-  logic [7:0] cfg_divider_q;
-  logic [7:0] cfg_conv_q;
+  logic [3:0]  cfg_pair_log2_q;
+  logic [7:0]  cfg_settle_q;
+  // Rev 4.3 Phase 4.2: internal datapath widened to 14 bits (GAP-1), but
+  // REG_DIVIDER stays an 8-bit SPI window onto it for now -- only N=0..255
+  // is host-reachable over SPI until Phase 6 formalizes how a wider N (or a
+  // frequency-selector index) is encoded into the 2-byte SPI protocol. This
+  // keeps host-visible behavior identical to pre-Phase-4 while the RTL
+  // itself is honestly 14-bit-wide and ready for Phase 6 to extend.
+  logic [13:0] cfg_divider_q;
+  logic [7:0]  cfg_conv_q;
 
   logic core_done;
   logic status_done_q;
@@ -116,7 +136,7 @@ module agriasic_digital_spi_top #(
       unique case (addr)
         REG_PAIR_LOG2: read_byte_from_addr = {4'd0, cfg_pair_log2_q};
         REG_SETTLE:    read_byte_from_addr = cfg_settle_q;
-        REG_DIVIDER:   read_byte_from_addr = cfg_divider_q;
+        REG_DIVIDER:   read_byte_from_addr = cfg_divider_q[7:0];  // low byte only, see field decl
         REG_CONV:      read_byte_from_addr = cfg_conv_q;
         REG_STATUS:    read_byte_from_addr = status_byte;
         REG_RESULT_LO: read_byte_from_addr = result_o[7:0];
@@ -132,8 +152,8 @@ module agriasic_digital_spi_top #(
   // DONE state immediately and done_o is asserted for exactly ONE core cycle.
   // A SPI host polling STATUS needs many cycles per transaction and could never
   // observe that, so completion is latched here and held until the next start.
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
+  always_ff @(posedge clk or negedge rst_n_sync) begin
+    if (!rst_n_sync) begin
       status_done_q <= 1'b0;
     end else if (start_pulse_q) begin
       status_done_q <= 1'b0;
@@ -157,11 +177,12 @@ module agriasic_digital_spi_top #(
     .DATA_W(8)
   ) u_spi_slave (
     .clk       (clk),
-    .rst_n     (rst_n),
+    .rst_n     (rst_n_sync),
     .sclk_i    (sclk_i),
     .cs_n_i    (cs_n_i),
     .mosi_i    (mosi_i),
     .miso_o    (miso_o),
+    .miso_oe_o (miso_oe_o),
     .rx_data_o (spi_rx_data),
     .rx_valid_o(spi_rx_valid),
     .tx_data_i (spi_tx_data)
@@ -172,7 +193,7 @@ module agriasic_digital_spi_top #(
     .DW(32)
   ) u_regfile (
     .clk      (clk),
-    .rst_n    (rst_n),
+    .rst_n    (rst_n_sync),
     .wr_en_i  (rf_wr_en),
     .wr_addr_i(rf_wr_addr),
     .wr_data_i(rf_wr_data),
@@ -184,15 +205,19 @@ module agriasic_digital_spi_top #(
     .ADC_WIDTH(ADC_WIDTH)
   ) u_core (
     .clk                (clk),
-    .rst_n              (rst_n),
+    .rst_n              (rst_n_sync),
     .start              (start_pulse_q),
     .cfg_pair_log2_i    (cfg_pair_log2_q),
     .cfg_settle_cycles_i(cfg_settle_q),
     .cfg_exc_divider_i  (cfg_divider_q),
     .cfg_conv_cycles_i  (cfg_conv_q),
-    .adc_code_i         (adc_code_i),
     .conv_start_o       (conv_start_o),
-    .exc_pol_o          (exc_pol_o),
+    .exc_drive_p_o      (exc_drive_p_o),
+    .exc_drive_n_o      (exc_drive_n_o),
+    .adc_enable_o       (adc_enable_o),
+    .adc_sample_o       (adc_sample_o),
+    .adc_dac_o          (adc_dac_o),
+    .adc_comp_i         (adc_comp_i),
     .busy_o             (busy_o),
     .done_o             (core_done),
     .result_o           (result_o)
@@ -236,8 +261,8 @@ module agriasic_digital_spi_top #(
     end
   end
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
+  always_ff @(posedge clk or negedge rst_n_sync) begin
+    if (!rst_n_sync) begin
       rx_state_q         <= RX_WAIT_CMD;
       pending_addr_q     <= 4'd0;
       pending_is_read_q  <= 1'b0;
@@ -252,7 +277,7 @@ module agriasic_digital_spi_top #(
       start_pulse_q      <= 1'b0;
       cfg_pair_log2_q    <= 4'd2;
       cfg_settle_q       <= 8'd2;
-      cfg_divider_q      <= 8'd0;
+      cfg_divider_q      <= 14'd0;
       cfg_conv_q         <= 8'd1;
       status_protocol_err_q <= 1'b0;
       status_bad_addr_q     <= 1'b0;
@@ -330,7 +355,7 @@ module agriasic_digital_spi_top #(
                 end
                 REG_PAIR_LOG2: cfg_pair_log2_q <= spi_rx_data[3:0];
                 REG_SETTLE:    cfg_settle_q    <= spi_rx_data;
-                REG_DIVIDER:   cfg_divider_q   <= spi_rx_data;
+                REG_DIVIDER:   cfg_divider_q   <= {6'd0, spi_rx_data};  // zero-extend, see field decl
                 REG_CONV:      cfg_conv_q      <= spi_rx_data;
                 default: begin
                 end

@@ -59,7 +59,11 @@ module RegFile (
 
     input logic clk,
     input logic we,
-    input logic rst
+    input logic rst,
+    // Rev 4.3 Phase 2.2: clock enable. Forwarding (rs1_data/rs2_data below)
+    // deliberately does NOT depend on this -- it is pure combinational read
+    // logic and costs nothing to leave live; only the write is gated.
+    input logic clk_en_i
 );
   localparam int NumRegs = 32;
   logic [`REG_SIZE] regs[NumRegs];
@@ -74,7 +78,7 @@ module RegFile (
       for (int i = 0; i < NumRegs; i = i + 1) begin
         regs[i] <= 32'd0;
       end
-    end else if (we && rd != 5'd0) begin
+    end else if (clk_en_i && we && rd != 5'd0) begin
       regs[rd] <= rd_data;
     end
   end
@@ -151,6 +155,14 @@ typedef struct packed {
 module DatapathPipelined (
     input wire clk,
     input wire rst,
+    // Rev 4.3 Phase 2.2: clock enable, not a gated clock. When low, every
+    // pipeline stage register, the register file, and the cycle counter hold
+    // their current value -- nothing in the core toggles. clk itself is never
+    // gated; this is an ordinary synchronous enable so STA sees one domain
+    // with the core simply idle some cycles, and there is no CDC risk from
+    // toggling something that looks like a second clock. See
+    // agriasic_rv32i_control_shell.sv for the accumulation-burst gating logic.
+    input wire clk_en_i,
     output logic [`REG_SIZE] pc_to_imem,
     input wire [`INSN_SIZE] insn_from_imem,
     // dmem is read/write
@@ -202,6 +214,8 @@ module DatapathPipelined (
   always_ff @(posedge clk) begin
     if (rst) begin
       cycles_current <= 0;
+    end else if (!clk_en_i) begin
+      cycles_current <= cycles_current;
     end else begin
       cycles_current <= cycles_current + 1;
     end
@@ -222,7 +236,10 @@ module DatapathPipelined (
 
   logic [`REG_SIZE] f_pc_next;
   always_comb begin
-    if (x_pc_redirect) begin
+    if (!clk_en_i) begin
+      // Core disabled: hold, ahead of any real hazard or redirect.
+      f_pc_next = f_pc_current;
+    end else if (x_pc_redirect) begin
       f_pc_next = x_next_pc;
     end else if (decode_stall) begin
       f_pc_next = f_pc_current;
@@ -237,6 +254,9 @@ module DatapathPipelined (
       f_pc_current <= 32'd0;
       // NB: use CYCLE_NO_STALL since this is the value that will persist after the last reset cycle
       f_cycle_status <= CYCLE_NO_STALL;
+    end else if (!clk_en_i) begin
+      f_pc_current <= f_pc_current;
+      f_cycle_status <= f_cycle_status;
     end else begin
       f_cycle_status <= CYCLE_NO_STALL;
       f_pc_current <= f_pc_next;
@@ -248,8 +268,9 @@ module DatapathPipelined (
   assign pc_to_imem = f_pc_current;
 
   // Hold the SRAM output while Decode is stalled so the held instruction is not
-  // overwritten by a new fetch.
-  assign imem_ce_o = !decode_stall;
+  // overwritten by a new fetch. Also held while the core is disabled, so imem
+  // does not clock a new fetch during an accumulation burst.
+  assign imem_ce_o = clk_en_i && !decode_stall;
 
   // Here's how to disassemble an insn into a string you can view in GtkWave.
   // Use PREFIX to provide a 1-character tag to identify which stage the insn comes from.
@@ -267,6 +288,8 @@ module DatapathPipelined (
         insn_valid: 1'b0,
         cycle_status: CYCLE_RESET
       };
+    end else if (!clk_en_i) begin
+      decode_state <= decode_state;
     end else if (x_pc_redirect) begin
       decode_state <= '{
         pc: 0,
@@ -337,6 +360,7 @@ module DatapathPipelined (
   RegFile rf (
     .clk(clk),
     .rst(rst),
+    .clk_en_i(clk_en_i),
     .we(w_rd_we),
     .rd(w_rd),
     .rd_data(w_rd_data),
@@ -432,6 +456,8 @@ module DatapathPipelined (
         imm_j_sext: 0,
         insn_opcode: 0
       };
+    end else if (!clk_en_i) begin
+      execute_state <= execute_state;
     end else if (x_pc_redirect) begin
       execute_state <= '{
         pc: 0,
@@ -770,6 +796,10 @@ module DatapathPipelined (
       for (int i = 0; i < DivLatency; i = i + 1) begin
         div_pipe[i] <= '0;
       end
+    end else if (!clk_en_i) begin
+      for (int i = 0; i < DivLatency; i = i + 1) begin
+        div_pipe[i] <= div_pipe[i];
+      end
     end else begin
       div_pipe[0] <= div_issue_entry;
       for (int i = 1; i < DivLatency; i = i + 1) begin
@@ -960,6 +990,8 @@ module DatapathPipelined (
         is_store: 0,
         halt: 0
       };
+    end else if (!clk_en_i) begin
+      memory_state <= memory_state;
     end else if (div_result_valid) begin
       memory_state <= '{
         pc: div_pipe[DivResultStage].pc,
@@ -1133,6 +1165,8 @@ module DatapathPipelined (
         is_load: 0,
         mem_addr_lsb: 0
       };
+    end else if (!clk_en_i) begin
+      writeback_state <= writeback_state;
     end else begin
       writeback_state <= '{
         pc: memory_state.pc,
@@ -1334,6 +1368,10 @@ module Processor (
   DatapathPipelined datapath (
       .clk(clk),
       .rst(rst),
+      // The generic Processor wrapper (used only by the standalone cocotb ISA
+      // regression, not by the chip's own control shell) has no accumulation
+      // burst to gate against, so it always runs at full speed.
+      .clk_en_i(1'b1),
       .pc_to_imem(pc_to_imem),
       .insn_from_imem(insn_from_imem),
       .addr_to_dmem(mem_data_addr),

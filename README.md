@@ -163,15 +163,18 @@ neither of which lives in this repo. See `tb/rv32i_regression/` for those script
 | Check | Result |
 | --- | --- |
 | Processor — rv32ui ISA suite + dhrystone | 77/77 as of the last run; **not re-run since Phase 2.2 touched the core** (needs the external cocotb harness, not present here) |
-| Measurement smoke (`tb_agriasic_digital_top`) | pass, result = 480, every sample phase-matched exactly (0 errors) |
-| SPI smoke (`tb_agriasic_digital_spi_top`) | pass, result = 480 |
+| Measurement smoke (`tb_agriasic_digital_top`) | pass, I=480 Q=320, every sample (16 of them) phase-matched exactly (0 errors) |
+| SPI smoke (`tb_agriasic_digital_spi_top`) | pass, I=480 Q=320 read back via the indexed `REG_RESULT_IDX`/`REG_RESULT_DATA` (Phase 6); auto-increment, reserved-zero, `REG_ID`, and overrange bit all checked |
 | SAR bit-trial unit test (`tb_sar_bit_trial`) | pass, exact convergence over 0–255 |
 | Excitation free-running phase generator (`tb_excitation_drive`, rewritten Phase 4) | pass, exact 16/80/208-cycle periods at N=1/5/13 |
 | Reset synchronizer (`tb_rst_sync`) | pass, 4 clk-unaligned phase offsets |
 | SPI clk-domain rework (`tb_spi_domain_crossing`) | pass, correct at `f_clk/16`, corrupted below Nyquist |
 | Settle timing regression (`tb_settle_timing`) | pass |
-| End-to-end firmware + measurement | pass, core clock enable frozen 93% of cycles |
+| End-to-end firmware + measurement (Phase 7: 3-point sweep, N=1/100/10000) | pass, I=400 Q=280 at all 3 points, 3,152,965 cycles total |
 | Full chip lint | clean |
+| Control shell descope fallback lint (`.orig`) | clean -- was checked only by hand before, now a regular sweep stage |
+| Accumulator edge cases (Phase 8, closes V-2) | pass: odd (55), +1, -1, and true M=64 saturating (16320) all exact |
+| Settle x conv grid sweep (Phase 8, closes V-1) | pass: 54/54 practical grid points, no hangs, correct results |
 
 Results are 480 (was 240) and the end-to-end average is 400 (was 200) because the
 measurement FSM now accumulates the **raw** signed difference. See the Rev 4.3
@@ -284,15 +287,166 @@ sit on the very first cycle after each polarity transition, with no settle
 margin inside the sampled half itself — see MAS GAP-7 for what analog/systems
 review needs to confirm before trusting the fastest excitation points.
 
-**Phases 5–8 are not started.** Four phase offsets per frequency (I/Q, not
-just P/N), a second signed accumulator with shadow-register snapshotting, and
-the indexed `REG_RESULT_IDX`/`REG_RESULT_DATA` readout are all still
-**[SPEC]**-only. See
+**Phase 5 (I/Q accumulation) is also done.** `measurement_fsm.sv` now samples
+all four phase offsets per pair — 0/90/180/270 degrees, not just 0/180 — into
+**two** independent signed 16-bit accumulators (I and Q). `sar_controller`'s
+D+/D- capture slots are reused unmodified for all four samples; the FSM's own
+sequencing (`S_ACCUM_I` reads before either slot is overwritten for the Q
+samples) is what keeps the channels from cross-contaminating, not new
+hardware. A shadow-register snapshot (`i_shadow_q`/`q_shadow_q`, latched only
+on the `S_LOOP -> S_DONE` transition) means a host reading mid-run always sees
+the previous run's complete result, never a partial sum — this is the first
+time that long-specified contract has actually been implemented, not just
+described.
+
+Both channels are exposed today as **four direct registers**
+(`REG_RESULT_I_LO/HI` at 0x6/0x7, `REG_RESULT_Q_LO/HI` at 0x8/0x9) on every
+host interface — SPI, the parallel programming interface, and RV32I MMIO
+(`REG_RESULT_Q` newly added at 0x8000_001C) — deliberately ahead of the
+indexed, multi-frequency-point readout scheme Phase 6 will build once there's
+an actual 13-byte result set that needs it. `fw/fw.c` was updated to match:
+it now reads `REG_RESULT_I`/`REG_RESULT_Q` and writes `OUT_AVERAGE`/
+`OUT_AVERAGE_Q` and `OUT_SAMPLES`/`OUT_SAMPLES_Q` to scratch RAM.
+
+Two testbench-modeling issues were found and fixed while building this. First,
+every behavioral ADC model's track-and-hold logic (added in Phase 4) was
+keyed on `exc_phase_index` at the moment `adc_sample_o` fired — that broke
+silently for Phase 5 because `sar_controller` registers `adc_sample_o` one
+cycle after the phase match that triggered it, so at N=1 the phase counter
+has already ticked past 0/4/8/12 to 1/5/9/13 by the time the model reads it.
+First symptom: `SMOKE_FAIL: expected I=480 got=0`. Fixed by keying every
+model on `measurement_fsm`'s own state instead, which is unambiguous
+regardless of that one-cycle lag. Second, a real pre-existing port-identity
+drift was found in `agriasic_rv32i_control_shell.sv.orig` (the microsequencer
+descope fallback): its `cfg_exc_divider_o` port was still `[7:0]`, three
+phases after the real shell widened the same port to `[13:0]` — nothing
+caught it because `.orig` isn't referenced by any lint or build script. Fixed
+by hand and lint-checked directly; see MAS GAP-8 for why this can silently
+recur.
+
+**Phase 6 (register map and readout) is also done.** The SPI register map is
+now the Rev 4.3 target layout, not an interim one: `REG_FREQ_SEL` replaces
+`REG_DIVIDER` with a 2-bit selector (0/1/2 -> N=1/100/10000, i.e. 10 MHz/
+100 kHz/1 kHz) instead of raw N — the only way to reach the 1 kHz point
+(which needs 14 bits) through a single SPI byte without widening the 2-byte
+protocol. `REG_RESULT_IDX`/`REG_RESULT_DATA` implement the indexed,
+auto-incrementing byte readout the design doc specifies: indices 0-3 serve
+real I/Q data, indices 4-15 read as an honest zero (frequency points 1/2 and
+temperature don't exist yet — that's Phase 7). `REG_ID` (fixed `0x43`) and a
+`REG_STATUS` overrange bit (set when `REG_PAIR_LOG2 > 6` gets silently
+clamped to M=64) were added alongside. The parallel programming interface got
+the same `REG_FREQ_SEL` selector treatment (`CFG_FREQ_SEL`), for the same
+byte-width reason. RV32I MMIO's divider register keeps its original name and
+raw-N behavior unchanged — it has no byte-width constraint forcing a
+selector, and giving it the same name as SPI's selector-based register would
+wrongly imply matching semantics.
+
+Two items in the baseline register map were found to have no coherent
+implementation given how the rest of the design was actually built, and were
+left as documented, inert placeholders rather than guessed at: `REG_PHASE_IDX`
+("phase index into the 16-state counter") doesn't reconcile with I/Q sampling
+needing four *fixed* 90-degree-spaced points, not one selectable one; and
+`REG_CTRL`'s core-enable bit presumes a unified chip with a toggleable on-die
+core, which doesn't exist — the RV32I and SPI control paths are two separate,
+mutually exclusive top-level modules today. Both addresses accept writes and
+read them back so host software probing the map doesn't get an unexpected
+error, but neither does anything yet. See MAS GAP-10.
+
+**Phase 7 (sweep policy in firmware) is also done.** `fw/fw.c` is rewritten to
+run the real 3-frequency-point sweep the design targets — N=1 (10 MHz),
+N=100 (100 kHz), N=10000 (1 kHz) via `REG_FREQ_SEL`'s selector encoding —
+averaging 2 measurements per point and writing divider/I/Q results for all
+three points to scratch RAM (`OUT_DIV`/`OUT_I`/`OUT_Q`, replacing the old
+single-point `OUT_AVERAGE`/`OUT_SAMPLES` layout). The real N=10000 timing was
+verified, not assumed: the full 6-measurement sweep takes 3,152,965 simulated
+cycles and 4.3 seconds of wall-clock time in Verilator — well within
+practical regression budget. Temperature sensing (`OUT_TEMP`) stays an
+explicit `-1` sentinel; no temperature sensor interface exists anywhere in
+the digital RTL to wire it to (Phase 7.3, tracked as an open item below).
+
+Building this surfaced a real architectural gap, not a bug: **`agriasic_digital_rv32i_top`
+has zero SPI or other host-facing pins** (confirmed by grep — no matches at
+all). The firmware now genuinely computes a 3-point sweep, but there is no
+path for a real external host to read those results out of the RV32I chip
+top; only the SPI-controlled top (`agriasic_digital_spi_top`, which has no
+RV32I core) can talk to a host. See MAS GAP-11 for the three architectural
+options to reconcile this before Rev 4.3 is called integration-ready.
+
+**Phase 8 (verification and signoff) is also done.** All open items from the
+Rev 4.3 baseline's verification plan are now closed or confirmed moot:
+
+- **V-1** (settle x conv grid, was the single highest-value item left): closed
+  with `tb_settle_conv_sweep.sv`, a 54-point practical grid (9 settle values x
+  6 conv values) rather than the literal 65,536-point exhaustive grid, which
+  is impractical for a fast-running regression — the grid still covers every
+  settle/conv value class pairing that D-1/D-2's actual hang would have
+  triggered.
+- **V-2** (odd/±1/saturating rounding checks): closed with
+  `tb_accum_edge_cases.sv`, covering all three cases including the true
+  M=64 saturating value (16320) exactly. The rounding defect this was
+  originally written for (D-3) is now structurally impossible — there is no
+  shift or rounding left anywhere in the arithmetic path — so this is
+  regression coverage, not open defect-hunting.
+- **V-3**: confirmed still superseded by Phase 4 (no phase command left to
+  bound).
+- **V-4** and **V-5** (shadow-register stability and phase-match strobe
+  correctness): both closed with new formal `assert property` statements in
+  `tb/smoke/tb_agriasic_digital_top.sv` — `p_shadow_stable_while_busy` and
+  `p_sample_req_exact_phase_match` — replacing the earlier trace-inspection-only
+  evidence with a real structural restatement.
+
+An accumulator-range assertion (`i_acc_q`/`q_acc_q` bounded to +/-16320) and
+an explicit half-cycle-symmetry check (7 P-cycles == 7 N-cycles per period,
+every N tested) were also added as regression coverage during this pass. See
 [`docs/agriasic_digital_MAS.md`](agriasic_digital_v2/docs/agriasic_digital_MAS.md)
-section 10 for the phased plan.
+sections 10 and 12 for full detail, including the reasoning behind the
+practical-vs-exhaustive V-1 grid and V-2's regression-not-defect-hunting
+framing.
+
+**A full synthesizability/lint audit was done across every file in `rtl/`**,
+not just the files the regression scripts already touched, and every
+diagram in `docs/diagrams/` was checked against the current RTL and redrawn
+where it had drifted. Findings:
+
+- Two genuinely dead signals were removed: `sar_busy` in
+  `agriasic_digital_top.sv` (driven, never read — `measurement_fsm` tracks
+  its own busy state and never polls `sar_controller`'s) and
+  `pending_is_read_q` in `agriasic_digital_spi_top.sv` (write-only since
+  before this session's changes, confirmed by checking the last commit).
+- Two files were missing a trailing newline (`agriasic_digital_rv32i_top.sv`,
+  `agriasic_digital_programming_top.sv`) — fixed.
+- `agriasic_digital_spi_top.sv.orig` turned out to have an actual syntax
+  error (`case`/`endcase` mismatch) on top of being dead code — fixed the
+  syntax so the file at least parses, but it's still unbuildable against the
+  current `agriasic_digital_top` (three `PINNOTFOUND` errors: it wants
+  `adc_code_i`/`exc_pol_o`/`result_o`, none of which exist anymore).
+- Two more previously-undocumented dead `.orig` snapshots were found:
+  `ctrl/spi_slave.sv.orig` (pre-Phase-3) and confirmation that
+  `ctrl/sar_controller.sv.orig` (pre-Phase-1, already referenced in the MAS's
+  defect register) is in the same unbuildable state. None of the three are
+  part of any documented descope story or referenced by any script — all
+  three are recommended for deletion pending team confirmation (MAS GAP-9).
+- `agriasic_rv32i_control_shell.sv.orig` (the *actual*, documented descope
+  fallback) is real and correctly maintained, but was checked only by hand —
+  added `lint_shell_orig.sh` as a proper regression stage so this can't drift
+  silently again (closes MAS GAP-8).
+- The remaining warnings under a strict `-Wall` pass are either the
+  already-documented GAP-4 (dangling shell status outputs) or pre-existing
+  characteristics of the third-party RV32I processor core (multi-module
+  source files, internal disassembly/debug signals) that predate this
+  project and are out of scope to rewrite. No `#` delays, implicit-sensitivity
+  `always @(*)` blocks, or synthesizable-path `initial` blocks (other than
+  standard `$readmemh` ROM init) exist anywhere in the real chip hierarchy.
 
 ## Known open items
 
+- **GAP-11: `agriasic_digital_rv32i_top` has no host-facing pins at all.**
+  The Phase 7 sweep firmware genuinely computes 3-frequency-point I/Q results,
+  but there is no SPI (or other) path out of the RV32I chip top for a real
+  external host to read them — only the separate, RV32I-free
+  `agriasic_digital_spi_top` talks to a host. This needs an explicit
+  architectural decision (see MAS section 10.3 GAP-11 for three options)
+  before Rev 4.3 is integration-ready, not just simulation-clean.
 - **Cocotb ISA regression needs an external checkout.** The scripts under
   `tb/rv32i_regression/` that drive the 77-test suite (`setup.sh`, `rerun.sh`,
   `build_riscv_tests.sh`) expect the CIS 5710 class repo and a `riscv-tests`

@@ -55,3 +55,22 @@ echo "=================================================="
 echo "9. END-TO-END FIRMWARE + MEASUREMENT (incl. core clock enable, Phase 2.2)"
 echo "=================================================="
 bash "$R/e2e.sh" 2>&1 | grep -E "^\[TB\]" | tail -13
+
+echo ""
+echo "=================================================="
+echo "10. CONTROL SHELL DESCOPE FALLBACK LINT (.orig, closes GAP-8)"
+echo "=================================================="
+bash "$R/lint_shell_orig.sh" 2>&1 | grep -E "^%Error|^%Warning-" | head -6
+echo "(lint is expected to be clean -- no output above this line)"
+
+echo ""
+echo "=================================================="
+echo "11. ACCUMULATOR EDGE CASES (Rev 4.3 Phase 8, closes V-2)"
+echo "=================================================="
+bash "$R/accum_edge_cases.sh" 2>&1 | grep -E "^\[TB\]|ACCUM_EDGE_" | tail -8
+
+echo ""
+echo "=================================================="
+echo "12. SETTLE x CONV GRID SWEEP (Rev 4.3 Phase 8, closes V-1)"
+echo "=================================================="
+bash "$R/settle_conv_sweep.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | tail -6

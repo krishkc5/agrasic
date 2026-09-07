@@ -45,7 +45,8 @@ module agriasic_rv32i_control_shell #(
   input  logic                 rst_n,
   input  logic                 start_i,
   input  logic                 measurement_done_i,
-  input  logic [15:0]          measurement_result_i,
+  input  logic signed [15:0]   measurement_result_i_i,  // I channel (Rev 4.3 Phase 5)
+  input  logic signed [15:0]   measurement_result_q_i,  // Q channel (Rev 4.3 Phase 5)
 
   output logic                 busy_o,
   output logic                 done_o,
@@ -56,7 +57,8 @@ module agriasic_rv32i_control_shell #(
   output logic [7:0]           cfg_settle_cycles_o,
   output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
   output logic [7:0]           cfg_conv_cycles_o,
-  output logic [15:0]          result_o
+  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
+  output logic signed [15:0]   result_q_o   // Rev 4.3 Phase 5: Q channel
 );
 
   // ADC_WIDTH is retained for interface compatibility; the control core does
@@ -180,29 +182,36 @@ module agriasic_rv32i_control_shell #(
     .cfg_exc_divider_o   (cfg_exc_divider_o),
     .cfg_conv_cycles_o   (cfg_conv_cycles_o),
     .done_i              (measurement_done_i),
-    .result_i            (measurement_result_i)
+    .result_i_i          (measurement_result_i_i),
+    .result_q_i          (measurement_result_q_i)
   );
 
   // --------------------------------------------------------------------------
   // Shell status
   //
-  // Latch the measurement result so result_o stays stable after done, matching
-  // the previous shell's behavior.
+  // Latch both measurement results so result_i_o/result_q_o stay stable after
+  // done, matching the previous (Phase 4 and earlier) shell's single-channel
+  // behavior.
   // --------------------------------------------------------------------------
-  logic [15:0] result_q;
+  logic signed [15:0] result_i_q;
+  logic signed [15:0] result_q_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      result_q <= 16'd0;
+      result_i_q <= 16'd0;
+      result_q_q <= 16'd0;
     end else if (!start_i) begin
-      result_q <= 16'd0;
+      result_i_q <= 16'd0;
+      result_q_q <= 16'd0;
     end else if (measurement_done_i) begin
-      result_q <= measurement_result_i;
+      result_i_q <= measurement_result_i_i;
+      result_q_q <= measurement_result_q_i;
     end
   end
 
-  assign result_o = result_q;
-  assign done_o   = core_halt;                 // firmware reached ecall
-  assign busy_o   = !core_rst && !core_halt;   // program running
+  assign result_i_o = result_i_q;
+  assign result_q_o = result_q_q;
+  assign done_o     = core_halt;                 // firmware reached ecall
+  assign busy_o     = !core_rst && !core_halt;   // program running
 
 endmodule

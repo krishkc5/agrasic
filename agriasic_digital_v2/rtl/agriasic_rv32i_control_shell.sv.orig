@@ -11,6 +11,8 @@
 //   - The ROM is a tiny control-policy image; the actual RV32I core can be
 //     dropped in later behind the same top-level interface.
 // -----------------------------------------------------------------------------
+`timescale 1ns / 1ns
+
 module agriasic_rv32i_control_shell #(
   parameter int unsigned ADC_WIDTH = 8
 ) (
@@ -18,7 +20,8 @@ module agriasic_rv32i_control_shell #(
   input  logic                 rst_n,
   input  logic                 start_i,
   input  logic                 measurement_done_i,
-  input  logic [15:0]          measurement_result_i,
+  input  logic signed [15:0]   measurement_result_i_i,  // I channel (Rev 4.3 Phase 5)
+  input  logic signed [15:0]   measurement_result_q_i,  // Q channel (Rev 4.3 Phase 5)
 
   output logic                 busy_o,
   output logic                 done_o,
@@ -27,9 +30,15 @@ module agriasic_rv32i_control_shell #(
 
   output logic [3:0]           cfg_pair_log2_o,
   output logic [7:0]           cfg_settle_cycles_o,
-  output logic [7:0]           cfg_exc_divider_o,
+  output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1.
+                                                     // NOTE: this port was found still at [7:0] here
+                                                     // during Phase 5 -- a real port-identity drift
+                                                     // (section 4.2) that nothing caught because this
+                                                     // file isn't in any lint/build script. Fixed here;
+                                                     // see the MAS Phase 5 note.
   output logic [7:0]           cfg_conv_cycles_o,
-  output logic [15:0]          result_o
+  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
+  output logic signed [15:0]   result_q_o   // Rev 4.3 Phase 5: Q channel
 );
 
   localparam logic [7:0] OP_LOAD_CFG = 8'h01;
@@ -52,10 +61,11 @@ module agriasic_rv32i_control_shell #(
   logic [2:0]  pc_q;
   logic        start_req_q;
   logic        start_req_d;
-  logic [15:0] result_q;
+  logic signed [15:0] result_i_q;
+  logic signed [15:0] result_q_q;
   logic [3:0]  cfg_pair_log2_q;
   logic [7:0]  cfg_settle_q;
-  logic [7:0]  cfg_divider_q;
+  logic [13:0] cfg_divider_q;  // Rev 4.3 Phase 4.2 width, see the port comment above
   logic [7:0]  cfg_conv_q;
 
   initial begin
@@ -71,7 +81,8 @@ module agriasic_rv32i_control_shell #(
   assign cfg_settle_cycles_o = cfg_settle_q;
   assign cfg_exc_divider_o   = cfg_divider_q;
   assign cfg_conv_cycles_o   = cfg_conv_q;
-  assign result_o            = result_q;
+  assign result_i_o          = result_i_q;
+  assign result_q_o          = result_q_q;
 
   always_comb begin
     start_pulse_o   = 1'b0;
@@ -132,10 +143,11 @@ module agriasic_rv32i_control_shell #(
       state_q         <= S_IDLE;
       pc_q            <= 3'd0;
       start_req_q     <= 1'b0;
-      result_q        <= 16'd0;
+      result_i_q      <= 16'd0;
+      result_q_q      <= 16'd0;
       cfg_pair_log2_q <= 4'd2;
       cfg_settle_q    <= 8'd2;
-      cfg_divider_q   <= 8'd0;
+      cfg_divider_q   <= 14'd0;
       cfg_conv_q      <= 8'd1;
     end else begin
       start_req_q <= start_i;
@@ -143,9 +155,10 @@ module agriasic_rv32i_control_shell #(
       unique case (state_q)
         S_IDLE: begin
           if (start_i && !start_req_q) begin
-            pc_q    <= 3'd0;
-            result_q <= 16'd0;
-            state_q <= S_EXEC;
+            pc_q     <= 3'd0;
+            result_i_q <= 16'd0;
+            result_q_q <= 16'd0;
+            state_q  <= S_EXEC;
           end
         end
 
@@ -155,7 +168,7 @@ module agriasic_rv32i_control_shell #(
               unique case (program_rom[pc_q][23:16])
                 8'h00: cfg_pair_log2_q <= program_rom[pc_q][7:0][3:0];
                 8'h01: cfg_settle_q    <= program_rom[pc_q][7:0];
-                8'h02: cfg_divider_q   <= program_rom[pc_q][7:0];
+                8'h02: cfg_divider_q   <= {6'd0, program_rom[pc_q][7:0]};  // zero-extend, see field decl
                 8'h03: cfg_conv_q      <= program_rom[pc_q][7:0];
                 default: begin
                 end
@@ -176,7 +189,8 @@ module agriasic_rv32i_control_shell #(
             end
 
             OP_CAPTURE: begin
-              result_q <= measurement_result_i;
+              result_i_q <= measurement_result_i_i;
+              result_q_q <= measurement_result_q_i;
               pc_q <= pc_q + 3'd1;
             end
 
@@ -192,7 +206,8 @@ module agriasic_rv32i_control_shell #(
 
         S_WAIT_MEAS: begin
           if (measurement_done_i) begin
-            result_q <= measurement_result_i;
+            result_i_q <= measurement_result_i_i;
+            result_q_q <= measurement_result_q_i;
             state_q <= S_EXEC;
             pc_q <= pc_q + 3'd1;
           end

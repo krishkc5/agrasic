@@ -1,94 +1,153 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3200" viewBox="0 0 5000 3200" role="img" aria-labelledby="t d">
   <title id="t">measurement_fsm module block diagram</title>
-  <desc id="d">Detailed state and dataflow diagram for measurement_fsm including settle, sample, accumulate, and loop phases.</desc>
+  <desc id="d">Rev 4.3 Phase 5 state and dataflow diagram for measurement_fsm: watches a free-running phase counter at four phase indices (0/90/180/270 degrees) and accumulates I and Q separately, with shadow-register snapshot on completion.</desc>
   <defs>
     <marker id="m1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
     <marker id="m2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
     <marker id="m3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker>
   </defs>
-  <rect width="5000" height="3000" fill="#fff"/>
+  <rect width="5000" height="3200" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: measurement_fsm</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Rev 4.3 Phase 5 -- I/Q accumulation added (redrawn; replaces the single-accumulator, two-phase design)</text>
 
-  <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
-  <text x="120" y="235" font-family="Arial" font-size="22" font-weight="700" fill="#212121">Fallback measurement sequencer with programmable averaging depth</text>
+  <rect x="80" y="180" width="4840" height="2940" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
 
-  <rect x="260" y="470" width="980" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
-  <text x="320" y="550" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
-  <text x="320" y="595" font-family="Arial" font-size="20" fill="#fff">start_i, pair_log2_i</text>
-  <text x="320" y="630" font-family="Arial" font-size="20" fill="#fff">settled_i, sar_done_i</text>
-  <text x="320" y="665" font-family="Arial" font-size="20" fill="#fff">d_plus_i, d_minus_i</text>
-  <text x="320" y="700" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+  <rect x="150" y="230" width="900" height="300" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="200" y="300" font-family="Arial" font-size="28" font-weight="700" fill="#fff">Inputs</text>
+  <text x="200" y="340" font-family="Arial" font-size="18" fill="#fff">start_i, pair_log2_i, settle_cycles_i</text>
+  <text x="200" y="372" font-family="Arial" font-size="18" fill="#fff">phase_index_i[3:0], period_tick_i</text>
+  <text x="200" y="404" font-family="Arial" font-size="18" fill="#fff">sar_done_i, d_plus_i, d_minus_i</text>
+  <text x="200" y="436" font-family="Arial" font-size="18" fill="#fff">clk, rst_n</text>
+  <text x="200" y="480" font-family="Arial" font-size="15" fill="#BDBDBD">No settled_i handshake -- removed in Phase 4;</text>
+  <text x="200" y="500" font-family="Arial" font-size="15" fill="#BDBDBD">this FSM only watches phase_index_i, never commands.</text>
 
-  <rect x="1450" y="430" width="3240" height="1540" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="1500" y="500" font-family="Arial" font-size="28" font-weight="700" fill="#212121">State engine</text>
+  <rect x="3400" y="230" width="1500" height="380" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="3450" y="300" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Outputs</text>
+  <text x="3450" y="340" font-family="Arial" font-size="18" fill="#212121">exc_enable_o, sample_req_o, sample_phase_o</text>
+  <text x="3450" y="372" font-family="Arial" font-size="18" fill="#212121">busy_o, done_o</text>
+  <text x="3450" y="404" font-family="Arial" font-size="18" fill="#212121">result_i_o[15:0], result_q_o[15:0]</text>
+  <text x="3450" y="440" font-family="Arial" font-size="15" fill="#8D6E63">Shadow registers -- latch only on</text>
+  <text x="3450" y="460" font-family="Arial" font-size="15" fill="#8D6E63">S_LOOP -&gt; S_DONE, never mid-run.</text>
+  <text x="3450" y="490" font-family="Arial" font-size="15" fill="#8D6E63">No more exc_set_phase_o/exc_phase_o.</text>
 
-  <rect x="1560" y="610" width="390" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1610" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_IDLE</text>
-  <text x="1610" y="720" font-family="Arial" font-size="18" fill="#212121">wait start</text>
+  <text x="150" y="640" font-family="Arial" font-size="26" font-weight="700" fill="#1B5E20">I channel: watch phase 0, then phase 8</text>
 
-  <rect x="2080" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2130" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SETTLE_P</text>
-  <text x="2130" y="720" font-family="Arial" font-size="18" fill="#212121">exc_phase=1</text>
+  <!-- Row 1: I channel states -->
+  <rect x="150" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="190" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_IDLE</text>
+  <text x="190" y="775" font-family="Arial" font-size="16" fill="#212121">wait start_i</text>
 
-  <rect x="2670" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2720" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SAMPLE_P</text>
-  <text x="2720" y="720" font-family="Arial" font-size="18" fill="#212121">request D+</text>
+  <rect x="800" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="840" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_SETTLE</text>
+  <text x="840" y="775" font-family="Arial" font-size="16" fill="#212121">count period_tick_i to settle_cycles_i</text>
 
-  <rect x="3260" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="3310" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SETTLE_N</text>
-  <text x="3310" y="720" font-family="Arial" font-size="18" fill="#212121">exc_phase=0</text>
+  <rect x="1450" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1490" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_WAIT_0</text>
+  <text x="1490" y="775" font-family="Arial" font-size="16" fill="#212121">watch for phase_index_i==0</text>
 
-  <rect x="3850" y="610" width="470" height="220" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="3900" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_SAMPLE_N</text>
-  <text x="3900" y="720" font-family="Arial" font-size="18" fill="#212121">request D-</text>
+  <rect x="2100" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2140" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_SAMPLE_0</text>
+  <text x="2140" y="775" font-family="Arial" font-size="16" fill="#212121">hold for sar_done_i -&gt; D(0)</text>
 
-  <rect x="2250" y="980" width="540" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2300" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_ACCUM</text>
-  <text x="2300" y="1100" font-family="Arial" font-size="18" fill="#212121">acc += (D+ - D-) / 2</text>
-  <text x="2300" y="1133" font-family="Arial" font-size="18" fill="#212121">pair_count++</text>
+  <rect x="2750" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2790" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_WAIT_180</text>
+  <text x="2790" y="775" font-family="Arial" font-size="16" fill="#212121">watch for phase_index_i==8</text>
 
-  <rect x="2970" y="980" width="560" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="3020" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_LOOP</text>
-  <text x="3020" y="1100" font-family="Arial" font-size="18" fill="#212121">pair_count &gt;= pair_target ?</text>
+  <rect x="3400" y="670" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3440" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_SAMPLE_180</text>
+  <text x="3440" y="775" font-family="Arial" font-size="16" fill="#212121">hold for sar_done_i -&gt; D(180)</text>
 
-  <rect x="3690" y="980" width="470" height="240" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="3740" y="1060" font-family="Arial" font-size="28" font-weight="700" fill="#212121">S_DONE</text>
-  <text x="3740" y="1100" font-family="Arial" font-size="18" fill="#212121">done_o=1</text>
+  <rect x="4050" y="670" width="560" height="200" rx="10" fill="#A5D6A7" stroke="#2E7D32" stroke-width="2"/>
+  <text x="4090" y="740" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_ACCUM_I</text>
+  <text x="4090" y="775" font-family="Arial" font-size="16" fill="#212121">i_acc_q += D(0)-D(180)</text>
 
-  <path d="M1950,720 L2080,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M2550,720 L2670,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M3140,720 L3260,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M3730,720 L3850,720" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M4080,830 L4080,980" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M2790,1100 L2970,1100" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M3530,1100 L3690,1100" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <path d="M3190,980 L3190,890 L2310,890 L2310,830" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
-  <text x="3230" y="940" font-family="Arial" font-size="17" fill="#212121">loop continue</text>
+  <path d="M710,770 L800,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M1360,770 L1450,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2010,770 L2100,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2660,770 L2750,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3310,770 L3400,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3960,770 L4050,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
 
-  <rect x="260" y="1030" width="980" height="420" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
-  <text x="320" y="1110" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Outputs</text>
-  <text x="320" y="1155" font-family="Arial" font-size="20" fill="#212121">exc_enable_o, exc_set_phase_o, exc_phase_o</text>
-  <text x="320" y="1190" font-family="Arial" font-size="20" fill="#212121">sample_req_o, sample_phase_o</text>
-  <text x="320" y="1225" font-family="Arial" font-size="20" fill="#212121">busy_o, done_o, result_o</text>
+  <text x="150" y="1010" font-family="Arial" font-size="26" font-weight="700" fill="#1B5E20">Q channel: watch phase 4, then phase 12 (same pattern, different targets and slots)</text>
 
-  <path d="M1240,1230 L2250,1230" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#m1)"/>
-  <text x="1280" y="1208" font-family="Arial" font-size="17" fill="#212121">result datapath</text>
-  <path d="M1240,560 L1560,560 L1560,700" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#m3)"/>
-  <text x="1265" y="535" font-family="Arial" font-size="17" fill="#212121">pair_target from pair_log2</text>
+  <!-- Row 2: Q channel states, mirrored right-to-left to sit visually under the loop-back -->
+  <rect x="4050" y="1040" width="560" height="200" rx="10" fill="#D1C4E9" stroke="#5E35B1" stroke-width="2"/>
+  <text x="4090" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_WAIT_90</text>
+  <text x="4090" y="1145" font-family="Arial" font-size="16" fill="#212121">watch for phase_index_i==4</text>
 
-  <rect x="260" y="1660" width="4430" height="1150" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="320" y="1740" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Detailed behavior</text>
-  <text x="320" y="1790" font-family="Arial" font-size="20" fill="#212121">- pair_target = 1 &lt;&lt; pair_log2 (clamped to counter width)</text>
-  <text x="320" y="1830" font-family="Arial" font-size="20" fill="#212121">- each completed pair contributes signed pair_delta into accumulator</text>
-  <text x="320" y="1870" font-family="Arial" font-size="20" fill="#212121">- done_o remains asserted until start_i is released</text>
-  <text x="320" y="1910" font-family="Arial" font-size="20" fill="#212121">- exc_enable_o is active through all non-idle states</text>
-  <text x="320" y="1950" font-family="Arial" font-size="20" fill="#212121">- sample requests are phase-tagged to separate D+ and D- capture paths</text>
+  <rect x="3400" y="1040" width="560" height="200" rx="10" fill="#D1C4E9" stroke="#5E35B1" stroke-width="2"/>
+  <text x="3440" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_SAMPLE_90</text>
+  <text x="3440" y="1145" font-family="Arial" font-size="16" fill="#212121">hold for sar_done_i -&gt; D(90)</text>
 
-  <line x1="320" y1="2030" x2="500" y2="2030" stroke="#1565C0" stroke-width="2" marker-end="url(#m1)"/>
-  <text x="540" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
-  <line x1="1260" y1="2030" x2="1440" y2="2030" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#m2)"/>
-  <text x="1480" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
-  <line x1="2140" y1="2030" x2="2320" y2="2030" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#m3)"/>
-  <text x="2360" y="2038" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <rect x="2750" y="1040" width="560" height="200" rx="10" fill="#D1C4E9" stroke="#5E35B1" stroke-width="2"/>
+  <text x="2790" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_WAIT_270</text>
+  <text x="2790" y="1145" font-family="Arial" font-size="16" fill="#212121">watch for phase_index_i==12</text>
+
+  <rect x="2100" y="1040" width="560" height="200" rx="10" fill="#D1C4E9" stroke="#5E35B1" stroke-width="2"/>
+  <text x="2140" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_SAMPLE_270</text>
+  <text x="2140" y="1145" font-family="Arial" font-size="16" fill="#212121">hold for sar_done_i -&gt; D(270)</text>
+
+  <rect x="1450" y="1040" width="560" height="200" rx="10" fill="#A5D6A7" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1490" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_ACCUM_Q</text>
+  <text x="1490" y="1145" font-family="Arial" font-size="16" fill="#212121">q_acc_q += D(90)-D(270); pair_count++</text>
+
+  <rect x="800" y="1040" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="840" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_LOOP</text>
+  <text x="840" y="1145" font-family="Arial" font-size="16" fill="#212121">pair_count &gt;= pair_target ?</text>
+
+  <rect x="150" y="1040" width="560" height="200" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="190" y="1110" font-family="Arial" font-size="26" font-weight="700" fill="#212121">S_DONE</text>
+  <text x="190" y="1145" font-family="Arial" font-size="16" fill="#212121">done_o=1; shadow snapshot happened on entry</text>
+
+  <path d="M4330,870 L4330,1040" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <text x="4360" y="960" font-family="Arial" font-size="16" fill="#212121">S_ACCUM_I -&gt; S_WAIT_90</text>
+  <path d="M4050,1140 L3960,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M3400,1140 L3310,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2750,1140 L2660,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M2100,1140 L2010,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+  <path d="M1450,1140 L1360,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#m2)"/>
+
+  <path d="M800,1110 L710,1110" stroke="#2E7D32" stroke-width="2" fill="none" marker-end="url(#m1)"/>
+  <text x="705" y="1090" font-family="Arial" font-size="16" fill="#1B5E20" text-anchor="end">yes: pair_count &gt;= target</text>
+
+  <path d="M1080,1040 L1080,900 L1730,900 L1730,870" stroke="#2E7D32" stroke-width="2" fill="none" marker-end="url(#m1)"/>
+  <text x="1090" y="885" font-family="Arial" font-size="16" fill="#1B5E20">no: loop back to S_WAIT_0 (excitation never stops, no re-settle)</text>
+
+  <rect x="150" y="1330" width="4460" height="620" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="200" y="1400" font-family="Arial" font-size="26" font-weight="700" fill="#212121">The reuse that isn't obvious from the state diagram</text>
+  <text x="200" y="1445" font-family="Arial" font-size="19" fill="#212121">sar_controller has exactly two capture slots, d_plus_o and d_minus_o -- it has no concept of I or Q. This FSM's own</text>
+  <text x="200" y="1478" font-family="Arial" font-size="19" fill="#212121">sequencing is what keeps the channels separate: sample_phase_o=1 always means "capture into d_plus," =0 means</text>
+  <text x="200" y="1511" font-family="Arial" font-size="19" fill="#212121">"capture into d_minus," regardless of which channel that slot is about to feed. D(0) lands in d_plus, D(180)</text>
+  <text x="200" y="1544" font-family="Arial" font-size="19" fill="#212121">overwrites d_minus, S_ACCUM_I reads both -- then D(90) and D(270) reuse the SAME two slots for the Q channel.</text>
+  <text x="200" y="1585" font-family="Arial" font-size="19" fill="#212121">Every S_WAIT_* state fires its sample the instant phase_index_i matches, including immediately on entry if it</text>
+  <text x="200" y="1618" font-family="Arial" font-size="19" fill="#212121">already matches -- correct for equivalent-time sampling: any occurrence of the target phase is a valid instant.</text>
+  <text x="200" y="1670" font-family="Arial" font-size="19" fill="#B71C1C">Open item (MAS GAP-7): sample points 0 and 8 (also 4 and 12) land on the very first cycle of their drive half,</text>
+  <text x="200" y="1703" font-family="Arial" font-size="19" fill="#B71C1C">immediately adjacent to a dead-time state -- zero settle margin inside the sampled half itself.</text>
+  <text x="200" y="1745" font-family="Arial" font-size="19" fill="#5E35B1">phase encoding, for reference (excitation_ctrl): 0-6 drive+, 7 dead, 8-14 drive-, 15 dead -- so 0,4 fall in the</text>
+  <text x="200" y="1778" font-family="Arial" font-size="19" fill="#5E35B1">positive half and 8,12 fall in the negative half, each a quarter-period apart as I/Q requires.</text>
+  <text x="200" y="1830" font-family="Arial" font-size="19" fill="#212121">- pair_target = 1 &lt;&lt; pair_log2_i, clamped to 64 -- applies identically to both accumulators (section 9.3)</text>
+  <text x="200" y="1863" font-family="Arial" font-size="19" fill="#212121">- exc_enable_o is asserted through every non-idle, non-done state</text>
+  <text x="200" y="1896" font-family="Arial" font-size="19" fill="#212121">- settle_cycles_i counts excitation PERIODS (period_tick_i pulses), not raw clock cycles</text>
+
+  <rect x="150" y="2010" width="4460" height="1000" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="200" y="2075" font-family="Arial" font-size="26" font-weight="700" fill="#212121">Worked cycle numbers (real Verilator trace, N=1, section 6.11)</text>
+  <text x="200" y="2130" font-family="Arial" font-size="19" fill="#212121">First pair (settle-gated, not comparable to steady state): S_SETTLE at cyc 3, S_WAIT_0 at cyc 36, S_SAMPLE_0 at</text>
+  <text x="200" y="2163" font-family="Arial" font-size="19" fill="#212121">cyc 51, S_WAIT_180 at cyc 84, S_SAMPLE_180 at cyc 91, S_ACCUM_I at cyc 124, S_WAIT_90 at cyc 125, S_SAMPLE_90 at</text>
+  <text x="200" y="2196" font-family="Arial" font-size="19" fill="#212121">cyc 135, S_WAIT_270 at cyc 168, S_SAMPLE_270 at cyc 175, S_ACCUM_Q at cyc 208, S_LOOP at cyc 209 (i_acc=120,</text>
+  <text x="200" y="2229" font-family="Arial" font-size="19" fill="#212121">q_acc=80). Steady-state pairs 2-4 repeat every 160 cycles exactly (S_WAIT_0 at 210, 370, 530). Final S_LOOP at</text>
+  <text x="200" y="2262" font-family="Arial" font-size="19" fill="#212121">cyc 689 (i_acc=480, q_acc=320) -&gt; S_DONE at cyc 690, the SAME cycle i_shadow_q/q_shadow_q latch to 480/320.</text>
+  <text x="200" y="2315" font-family="Arial" font-size="19" fill="#212121">Example ADC model targets used in this trace: D(0)=220, D(90)=170, D(180)=100, D(270)=90 (deliberately different</text>
+  <text x="200" y="2348" font-family="Arial" font-size="19" fill="#212121">deltas for I vs Q so a channel-swap bug would be numerically wrong, not coincidentally right). Result over 4</text>
+  <text x="200" y="2381" font-family="Arial" font-size="19" fill="#212121">pairs: result_i_o=480 (=4x120), result_q_o=320 (=4x80). Host still divides by M then by 2 for the true chop</text>
+  <text x="200" y="2414" font-family="Arial" font-size="19" fill="#212121">average -- none of that scaling happens on die.</text>
+
+  <line x1="200" y1="2900" x2="380" y2="2900" stroke="#1565C0" stroke-width="2" marker-end="url(#m1)"/>
+  <text x="420" y="2908" font-family="Arial" font-size="18" fill="#212121">WIRE.I-CHANNEL / done-path</text>
+  <line x1="1200" y1="2900" x2="1380" y2="2900" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#m2)"/>
+  <text x="1420" y="2908" font-family="Arial" font-size="18" fill="#212121">WIRE.STATE SEQUENCE</text>
+  <line x1="2280" y1="2900" x2="2460" y2="2900" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#m3)"/>
+  <text x="2500" y="2908" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG (unused in this view)</text>
+  <rect x="3200" y="2884" width="34" height="24" fill="#D1C4E9" stroke="#5E35B1" stroke-width="2"/>
+  <text x="3245" y="2902" font-family="Arial" font-size="18" fill="#212121">Q-channel states</text>
 </svg>

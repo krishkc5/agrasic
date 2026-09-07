@@ -80,6 +80,8 @@ module tb_excitation_drive;
     logic [3:0] last_idx;
     int unsigned states_seen;
     int unsigned period_cycles;
+    int unsigned p_half_cycles;
+    int unsigned n_half_cycles;
     begin
       divider_i = n;
       @(negedge clk);
@@ -90,6 +92,8 @@ module tb_excitation_drive;
       cyc_since_last = 0;
       states_seen    = 0;
       period_cycles  = 0;
+      p_half_cycles  = 0;
+      n_half_cycles  = 0;
 
       // Walk cycles until period_tick_o pulses (one full period), verifying
       // every phase-index transition takes exactly N cycles and the drive
@@ -99,6 +103,8 @@ module tb_excitation_drive;
         period_cycles++;
         cyc_since_last++;
         check_phase_map(phase_index_o);
+        if (drive_p_o) p_half_cycles++;
+        if (drive_n_o) n_half_cycles++;
 
         if (phase_index_o !== last_idx) begin
           if (cyc_since_last !== n) begin
@@ -119,6 +125,20 @@ module tb_excitation_drive;
       end else begin
         $display("[TB]   N=%0d: 16 phase states, %0d cycles each, %0d cycles/period -- OK",
                  n, n, period_cycles);
+      end
+
+      // 8.2 half-cycle symmetry, made explicit rather than left implicit in
+      // the combination of the phase-map and per-state timing checks above:
+      // 7 P-states and 7 N-states, each exactly N cycles, must sum to the
+      // same total on both halves -- 7*N drive_p_o cycles, 7*N drive_n_o
+      // cycles, for charge balance.
+      if (p_half_cycles !== 7 * n || n_half_cycles !== 7 * n || p_half_cycles !== n_half_cycles) begin
+        $error("SYMMETRY_FAIL: N=%0d drive_p_o high for %0d cycles, drive_n_o for %0d cycles, expected %0d each",
+               n, p_half_cycles, n_half_cycles, 7 * n);
+        errors++;
+      end else begin
+        $display("[TB]   N=%0d: half-cycle symmetry holds -- %0d cycles driven positive, %0d negative",
+                 n, p_half_cycles, n_half_cycles);
       end
 
       enable_i = 1'b0;

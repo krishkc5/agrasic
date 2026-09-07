@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="3200" viewBox="0 0 5200 3200" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="3400" viewBox="0 0 5200 3400" role="img" aria-labelledby="title desc">
   <title id="title">agriasic_digital_spi_top detailed block diagram</title>
-  <desc id="desc">Detailed diagram for SPI-controlled top wrapper connecting spi_slave, regfile, command decode FSM, and agriasic_digital_top core.</desc>
+  <desc id="desc">Rev 4.3 Phase 6 diagram for the SPI-controlled top wrapper: spi_slave (fully clk-domain, Phase 3), the command decode FSM with the renumbered register map (Phase 6: REG_FREQ_SEL selector, indexed REG_RESULT_IDX/DATA, REG_ID), and agriasic_digital_top with the current analog-boundary pins.</desc>
 
   <defs>
     <marker id="mData" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
@@ -10,88 +10,108 @@
     <marker id="mIf" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#000000"/></marker>
   </defs>
 
-  <rect width="5200" height="3200" fill="#ffffff"/>
+  <rect width="5200" height="3400" fill="#ffffff"/>
   <text x="120" y="95" font-family="Arial" font-size="40" font-weight="700" fill="#212121">Module: agriasic_digital_spi_top</text>
-  <text x="120" y="145" font-family="Arial" font-size="22" fill="#212121">SPI command plane + register map + measurement core integration</text>
+  <text x="120" y="145" font-family="Arial" font-size="22" fill="#616161">Rev 4.3 Phase 6 -- redrawn; register map is now the target layout (section 7.1), not the Phase 1-5 interim one</text>
 
-  <rect x="80" y="220" width="5040" height="2880" rx="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
+  <rect x="80" y="220" width="5040" height="3080" rx="12" fill="#F5F5F5" stroke="#444444" stroke-width="2"/>
 
-  <rect x="240" y="500" width="920" height="360" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
-  <text x="300" y="585" font-family="Arial" font-size="30" font-weight="700" fill="#ffffff">External SPI + ADC pins</text>
-  <text x="300" y="630" font-family="Arial" font-size="20" fill="#ffffff">sclk_i, cs_n_i, mosi_i, miso_o</text>
-  <text x="300" y="665" font-family="Arial" font-size="20" fill="#ffffff">adc_code_i</text>
-  <text x="300" y="700" font-family="Arial" font-size="20" fill="#ffffff">conv_start_o, exc_pol_o, busy_o, done_o, result_o</text>
+  <rect x="240" y="500" width="1000" height="440" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="580" font-family="Arial" font-size="26" font-weight="700" fill="#ffffff">External SPI + analog pins</text>
+  <text x="300" y="620" font-family="Arial" font-size="18" fill="#ffffff">sclk_i, cs_n_i, mosi_i, miso_o, miso_oe_o</text>
+  <text x="300" y="652" font-family="Arial" font-size="18" fill="#ffffff">exc_drive_p_o, exc_drive_n_o</text>
+  <text x="300" y="684" font-family="Arial" font-size="18" fill="#ffffff">adc_enable_o, adc_sample_o, adc_dac_o[7:0], adc_comp_i</text>
+  <text x="300" y="716" font-family="Arial" font-size="18" fill="#ffffff">conv_start_o, busy_o, done_o, result_i_o, result_q_o</text>
+  <text x="300" y="750" font-family="Arial" font-size="15" fill="#BDBDBD">adc_code_i / exc_pol_o / result_o no longer exist.</text>
 
-  <rect x="1400" y="460" width="980" height="450" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1460" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_spi_slave</text>
-  <text x="1460" y="590" font-family="Arial" font-size="20" fill="#212121">mode-0 byte shift + CDC toggle</text>
-  <text x="1460" y="625" font-family="Arial" font-size="19" fill="#212121">rx_data_o, rx_valid_o</text>
-  <text x="1460" y="658" font-family="Arial" font-size="19" fill="#212121">tx_data_i for read response</text>
+  <rect x="1400" y="460" width="980" height="480" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1460" y="540" font-family="Arial" font-size="28" font-weight="700" fill="#212121">u_spi_slave</text>
+  <text x="1460" y="582" font-family="Arial" font-size="18" fill="#212121">entirely clk-domain (Phase 3):</text>
+  <text x="1460" y="612" font-family="Arial" font-size="18" fill="#212121">2FF-oversampled sclk/cs_n/mosi,</text>
+  <text x="1460" y="642" font-family="Arial" font-size="18" fill="#212121">no toggle synchronizer</text>
+  <text x="1460" y="682" font-family="Arial" font-size="18" fill="#212121">rx_data_o, rx_valid_o</text>
+  <text x="1460" y="712" font-family="Arial" font-size="18" fill="#212121">tx_data_i for read response</text>
 
-  <rect x="2600" y="460" width="1200" height="620" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2660" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Command decode FSM</text>
-  <text x="2660" y="590" font-family="Arial" font-size="20" fill="#212121">RX_WAIT_CMD / RX_WAIT_WDATA</text>
-  <text x="2660" y="625" font-family="Arial" font-size="19" fill="#212121">cmd[7]=RW, cmd[6:3]=addr</text>
-  <text x="2660" y="658" font-family="Arial" font-size="19" fill="#212121">READ: select tx byte</text>
-  <text x="2660" y="691" font-family="Arial" font-size="19" fill="#212121">WRITE: capture payload byte</text>
-  <text x="2660" y="724" font-family="Arial" font-size="19" fill="#212121">CTRL bit0 generates start pulse</text>
-  <text x="2660" y="757" font-family="Arial" font-size="19" fill="#212121">CFG regs update pair/settle/div/conv</text>
+  <rect x="2600" y="460" width="1300" height="700" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2660" y="540" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Command decode FSM</text>
+  <text x="2660" y="582" font-family="Arial" font-size="18" fill="#212121">RX_WAIT_CMD / RX_WAIT_WDATA / RX_WAIT_DROP</text>
+  <text x="2660" y="614" font-family="Arial" font-size="18" fill="#212121">cmd[7]=RW, cmd[6:3]=addr, cmd[2:0]=reserved</text>
+  <text x="2660" y="646" font-family="Arial" font-size="18" fill="#212121">READ: read_byte_from_addr() -&gt; tx byte</text>
+  <text x="2660" y="678" font-family="Arial" font-size="18" fill="#212121">WRITE: capture payload byte into cfg_* / index</text>
+  <text x="2660" y="710" font-family="Arial" font-size="18" fill="#212121">CTRL bit0 -&gt; start pulse; bit7 -&gt; clear sticky errors</text>
+  <text x="2660" y="742" font-family="Arial" font-size="18" fill="#212121">REG_FREQ_SEL write -&gt; selector-to-N lookup (combinational)</text>
+  <text x="2660" y="774" font-family="Arial" font-size="18" fill="#212121">REG_RESULT_DATA read -&gt; auto-increments result_idx_q</text>
 
-  <rect x="1400" y="1100" width="980" height="520" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
-  <text x="1460" y="1185" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_regfile</text>
-  <text x="1460" y="1230" font-family="Arial" font-size="20" fill="#212121">AW=4, DW=32</text>
-  <text x="1460" y="1265" font-family="Arial" font-size="19" fill="#212121">host writes + status/result mirror</text>
-  <text x="1460" y="1298" font-family="Arial" font-size="19" fill="#212121">read access for SPI responses</text>
-  <text x="1460" y="1331" font-family="Arial" font-size="19" fill="#212121">addr map 0..7</text>
+  <rect x="1400" y="1200" width="980" height="440" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1460" y="1280" font-family="Arial" font-size="28" font-weight="700" fill="#212121">u_regfile</text>
+  <text x="1460" y="1322" font-family="Arial" font-size="18" fill="#212121">AW=4, DW=32</text>
+  <text x="1460" y="1354" font-family="Arial" font-size="18" fill="#212121">Phase 6: mirrors STATUS only now --</text>
+  <text x="1460" y="1386" font-family="Arial" font-size="18" fill="#212121">non-load-bearing for reads either way,</text>
+  <text x="1460" y="1418" font-family="Arial" font-size="18" fill="#212121">since read_byte_from_addr() never falls</text>
+  <text x="1460" y="1450" font-family="Arial" font-size="16" fill="#8D6E63">through to rd_data for a valid address</text>
 
-  <rect x="2600" y="1200" width="2200" height="700" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2660" y="1285" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_core: agriasic_digital_top</text>
-  <text x="2660" y="1330" font-family="Arial" font-size="20" fill="#212121">start pulse + cfg_* inputs from command plane</text>
-  <text x="2660" y="1365" font-family="Arial" font-size="20" fill="#212121">runs settle/sample/accumulate sequencing</text>
-  <text x="2660" y="1400" font-family="Arial" font-size="20" fill="#212121">outputs busy/done/result + analog controls</text>
+  <rect x="2600" y="1320" width="2280" height="700" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2660" y="1400" font-family="Arial" font-size="28" font-weight="700" fill="#212121">u_core: agriasic_digital_top</text>
+  <text x="2660" y="1442" font-family="Arial" font-size="19" fill="#212121">start pulse + cfg_pair_log2/settle/divider(from</text>
+  <text x="2660" y="1474" font-family="Arial" font-size="19" fill="#212121">selector lookup)/conv inputs from command plane</text>
+  <text x="2660" y="1506" font-family="Arial" font-size="19" fill="#212121">runs phase-lock watch/sample/accumulate sequencing</text>
+  <text x="2660" y="1538" font-family="Arial" font-size="19" fill="#212121">(measurement_fsm + excitation_ctrl + sar_controller)</text>
+  <text x="2660" y="1570" font-family="Arial" font-size="19" fill="#212121">outputs busy/done/result_i/result_q + analog controls</text>
 
-  <rect x="2600" y="2020" width="2200" height="540" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="2660" y="2105" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Register map (byte-oriented)</text>
-  <text x="2660" y="2150" font-family="Arial" font-size="20" fill="#212121">0x0 CTRL(start pulse), 0x1 pair_log2, 0x2 settle, 0x3 divider, 0x4 conv</text>
-  <text x="2660" y="2185" font-family="Arial" font-size="20" fill="#212121">0x5 STATUS(done,busy), 0x6 RESULT_LO, 0x7 RESULT_HI</text>
-  <text x="2660" y="2220" font-family="Arial" font-size="20" fill="#212121">READ: cmd byte then dummy byte to shift out response</text>
+  <rect x="2600" y="2170" width="2480" height="900" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="2660" y="2250" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Register map (Phase 6, target layout)</text>
+  <text x="2660" y="2295" font-family="Arial" font-size="18" fill="#212121">0x0 CTRL(start,clr-err)  0x1 PAIR_LOG2  0x2 SETTLE</text>
+  <text x="2660" y="2327" font-family="Arial" font-size="18" fill="#212121">0x3 FREQ_SEL (2-bit selector: 0/1/2 -&gt; N=1/100/10000)</text>
+  <text x="2660" y="2359" font-family="Arial" font-size="18" fill="#B71C1C">0x4 PHASE_IDX -- reserved, NOT wired (MAS GAP-10)</text>
+  <text x="2660" y="2391" font-family="Arial" font-size="18" fill="#212121">0x5 CONV  0x6 STATUS (+bit4 overrange, new)</text>
+  <text x="2660" y="2423" font-family="Arial" font-size="18" fill="#1B5E20">0x7 RESULT_IDX (RW, auto-inc on data read)</text>
+  <text x="2660" y="2455" font-family="Arial" font-size="18" fill="#1B5E20">0x8 RESULT_DATA (RO, byte at index 0-15;</text>
+  <text x="2660" y="2487" font-family="Arial" font-size="18" fill="#1B5E20">   idx 0-3 = I/Q lo/hi, 4-15 reserved = 0x00)</text>
+  <text x="2660" y="2519" font-family="Arial" font-size="18" fill="#212121">0x9 ID (RO, fixed 0x43)</text>
+  <text x="2660" y="2560" font-family="Arial" font-size="17" fill="#616161">READ: cmd byte then dummy byte to shift out response.</text>
+  <text x="2660" y="2590" font-family="Arial" font-size="17" fill="#616161">REG_CTRL's core-enable bit called for by the baseline</text>
+  <text x="2660" y="2620" font-family="Arial" font-size="17" fill="#616161">doc is likewise reserved, not wired (MAS GAP-10).</text>
 
   <path d="M1160,610 L1400,610" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
   <text x="1190" y="586" font-family="Arial" font-size="17" fill="#212121">SPI pins</text>
 
-  <path d="M2380,620 L2600,620" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#mCtrl)"/>
-  <text x="2410" y="596" font-family="Arial" font-size="17" fill="#212121">rx_data, rx_valid</text>
-  <path d="M2600,690 L2380,690" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
-  <text x="2410" y="716" font-family="Arial" font-size="17" fill="#212121">tx_data</text>
+  <path d="M2380,610 L2600,610" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#mCtrl)"/>
+  <text x="2410" y="586" font-family="Arial" font-size="17" fill="#212121">rx_data, rx_valid</text>
+  <path d="M2600,700 L2380,700" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="2410" y="726" font-family="Arial" font-size="17" fill="#212121">tx_data</text>
 
-  <path d="M3200,1080 L2000,1080 L2000,1100" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
-  <text x="2550" y="1056" font-family="Arial" font-size="17" fill="#212121">wr_en/addr/data</text>
+  <path d="M3250,1160 L2000,1160 L2000,1200" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
+  <text x="2550" y="1136" font-family="Arial" font-size="17" fill="#212121">STATUS mirror write</text>
 
-  <path d="M2380,1360 L2600,1360" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
-  <text x="2410" y="1336" font-family="Arial" font-size="17" fill="#212121">rd_data[7:0]</text>
+  <path d="M2380,1420 L2600,1420" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="2410" y="1396" font-family="Arial" font-size="17" fill="#212121">rd_data[7:0] (default case only)</text>
 
-  <path d="M3300,1080 L3300,1200" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
-  <text x="3330" y="1140" font-family="Arial" font-size="17" fill="#212121">cfg_* + start</text>
+  <path d="M3300,1160 L3300,1320" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#mCfg)"/>
+  <text x="3330" y="1250" font-family="Arial" font-size="17" fill="#212121">cfg_* + start</text>
 
-  <path d="M1160,700 L2600,700 L2600,1480" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
-  <text x="1190" y="724" font-family="Arial" font-size="17" fill="#212121">adc_code_i</text>
+  <path d="M1160,700 L2600,700 L2600,1550" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
+  <text x="1190" y="724" font-family="Arial" font-size="17" fill="#212121">adc_comp_i</text>
 
-  <path d="M4800,1440 L4960,1440" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
-  <text x="4700" y="1416" font-family="Arial" font-size="17" fill="#212121">conv/exc/status/result</text>
+  <path d="M4880,1560 L5040,1560" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
+  <text x="4780" y="1536" font-family="Arial" font-size="17" fill="#212121">exc/adc/status/result pins</text>
 
-  <rect x="240" y="2060" width="2200" height="900" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="300" y="2145" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Flow summary</text>
-  <text x="300" y="2190" font-family="Arial" font-size="20" fill="#212121">1) SPI byte stream enters u_spi_slave.</text>
-  <text x="300" y="2225" font-family="Arial" font-size="20" fill="#212121">2) Command FSM decodes RW/address and updates cfg/start or read response byte.</text>
-  <text x="300" y="2260" font-family="Arial" font-size="20" fill="#212121">3) Core executes measurement and reports done/result.</text>
-  <text x="300" y="2295" font-family="Arial" font-size="20" fill="#212121">4) Wrapper mirrors status/result bytes for SPI readback.</text>
+  <rect x="240" y="2130" width="2200" height="940" rx="10" fill="#ffffff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="2210" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Flow summary</text>
+  <text x="300" y="2255" font-family="Arial" font-size="19" fill="#212121">1) SPI byte stream enters u_spi_slave (fully clk-domain since Phase 3).</text>
+  <text x="300" y="2290" font-family="Arial" font-size="19" fill="#212121">2) Command FSM decodes RW/address; REG_FREQ_SEL writes translate a</text>
+  <text x="300" y="2320" font-family="Arial" font-size="19" fill="#212121">   selector to N combinationally before it reaches the core.</text>
+  <text x="300" y="2355" font-family="Arial" font-size="19" fill="#212121">3) Core executes measurement, reports done_o/result_i_o/result_q_o.</text>
+  <text x="300" y="2390" font-family="Arial" font-size="19" fill="#212121">4) Host reads I/Q via REG_RESULT_IDX/DATA: set index 0, read 4 times,</text>
+  <text x="300" y="2420" font-family="Arial" font-size="19" fill="#212121">   pointer auto-increments -- no separate index write between reads.</text>
+  <text x="300" y="2455" font-family="Arial" font-size="19" fill="#212121">5) STATUS mirrors continuously into u_regfile (vestigial for reads --</text>
+  <text x="300" y="2485" font-family="Arial" font-size="19" fill="#212121">   every valid address is served directly, never through rd_data).</text>
 
-  <line x1="300" y1="2385" x2="480" y2="2385" stroke="#1565C0" stroke-width="2" marker-end="url(#mData)"/>
-  <text x="520" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
-  <line x1="1240" y1="2385" x2="1420" y2="2385" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#mCtrl)"/>
-  <text x="1460" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
-  <line x1="2060" y1="2385" x2="2240" y2="2385" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#mCfg)"/>
-  <text x="2280" y="2393" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
-  <line x1="300" y1="2450" x2="480" y2="2450" stroke="#000000" stroke-width="3" marker-end="url(#mIf)"/>
-  <text x="520" y="2458" font-family="Arial" font-size="18" fill="#212121">WIRE.INTERFACE</text>
+  <line x1="300" y1="2830" x2="480" y2="2830" stroke="#1565C0" stroke-width="2" marker-end="url(#mData)"/>
+  <text x="520" y="2838" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1240" y1="2830" x2="1420" y2="2830" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#mCtrl)"/>
+  <text x="1460" y="2838" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2060" y1="2830" x2="2240" y2="2830" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#mCfg)"/>
+  <text x="2280" y="2838" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <line x1="300" y1="2895" x2="480" y2="2895" stroke="#000000" stroke-width="3" marker-end="url(#mIf)"/>
+  <text x="520" y="2903" font-family="Arial" font-size="18" fill="#212121">WIRE.INTERFACE</text>
 </svg>

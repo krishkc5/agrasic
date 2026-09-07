@@ -9,7 +9,8 @@
 //      between control blocks (Rev 4.3 Phase 4: excitation_ctrl runs on its
 //      own; measurement_fsm watches its phase counter rather than commanding
 //      flips -- see excitation_ctrl.sv and measurement_fsm.sv).
-//   3) Aggregates completion and accumulated result to top outputs.
+//   3) Aggregates completion and both accumulated results (I and Q, Rev 4.3
+//      Phase 5) to top outputs.
 //
 // Analog boundary (Rev 4.3):
 //   Only these signals cross into the analog front end: exc_drive_p_o and
@@ -41,7 +42,8 @@ module agriasic_digital_top #(
   input  logic                   adc_comp_i,
   output logic                   busy_o,
   output logic                   done_o,
-  output logic [15:0]            result_o
+  output logic signed [15:0]     result_i_o,  // Rev 4.3 Phase 5: I channel, (D(0)-D(180)) summed
+  output logic signed [15:0]     result_q_o   // Rev 4.3 Phase 5: Q channel, (D(90)-D(270)) summed
 );
 
   logic [ADC_WIDTH-1:0] d_plus;
@@ -52,7 +54,6 @@ module agriasic_digital_top #(
   logic                 sample_phase;
   logic                 sample_done;
   logic                 exc_enable;
-  logic                 sar_busy;
 
   // Excitation controller: free-running divider + phase counter (Rev 4.3
   // Phase 4). No more commanded flips -- measurement_fsm watches
@@ -79,7 +80,7 @@ module agriasic_digital_top #(
     .conv_cycles_i  (cfg_conv_cycles_i),
     .conv_start_o   (conv_start_o),
     .sample_done_o  (sample_done),
-    .busy_o         (sar_busy),
+    .busy_o         (),  // not consumed: measurement_fsm tracks its own busy state via sample_done_i, never polls this
     .d_plus_o       (d_plus),
     .d_minus_o      (d_minus),
     .adc_enable_o   (adc_enable_o),
@@ -108,7 +109,8 @@ module agriasic_digital_top #(
     .sample_phase_o  (sample_phase),
     .busy_o          (busy_o),
     .done_o          (done_o),
-    .result_o        (result_o)
+    .result_i_o      (result_i_o),
+    .result_q_o      (result_q_o)
   );
 
 endmodule

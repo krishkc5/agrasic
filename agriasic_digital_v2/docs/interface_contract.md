@@ -1,16 +1,26 @@
 # AgriASIC Digital Interface Contract
 
-Refreshed for Rev 4.2 + Rev 4.3 Phases 1-4. This document describes the
-**currently implemented** RTL only. For what's specified but not yet built
-(I/Q accumulators, indexed register readout, and the Phase 6 SPI-visible
-divider encoding — Rev 4.3 Phases 5-8), see
-[`agriasic_digital_MAS.md`](agriasic_digital_MAS.md).
+Refreshed for Rev 4.2 + Rev 4.3 Phases 1-6. This document describes the
+**currently implemented** RTL only. It covers the SPI/parallel-programming/
+RV32I-MMIO *register* interfaces, none of which changed in Phase 7 or 8 —
+the 3-frequency-point sweep that Phase 7 added lives entirely inside RV32I
+*firmware* (`fw/fw.c`), not in any new register or protocol behavior, so
+nothing below needed updating for it. What Phase 7 did surface is an
+architectural gap in how that firmware's results reach a host at all — see
+the "GAP-11" note under "What is not in this contract yet" below, and
+[`agriasic_digital_MAS.md`](agriasic_digital_MAS.md) section 10.3 for full
+detail. Temperature sensing (Phase 7.3) remains unbuilt in any digital RTL.
 
 The previous version of this document predated three SPI behavior changes and
 the whole Phase 1-3 restructure; do not write host firmware from an older
 copy. It also predates Phase 4's excitation rearchitecture — the "phase
-change" / "polarity register" language below is gone, replaced by a
-free-running phase counter (see "Analog front-end interface" below).
+change" / "polarity register" language is gone, replaced by a free-running
+phase counter (see "Analog front-end interface" below) — Phase 5's I/Q
+accumulation, which turned every "the result" singular below into two
+independent channels (see "Measurement control" and the register map) — and
+Phase 6's full register-map renumbering (see the register map below; **every
+address after 0x2 has moved or changed meaning** compared to any document
+predating this one).
 
 ## Clock and Reset
 - `clk`: single digital clock domain for the entire design. As of Phase 3,
@@ -29,7 +39,13 @@ free-running phase counter (see "Analog front-end interface" below).
 - `done_o`: pulses high for one core cycle when the run completes (the SPI
   wrapper latches this into a sticky `REG_STATUS` bit — see below — because a
   host polling over SPI cannot reliably catch a single-cycle pulse)
-- `result_o[15:0]`: accumulated result, signed, valid once `done_o` has pulsed
+- `result_i_o[15:0]` / `result_q_o[15:0]` (Rev 4.3 Phase 5, replacing the
+  single `result_o[15:0]`): the I and Q channel accumulators, each
+  independently signed and valid once `done_o` has pulsed. Both are **shadow
+  registers** — they latch the internal accumulators' final value only on
+  measurement completion, so a read mid-run always returns the *previous*
+  run's result, never a partial sum in progress (see the register map below
+  for how these are exposed over each host interface)
 
 ## Analog front-end interface (Rev 4.3 Phases 1 and 4)
 `adc_code_i` no longer exists anywhere in this design. The digital side now
@@ -59,8 +75,9 @@ both. The old `DEAD_CYCLES` RTL parameter is gone; dead time is now just
 starts — and whether that is enough real dead time is still an open question
 pending a number from analog (see the MAS, GAP-6).
 
-Excitation frequency follows `f_exc = f_clk / (16 x N)` where N is the value
-written to `REG_DIVIDER`, verified exact (not approximate) in simulation.
+Excitation frequency follows `f_exc = f_clk / (16 x N)`, verified exact (not
+approximate) in simulation. As of Phase 6, N is set indirectly over SPI via
+`REG_FREQ_SEL` (see the register map below), not written directly.
 
 **`adc_comp_i` convention.** `1` = input ≥ current trial code (keep the bit,
 it's a valid lower bound); `0` = input < current trial code (clear the bit,
@@ -111,59 +128,111 @@ interface.
 - `0xE1`: invalid command (`cmd[2:0] != 0`)
 - `0xE2`: invalid register address
 
-## Register map (as implemented)
-- `0x0` `REG_CTRL` (RW):
-	- bit[0] write-one pulse to start measurement
-	- bit[7] write-one clears sticky protocol error bits in `REG_STATUS[7:5]`
-- `0x1` `REG_PAIR_LOG2` (RW): pair count as log2 (`M = 2^REG_PAIR_LOG2`,
-  clamped to 64 — write 6 or less)
-- `0x2` `REG_SETTLE` (RW): settle time to wait after `start`, before the FSM
-  begins watching for a phase match. **Rev 4.3 Phase 4 changed the unit**:
-  this now counts free-running **excitation periods** (one full 16-phase
-  cycle each), not raw clock cycles or divider ticks — the register keeps its
-  name and address, only what it counts changed
-- `0x3` `REG_DIVIDER` (RW, **8-bit window onto a 14-bit register**): sets N in
-  `f_exc = f_clk / (16 x N)`, `f_clk = 160 MHz`. As of Phase 4 the internal
-  register (`cfg_divider_q`) is 14 bits so the excitation floor can reach
-  1 kHz, but this SPI register (and the parallel programming interface) still
-  only reads/writes the low 8 bits — writes zero-extend the byte into the
-  14-bit register, reads return only the low byte. **N is therefore reachable
-  up to 255 over SPI (39.2 kHz floor) even though the hardware underneath can
-  reach 16383 (1 kHz floor)** — widening the SPI-visible window is a Phase 6
-  item, not yet done. A program running on the RV32I core, via MMIO, is not
-  subject to this limit; MMIO's `REG_DIVIDER` is fully 14-bit today.
-- `0x4` `REG_CONV` (RW): comparator regeneration wait, **in clk cycles, per
-  SAR bit trial** — not a total conversion latency. Total conversion time is
-  `8 × (3 + REG_CONV)` clk cycles (8 bit trials). This is a deliberate design
-  choice: the real regeneration time is not yet characterized, so making it a
-  runtime register rather than a fixed RTL parameter lets it be tuned during
-  bring-up with no respin.
-- `0x5` `REG_STATUS` (RO):
-	- bit[7] sticky protocol error
-	- bit[6] sticky bad address
-	- bit[5] sticky illegal write to RO register
-	- bit[1] **done — sticky**, not a one-cycle pulse. Latched when the FSM's
-	  one-cycle `done_o` fires, held until the next start, specifically so a
-	  host polling over SPI (which needs many cycles per transaction) cannot
-	  miss it.
-	- bit[0] busy
-- `0x6` `REG_RESULT_LO` (RO): result low byte
-- `0x7` `REG_RESULT_HI` (RO): result high byte
+## Register map (as implemented, Rev 4.3 Phase 6)
 
-**Result semantics (Rev 4.3 defect fix D-3):** `REG_RESULT` is
-`sum(D+ - D-)` over M pairs — the **raw** accumulated difference, with no
-per-pair scaling applied on die. Divide by M yourself, and by 2 again for the
-true chop average per `I = (D(0°) - D(180°))/2`. An earlier RTL revision
-applied a per-pair right shift on die; that version is gone, and any host code
-written against it will read results exactly double what it expects.
+This is now the Rev 4.3 **target** register layout, not an interim one — see
+the two exceptions called out after the table.
+
+| Addr | Name | Access | Purpose |
+|---|---|---|---|
+| `0x0` | `REG_CTRL` | RW | bit[0] write-one pulse to start measurement; bit[7] write-one clears sticky protocol error bits in `REG_STATUS[7:5]`. **No core-enable bit** — see the note below |
+| `0x1` | `REG_PAIR_LOG2` | RW | Pair count as log2 (`M = 2^REG_PAIR_LOG2`). Values above 6 are clamped to 64 in hardware and set `REG_STATUS` bit[4] (overrange) |
+| `0x2` | `REG_SETTLE` | RW | Excitation *periods* to wait after `start` before the FSM begins watching for a phase match (not raw clock cycles) |
+| `0x3` | `REG_FREQ_SEL` | RW | **2-bit selector, not raw N**: `0` -> 10 MHz (N=1), `1` -> 100 kHz (N=100), `2` -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER` — see the note below |
+| `0x4` | `REG_PHASE_IDX` | RW | Present in the map; writes are stored and read back, but **not wired to anything** — see the note below |
+| `0x5` | `REG_CONV` | RW | Comparator regeneration wait, **in clk cycles, per SAR bit trial** — not total conversion latency. Total conversion time is `8 x (3 + REG_CONV)` clk cycles. Runtime-tunable because the real regeneration time isn't characterized yet |
+| `0x6` | `REG_STATUS` | RO | bit[7] sticky protocol error; bit[6] sticky bad address; bit[5] sticky illegal write to RO register; bit[4] **overrange** (new); bit[1] done — **sticky**, latched when the FSM's one-cycle `done_o` fires, held until the next start; bit[0] busy |
+| `0x7` | `REG_RESULT_IDX` | RW | Pointer into the result byte vector, 0-15. **Auto-increments only on a `REG_RESULT_DATA` read** — not on writes to this register, and not on reads of this register itself |
+| `0x8` | `REG_RESULT_DATA` | RO | Byte at the current index — see the mapping below |
+| `0x9` | `REG_ID` | RO | Fixed design/revision identifier, `0x43` |
+
+**`REG_RESULT_DATA` index mapping.** The target result set is I/Q for three
+frequency points plus temperature (13 bytes); only one frequency point's data
+exists today:
+
+```text
+idx 0: I low byte      idx 1: I high byte
+idx 2: Q low byte      idx 3: Q high byte
+idx 4-15: reserved, reads as 0x00 (future frequency points + temperature)
+```
+
+Read index 0-3 in order after setting `REG_RESULT_IDX = 0` to get a full I/Q
+readout in 4 back-to-back reads with no further index writes needed — the
+pointer auto-increments. Indices 4-15 read as a deliberate zero, not garbage:
+there is no second/third frequency point or temperature data anywhere in the
+digital RTL yet (Phase 7).
+
+**Result semantics (Rev 4.3 defect fix D-3, unchanged since Phase 1):** each
+channel is `sum(D+ - D-)` over M pairs — the **raw** accumulated difference,
+with no per-pair scaling applied on die. Divide by M yourself, and by 2 again
+for the true chop average: `I = (D(0°) - D(180°))/2`, `Q = (D(90°) -
+D(270°))/2`. Both channels are **shadow registers**, not live accumulators —
+they latch only when a run completes, so a host that reads mid-run (which it
+should not do — check `busy_o`/`REG_STATUS` bit[0] first) gets the previous
+run's complete result, never a partial sum.
+
+**`REG_FREQ_SEL` — why a selector, not raw N.** The internal divider is 14
+bits (needs N=10000 for the 1 kHz point) — too wide for a single SPI byte to
+carry, and the 2-byte SPI protocol isn't being widened to fit it. A selector
+is the only encoding that reaches 1 kHz through one SPI byte: the host writes
+0/1/2, the wrapper looks up the matching N combinationally, and
+`excitation_ctrl` never sees the difference. The parallel programming
+interface uses the identical selector (`CFG_FREQ_SEL`) for the same reason.
+**RV32I MMIO keeps a separate, differently-named register, `REG_DIVIDER`,
+taking raw N directly** (word offset `0x8000_000C`) — native 32-bit MMIO
+writes have no byte-framing constraint, so there was nothing to work around,
+and giving it the same name as SPI's selector-based register would wrongly
+suggest matching semantics.
+
+**Two reserved items with no implemented semantics — `REG_PHASE_IDX` and
+`REG_CTRL`'s core-enable bit.** Both are called for by the baseline design
+doc's register map, and both accept writes and read them back, but do
+nothing:
+- `REG_PHASE_IDX` ("phase index into the 16-state counter") doesn't reconcile
+  with how I/Q sampling actually works: `measurement_fsm` watches four FIXED,
+  90-degree-spaced phase points, not one selectable one. A plausible reading
+  — a phase offset shifting all four points together, as a calibration trim
+  — is an interpretation, not a specification; building RTL against a guess
+  for a silicon-bound register was judged worse than an honest no-op.
+- `REG_CTRL`'s core-enable bit presumes a unified chip with a toggleable
+  on-die RV32I core, which doesn't exist: the RV32I and SPI control paths are
+  two separate, mutually exclusive top-level modules today
+  (`agriasic_digital_rv32i_top` vs. `agriasic_digital_spi_top`).
+
+Do not write host firmware that depends on either of these until the MAS's
+GAP-10 is resolved with the people who specified them.
+
+**Same result semantics, different mechanisms, on every host interface.** The
+parallel programming interface (`agriasic_digital_programming_top`) exposes
+both channels as bare `result_i_o`/`result_q_o` output ports — no index
+scheme, since a direct hardware interface has no byte-framing reason to need
+one. The RV32I MMIO interface exposes `REG_RESULT_I` at word offset
+`0x8000_0018` and `REG_RESULT_Q` at `0x8000_001C` directly (see `fw/fw.c`).
 
 ## What is not in this contract yet
-The free-running divider and 16-state phase counter themselves are
-implemented as of Rev 4.3 Phase 4 (see `REG_DIVIDER` above) — what's still
-missing is everything downstream of them in the register map:
-`REG_FREQ_SEL`/`REG_PHASE_IDX` (a cleaner Phase 6 register encoding for the
-divider and an explicit phase-index selector), the I/Q accumulator pair (a
-second signed accumulator and 90°/270° phase watch, Phase 5), and the indexed
-`REG_RESULT_IDX`/`REG_RESULT_DATA` readout (Phase 6). Do not write host or
-firmware code against any of those yet — see the MAS for current phase status
-before starting that work.
+The register map above is the Rev 4.3 target layout as far as *mechanisms*
+go. What's still missing is the *data* behind some of it:
+- Real I/Q data for frequency points 2 and 3, and temperature, **on the SPI/
+  parallel-programming/RV32I-MMIO register interfaces described above** —
+  `REG_RESULT_DATA` indices 4-12 still read as zero on those interfaces. The
+  3-frequency-point sweep itself now exists (Phase 7), but only as RV32I
+  *firmware* logic (`fw/fw.c`) writing to its own scratch RAM, not as new
+  register/protocol behavior on any of the interfaces this document covers
+- `REG_PHASE_IDX` and `REG_CTRL`'s core-enable bit's actual semantics (see
+  the notes above and MAS GAP-10)
+
+**GAP-11 (Phase 7 finding, not yet resolved): the RV32I firmware's sweep
+results have no host-facing path out of the chip at all.**
+`agriasic_digital_rv32i_top` — the only top-level integration that runs this
+firmware — has zero SPI or other host-facing pins (confirmed by grep, no
+matches). The 3-point sweep firmware computes real I/Q results for N=1/100/
+10000 and stores them in its own scratch RAM, but nothing outside the RV32I
+core itself can read them; the only integration with real host-facing pins,
+`agriasic_digital_spi_top`, has no RV32I core to run this firmware on in the
+first place. Do not write host software assuming firmware-computed sweep
+results are reachable over SPI (or any other interface) until this is
+resolved — see MAS section 10.3 GAP-11 for the three architectural options
+under consideration.
+
+Do not write host or firmware code against any of those yet — see the MAS for
+current phase status before starting that work.

@@ -23,7 +23,8 @@ module agriasic_digital_rv32i_top #(
   input  logic                 adc_comp_i,
   output logic                 busy_o,
   output logic                 done_o,
-  output logic [15:0]          result_o,
+  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
+  output logic signed [15:0]   result_q_o,  // Rev 4.3 Phase 5: Q channel
 
   output logic [3:0]           cfg_pair_log2_o,
   output logic [7:0]           cfg_settle_cycles_o,
@@ -44,25 +45,28 @@ module agriasic_digital_rv32i_top #(
   logic shell_done;
   logic shell_start_pulse;
   logic shell_clear_errors;
-  logic [15:0] shell_result;
+  logic signed [15:0] shell_result_i;
+  logic signed [15:0] shell_result_q;
 
   agriasic_rv32i_control_shell #(
     .ADC_WIDTH(ADC_WIDTH)
   ) u_control_shell (
-    .clk                   (clk),
-    .rst_n                 (rst_n_sync),
-    .start_i               (start_i),
-    .measurement_done_i    (done_o),
-    .measurement_result_i  (result_o),
-    .busy_o                (shell_busy),
-    .done_o                (shell_done),
-    .start_pulse_o         (shell_start_pulse),
-    .clear_errors_o        (shell_clear_errors),
-    .cfg_pair_log2_o       (cfg_pair_log2_o),
-    .cfg_settle_cycles_o   (cfg_settle_cycles_o),
-    .cfg_exc_divider_o     (cfg_exc_divider_o),
-    .cfg_conv_cycles_o     (cfg_conv_cycles_o),
-    .result_o              (shell_result)
+    .clk                     (clk),
+    .rst_n                   (rst_n_sync),
+    .start_i                 (start_i),
+    .measurement_done_i      (done_o),
+    .measurement_result_i_i  (result_i_o),
+    .measurement_result_q_i  (result_q_o),
+    .busy_o                  (shell_busy),
+    .done_o                  (shell_done),
+    .start_pulse_o           (shell_start_pulse),
+    .clear_errors_o          (shell_clear_errors),
+    .cfg_pair_log2_o         (cfg_pair_log2_o),
+    .cfg_settle_cycles_o     (cfg_settle_cycles_o),
+    .cfg_exc_divider_o       (cfg_exc_divider_o),
+    .cfg_conv_cycles_o       (cfg_conv_cycles_o),
+    .result_i_o              (shell_result_i),
+    .result_q_o              (shell_result_q)
   );
 
   agriasic_digital_top #(
@@ -84,7 +88,8 @@ module agriasic_digital_rv32i_top #(
     .adc_comp_i         (adc_comp_i),
     .busy_o             (busy_o),
     .done_o             (done_o),
-    .result_o           (result_o)
+    .result_i_o         (result_i_o),
+    .result_q_o         (result_q_o)
   );
 
 endmodule

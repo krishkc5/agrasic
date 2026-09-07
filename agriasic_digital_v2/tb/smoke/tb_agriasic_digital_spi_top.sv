@@ -6,24 +6,43 @@
 //   Smoke test for SPI-controlled wrapper.
 //
 // Coverage in this test:
-//   - Writes config registers through SPI.
+//   - Writes config registers through SPI (Rev 4.3 Phase 6 map: REG_FREQ_SEL
+//     selector encoding, not raw N).
 //   - Issues start command through SPI.
-//   - Drives ADC codes according to excitation polarity during conversions.
-//   - Reads status/result back through SPI and checks expected value.
+//   - Drives ADC codes according to the I/Q sample phase during conversions.
+//   - Reads both result channels back through the Phase 6 indexed readout
+//     (REG_RESULT_IDX/REG_RESULT_DATA), checks expected values, auto-
+//     increment, and that reserved indices read as zero.
+//   - Reads REG_ID and checks the fixed design identifier.
 // -----------------------------------------------------------------------------
 module tb_agriasic_digital_spi_top;
   localparam int unsigned ADC_WIDTH = 8;
-  localparam int unsigned EXPECTED_RESULT = 16'd480;
+  // Same four-target I/Q model as tb_agriasic_digital_top (section 6.11):
+  // D(0)=220, D(180)=100 -> I = 4*120 = 480; D(90)=170, D(270)=90 -> Q = 4*80 = 320.
+  localparam logic signed [15:0] EXPECTED_I = 16'sd480;
+  localparam logic signed [15:0] EXPECTED_Q = 16'sd320;
 
-  localparam logic [3:0] REG_CTRL      = 4'h0;
-  localparam logic [3:0] REG_PAIR_LOG2 = 4'h1;
-  localparam logic [3:0] REG_SETTLE    = 4'h2;
-  localparam logic [3:0] REG_DIVIDER   = 4'h3;
-  localparam logic [3:0] REG_CONV      = 4'h4;
-  localparam logic [3:0] REG_STATUS    = 4'h5;
-  localparam logic [3:0] REG_RESULT_LO = 4'h6;
-  localparam logic [3:0] REG_RESULT_HI = 4'h7;
-  localparam logic [3:0] REG_INVALID    = 4'hF;
+  // Rev 4.3 Phase 6 register map -- see agriasic_digital_spi_top.sv's header
+  // for the full map and the REG_RESULT_IDX/DATA index mapping.
+  localparam logic [3:0] REG_CTRL         = 4'h0;
+  localparam logic [3:0] REG_PAIR_LOG2    = 4'h1;
+  localparam logic [3:0] REG_SETTLE       = 4'h2;
+  localparam logic [3:0] REG_FREQ_SEL     = 4'h3;
+  localparam logic [3:0] REG_PHASE_IDX    = 4'h4;
+  localparam logic [3:0] REG_CONV         = 4'h5;
+  localparam logic [3:0] REG_STATUS       = 4'h6;
+  localparam logic [3:0] REG_RESULT_IDX   = 4'h7;
+  localparam logic [3:0] REG_RESULT_DATA  = 4'h8;
+  localparam logic [3:0] REG_ID           = 4'h9;
+  localparam logic [3:0] REG_INVALID      = 4'hF;
+
+  localparam logic [7:0] DESIGN_ID = 8'h43;
+
+  // Result byte vector indices (REG_RESULT_DATA), matching the DUT header.
+  localparam logic [3:0] RIDX_I_LO = 4'd0;
+  localparam logic [3:0] RIDX_I_HI = 4'd1;
+  localparam logic [3:0] RIDX_Q_LO = 4'd2;
+  localparam logic [3:0] RIDX_Q_HI = 4'd3;
 
   logic clk;
   logic rst_n;
@@ -41,12 +60,18 @@ module tb_agriasic_digital_spi_top;
   logic adc_comp_i;
   logic busy_o;
   logic done_o;
-  logic [15:0] result_o;
+  logic signed [15:0] result_i_o;
+  logic signed [15:0] result_q_o;
 
   logic [7:0] status_byte;
-  logic [7:0] result_lo;
-  logic [7:0] result_hi;
+  logic [7:0] result_i_lo;
+  logic [7:0] result_i_hi;
+  logic [7:0] result_q_lo;
+  logic [7:0] result_q_hi;
   logic [7:0] cmd_phase_rx;
+  logic [7:0] idx_readback;
+  logic [7:0] reserved_byte;
+  logic [7:0] id_byte;
   int unsigned wait_cycles;
 
   agriasic_digital_spi_top #(
@@ -68,20 +93,31 @@ module tb_agriasic_digital_spi_top;
     .adc_comp_i(adc_comp_i),
     .busy_o(busy_o),
     .done_o(done_o),
-    .result_o(result_o)
+    .result_i_o(result_i_o),
+    .result_q_o(result_q_o)
   );
 
   always #5 clk = ~clk;
 
   // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See
   // sar_controller's header for the adc_comp_i convention this implements.
-  // Rev 4.3 Phase 4: excitation free-runs, so exc_drive_p_o can move during a
-  // single multi-cycle conversion. Latch the target on adc_sample_o (real
-  // track-and-hold), don't re-derive it live from the drive signal.
+  // Rev 4.3 Phase 5: four distinct targets, one per I/Q sample phase, keyed
+  // on measurement_fsm's own state rather than phase_index or drive polarity
+  // -- see tb_agriasic_digital_top's header comment on this same model for
+  // why (the one-cycle sample-accept lag inside sar_controller means
+  // phase_index has already ticked past its nominal value by the time
+  // adc_sample_o actually fires at N=1).
+  //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
   logic [ADC_WIDTH-1:0] adc_target_held_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      adc_target_held_q <= exc_drive_p_o ? 8'd180 : 8'd60;
+      unique case (4'(dut.u_core.u_measurement_fsm.state_q))
+        4'd3:  adc_target_held_q <= 8'd220;  // S_SAMPLE_0:   D(0)
+        4'd8:  adc_target_held_q <= 8'd170;  // S_SAMPLE_90:  D(90)
+        4'd5:  adc_target_held_q <= 8'd100;  // S_SAMPLE_180: D(180)
+        4'd10: adc_target_held_q <= 8'd90;   // S_SAMPLE_270: D(270)
+        default: begin end
+      endcase
     end
   end
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
@@ -205,10 +241,10 @@ module tb_agriasic_digital_spi_top;
     rst_n = 1'b1;
     repeat (2) @(posedge clk);
 
-    // Program core behavior: 4 pairs, settle=2, divider=0, conv=1
+    // Program core behavior: 4 pairs, settle=2, freq_sel=0 (10 MHz, N=1), conv=1
     spi_write_reg(REG_PAIR_LOG2, 8'h02);
     spi_write_reg(REG_SETTLE,    8'h02);
-    spi_write_reg(REG_DIVIDER,   8'h00);
+    spi_write_reg(REG_FREQ_SEL,  8'h00);
     spi_write_reg(REG_CONV,      8'h01);
 
     // Inject invalid command (reserved bits set) and check status flag [7].
@@ -246,8 +282,10 @@ module tb_agriasic_digital_spi_top;
     // Trigger one measurement run via CTRL.start bit.
     spi_write_reg(REG_CTRL,      8'h01);
 
+    // Rev 4.3 Phase 5: 4 conversions/pair now (was 2), so the timeout budget
+    // needs roughly double the pre-Phase-5 headroom.
     wait_cycles = 0;
-    while (!done_o && wait_cycles < 1000) begin
+    while (!done_o && wait_cycles < 2000) begin
       @(posedge clk);
       wait_cycles++;
     end
@@ -257,10 +295,18 @@ module tb_agriasic_digital_spi_top;
       $finish;
     end
 
-    // Read back status and result via SPI.
+    // Read back status via SPI.
     spi_read_reg(REG_STATUS, status_byte);
-    spi_read_reg(REG_RESULT_LO, result_lo);
-    spi_read_reg(REG_RESULT_HI, result_hi);
+
+    // Rev 4.3 Phase 6: indexed result readout. Set REG_RESULT_IDX to 0, then
+    // read REG_RESULT_DATA four times in a row -- each read should return
+    // I_lo/I_hi/Q_lo/Q_hi in that order AND auto-increment the pointer, with
+    // no separate index write needed between reads.
+    spi_write_reg(REG_RESULT_IDX, {4'd0, RIDX_I_LO});
+    spi_read_reg(REG_RESULT_DATA, result_i_lo);
+    spi_read_reg(REG_RESULT_DATA, result_i_hi);
+    spi_read_reg(REG_RESULT_DATA, result_q_lo);
+    spi_read_reg(REG_RESULT_DATA, result_q_hi);
 
     // Capture command-phase response byte to ensure wrapper is driving response
     // stream continuously. Read command for STATUS should return some previous
@@ -276,18 +322,76 @@ module tb_agriasic_digital_spi_top;
       $finish;
     end
 
-    if ({result_hi, result_lo} !== EXPECTED_RESULT[15:0]) begin
+    if ($signed({result_i_hi, result_i_lo}) !== EXPECTED_I) begin
       $error(
-        "SPI_TOP_RESULT_FAIL: expected=%0d got=%0d (hi=0x%0h lo=0x%0h)",
-        EXPECTED_RESULT,
-        {result_hi, result_lo},
-        result_hi,
-        result_lo
+        "SPI_TOP_RESULT_FAIL: expected I=%0d got=%0d (hi=0x%0h lo=0x%0h)",
+        EXPECTED_I,
+        $signed({result_i_hi, result_i_lo}),
+        result_i_hi,
+        result_i_lo
       );
       $finish;
     end
 
-    $display("SPI_TOP_SMOKE_PASS: status=0x%0h result=%0d", status_byte, {result_hi, result_lo});
+    if ($signed({result_q_hi, result_q_lo}) !== EXPECTED_Q) begin
+      $error(
+        "SPI_TOP_RESULT_FAIL: expected Q=%0d got=%0d (hi=0x%0h lo=0x%0h)",
+        EXPECTED_Q,
+        $signed({result_q_hi, result_q_lo}),
+        result_q_hi,
+        result_q_lo
+      );
+      $finish;
+    end
+
+    // Rev 4.3 Phase 6: after four REG_RESULT_DATA reads starting from index
+    // 0, the pointer should have auto-incremented to 4 -- verify by reading
+    // REG_RESULT_IDX directly (a plain register read, no auto-increment on
+    // this address).
+    spi_read_reg(REG_RESULT_IDX, idx_readback);
+    if (idx_readback !== 8'd4) begin
+      $error("SPI_TOP_RESULT_IDX_FAIL: expected pointer=4 after 4 data reads, got=%0d",
+             idx_readback);
+      $finish;
+    end
+
+    // Index 4 is reserved (frequency points 1/2 and temperature, not built
+    // yet) and must read as zero, not garbage or leftover I/Q data.
+    spi_read_reg(REG_RESULT_DATA, reserved_byte);
+    if (reserved_byte !== 8'd0) begin
+      $error("SPI_TOP_RESERVED_IDX_FAIL: expected reserved index 4 to read 0, got=0x%0h",
+             reserved_byte);
+      $finish;
+    end
+
+    // REG_ID must return the fixed design/revision identifier.
+    spi_read_reg(REG_ID, id_byte);
+    if (id_byte !== DESIGN_ID) begin
+      $error("SPI_TOP_ID_FAIL: expected REG_ID=0x%0h got=0x%0h", DESIGN_ID, id_byte);
+      $finish;
+    end
+
+    // Rev 4.3 Phase 6: REG_STATUS overrange bit. pair_log2=7 (> 6) is
+    // silently clamped to M=64 in measurement_fsm; writing it here (post-run,
+    // core idle) must set STATUS bit4 without disturbing anything else.
+    spi_write_reg(REG_PAIR_LOG2, 8'h07);
+    spi_read_reg(REG_STATUS, status_byte);
+    if (status_byte[4] !== 1'b1) begin
+      $error("SPI_TOP_OVERRANGE_FAIL: expected overrange bit set for pair_log2=7, got status=0x%0h",
+             status_byte);
+      $finish;
+    end
+    spi_write_reg(REG_PAIR_LOG2, 8'h02);
+    spi_read_reg(REG_STATUS, status_byte);
+    if (status_byte[4] !== 1'b0) begin
+      $error("SPI_TOP_OVERRANGE_FAIL: expected overrange bit clear after pair_log2=2, got status=0x%0h",
+             status_byte);
+      $finish;
+    end
+
+    $display("SPI_TOP_SMOKE_PASS: status=0x%0h I=%0d Q=%0d ID=0x%0h", status_byte,
+             $signed({result_i_hi, result_i_lo}), $signed({result_q_hi, result_q_lo}),
+             id_byte);
     $finish;
   end
 endmodule

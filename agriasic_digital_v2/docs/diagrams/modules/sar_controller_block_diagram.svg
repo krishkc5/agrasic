@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
   <title id="t">sar_controller module block diagram</title>
-  <desc id="d">Detailed block diagram for sar_controller showing request latch, conversion counter, and phase-tagged sample capture.</desc>
+  <desc id="d">Rev 4.3 Phase 1 block diagram for sar_controller: the digital side now runs the successive-approximation bit-trial search itself against adc_dac_o/adc_comp_i, MSB first, 8 trials per sample. adc_code_i no longer exists.</desc>
   <defs>
     <marker id="s1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
     <marker id="s2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
@@ -9,62 +9,84 @@
   </defs>
   <rect width="5000" height="3000" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: sar_controller</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Rev 4.3 Phase 1 -- runs the SAR bit-trial search in digital (redrawn; replaces the adc_code_i-based design)</text>
   <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
 
-  <rect x="240" y="500" width="1040" height="500" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
-  <text x="300" y="585" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
-  <text x="300" y="630" font-family="Arial" font-size="20" fill="#fff">sample_req_i, sample_phase_i</text>
-  <text x="300" y="665" font-family="Arial" font-size="20" fill="#fff">conv_cycles_i, adc_code_i</text>
-  <text x="300" y="700" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+  <rect x="240" y="470" width="1040" height="500" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="300" y="555" font-family="Arial" font-size="28" font-weight="700" fill="#fff">Inputs</text>
+  <text x="300" y="600" font-family="Arial" font-size="18" fill="#fff">sample_req_i, sample_phase_i</text>
+  <text x="300" y="632" font-family="Arial" font-size="18" fill="#fff">conv_cycles_i[7:0]</text>
+  <text x="300" y="664" font-family="Arial" font-size="18" fill="#fff">adc_comp_i (timed, unsynchronized)</text>
+  <text x="300" y="696" font-family="Arial" font-size="18" fill="#fff">clk, rst_n</text>
+  <text x="300" y="740" font-family="Arial" font-size="15" fill="#BDBDBD">adc_code_i no longer exists anywhere</text>
+  <text x="300" y="760" font-family="Arial" font-size="15" fill="#BDBDBD">in this design.</text>
 
-  <rect x="1460" y="460" width="3270" height="1760" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="1520" y="545" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Control and capture pipeline</text>
+  <rect x="1460" y="440" width="3280" height="900" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1520" y="510" font-family="Arial" font-size="26" font-weight="700" fill="#212121">Bit-trial state machine -- 8 trials per sample, MSB first</text>
 
-  <rect x="1600" y="690" width="760" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1660" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Request accept</text>
-  <text x="1660" y="825" font-family="Arial" font-size="19" fill="#212121">if !busy and sample_req:</text>
-  <text x="1660" y="858" font-family="Arial" font-size="19" fill="#212121">latch phase, load conv_cnt, pulse conv_start</text>
+  <rect x="1520" y="560" width="620" height="230" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1560" y="630" font-family="Arial" font-size="24" font-weight="700" fill="#212121">S_IDLE</text>
+  <text x="1560" y="665" font-family="Arial" font-size="16" fill="#212121">accept sample_req_i (not</text>
+  <text x="1560" y="688" font-family="Arial" font-size="16" fill="#212121">same cycle as done)</text>
 
-  <rect x="2550" y="690" width="760" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2610" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Conversion wait</text>
-  <text x="2610" y="825" font-family="Arial" font-size="19" fill="#212121">while busy: conv_cnt decrements</text>
-  <text x="2610" y="858" font-family="Arial" font-size="19" fill="#212121">done when conv_cnt == 0</text>
+  <rect x="2260" y="560" width="620" height="230" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2300" y="630" font-family="Arial" font-size="24" font-weight="700" fill="#212121">S_TRIAL_SET</text>
+  <text x="2300" y="665" font-family="Arial" font-size="16" fill="#212121">present trial code on adc_dac_o</text>
+  <text x="2300" y="688" font-family="Arial" font-size="16" fill="#212121">load regen_cnt = conv_cycles_i</text>
 
-  <rect x="3500" y="690" width="1060" height="330" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="3560" y="780" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Sample capture</text>
-  <text x="3560" y="825" font-family="Arial" font-size="19" fill="#212121">phase=1 -&gt; d_plus_o = adc_code_i</text>
-  <text x="3560" y="858" font-family="Arial" font-size="19" fill="#212121">phase=0 -&gt; d_minus_o = adc_code_i</text>
-  <text x="3560" y="891" font-family="Arial" font-size="19" fill="#212121">pulse sample_done_o, clear busy</text>
+  <rect x="3000" y="560" width="620" height="230" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3040" y="630" font-family="Arial" font-size="24" font-weight="700" fill="#212121">S_TRIAL_WAIT</text>
+  <text x="3040" y="665" font-family="Arial" font-size="16" fill="#212121">wait regen_cnt cycles for</text>
+  <text x="3040" y="688" font-family="Arial" font-size="16" fill="#212121">comparator regeneration</text>
 
-  <rect x="1900" y="1170" width="2580" height="370" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
-  <text x="1960" y="1260" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Outputs</text>
-  <text x="1960" y="1305" font-family="Arial" font-size="19" fill="#212121">conv_start_o, sample_done_o, busy_o</text>
-  <text x="1960" y="1340" font-family="Arial" font-size="19" fill="#212121">d_plus_o, d_minus_o</text>
+  <rect x="3740" y="560" width="620" height="230" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="3780" y="630" font-family="Arial" font-size="24" font-weight="700" fill="#212121">S_TRIAL_EVAL</text>
+  <text x="3780" y="665" font-family="Arial" font-size="16" fill="#212121">sample adc_comp_i, decide bit,</text>
+  <text x="3780" y="688" font-family="Arial" font-size="16" fill="#212121">bit_idx==0 ? capture : next bit</text>
 
-  <path d="M1280,640 L1600,640 L1600,790" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
-  <text x="1310" y="615" font-family="Arial" font-size="17" fill="#212121">sample_req_i</text>
-  <path d="M1280,700 L1850,700" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#s3)"/>
-  <text x="1310" y="725" font-family="Arial" font-size="17" fill="#212121">sample_phase_i, conv_cycles_i</text>
+  <path d="M2140,675 L2260,675" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <path d="M2880,675 L3000,675" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <path d="M3620,675 L3740,675" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <path d="M4050,790 L4050,900 L2570,900 L2570,790" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
+  <text x="2900" y="895" font-family="Arial" font-size="17" fill="#212121">bit_idx != 0: loop back to S_TRIAL_SET for the next bit (8 iterations total)</text>
 
-  <path d="M2360,860 L2550,860" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
-  <path d="M3310,860 L3500,860" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
-  <path d="M2980,1020 L2980,1170" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
-  <text x="3010" y="1110" font-family="Arial" font-size="17" fill="#212121">status and data</text>
+  <rect x="1520" y="1440" width="3220" height="500" rx="10" fill="#C8E6C9" stroke="#2E7D32" stroke-width="2"/>
+  <text x="1580" y="1520" font-family="Arial" font-size="26" font-weight="700" fill="#212121">adc_comp_i convention (contract for any analog model/testbench)</text>
+  <text x="1580" y="1570" font-family="Arial" font-size="19" fill="#212121">1 = input &gt;= current trial code  -&gt;  keep the bit (valid lower bound), move to next bit</text>
+  <text x="1580" y="1608" font-family="Arial" font-size="19" fill="#212121">0 = input &lt;  current trial code  -&gt;  clear the bit (overshot)</text>
+  <text x="1580" y="1655" font-family="Arial" font-size="19" fill="#212121">Binary search converges to the target exactly for any integer input 0-255 (verified, tb_sar_bit_trial.sv).</text>
+  <text x="1580" y="1693" font-family="Arial" font-size="19" fill="#212121">adc_comp_i is a timed, unsynchronized path -- conv_cycles_i cycles of regeneration are guaranteed by</text>
+  <text x="1580" y="1720" font-family="Arial" font-size="19" fill="#212121">construction, per bit trial, before sampling it. Do not add a synchronizer; that would defeat the timing.</text>
 
-  <path d="M1280,770 L3500,770" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
-  <text x="1310" y="745" font-family="Arial" font-size="17" fill="#212121">adc_code_i sampling point</text>
+  <rect x="1900" y="1000" width="2580" height="330" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1960" y="1080" font-family="Arial" font-size="26" font-weight="700" fill="#212121">Outputs</text>
+  <text x="1960" y="1120" font-family="Arial" font-size="18" fill="#212121">adc_enable_o (full conversion), adc_sample_o (1-cycle T&amp;H strobe at accept)</text>
+  <text x="1960" y="1155" font-family="Arial" font-size="18" fill="#212121">adc_dac_o[7:0] (bit-trial DAC code), conv_start_o, sample_done_o, busy_o</text>
+  <text x="1960" y="1190" font-family="Arial" font-size="18" fill="#212121">d_plus_o[7:0], d_minus_o[7:0] -- generic capture slots, no I/Q concept</text>
 
-  <rect x="240" y="1700" width="4490" height="1110" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="300" y="1785" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior notes</text>
-  <text x="300" y="1835" font-family="Arial" font-size="20" fill="#212121">- One request is serviced at a time using busy_o backpressure.</text>
-  <text x="300" y="1875" font-family="Arial" font-size="20" fill="#212121">- conv_start_o is a single-cycle pulse at request accept time.</text>
-  <text x="300" y="1915" font-family="Arial" font-size="20" fill="#212121">- Conversion latency is programmable through conv_cycles_i.</text>
-  <text x="300" y="1955" font-family="Arial" font-size="20" fill="#212121">- sample_done_o strobes when D+ or D- is updated.</text>
+  <path d="M1280,610 L1520,610" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#s2)"/>
+  <text x="1310" y="590" font-family="Arial" font-size="17" fill="#212121">sample_req_i</text>
+  <path d="M1280,700 L1470,700 L1470,1000" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
+  <text x="1200" y="960" font-family="Arial" font-size="17" fill="#212121" text-anchor="end">sample_phase_i selects d_plus_o vs d_minus_o at capture</text>
 
-  <line x1="300" y1="2045" x2="480" y2="2045" stroke="#1565C0" stroke-width="2" marker-end="url(#s1)"/>
-  <text x="520" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
-  <line x1="1380" y1="2045" x2="1560" y2="2045" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#s2)"/>
-  <text x="1600" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
-  <line x1="2240" y1="2045" x2="2420" y2="2045" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#s3)"/>
-  <text x="2460" y="2053" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <path d="M4050,790 L4050,1000" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#s1)"/>
+  <text x="4080" y="900" font-family="Arial" font-size="17" fill="#212121">last bit decided:</text>
+  <text x="4080" y="925" font-family="Arial" font-size="17" fill="#212121">capture into d_plus_o/d_minus_o,</text>
+  <text x="4080" y="950" font-family="Arial" font-size="17" fill="#212121">pulse sample_done_o, clear busy_o</text>
+
+  <rect x="240" y="2010" width="4490" height="820" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="300" y="2090" font-family="Arial" font-size="26" font-weight="700" fill="#212121">Behavior notes</text>
+  <text x="300" y="2135" font-family="Arial" font-size="20" fill="#212121">- One request serviced at a time; a new request is not accepted the same cycle a completion is reported</text>
+  <text x="300" y="2163" font-family="Arial" font-size="20" fill="#212121">  (avoids a spurious second conversion sampling after excitation may already have moved on).</text>
+  <text x="300" y="2201" font-family="Arial" font-size="20" fill="#212121">- Total conversion time: 8 x (3 + conv_cycles_i) clock cycles. Verified: 24 cyc @ conv_cycles_i=0, 40 @ =2.</text>
+  <text x="300" y="2239" font-family="Arial" font-size="20" fill="#212121">- conv_cycles_i is a RUNTIME register (REG_CONV), reinterpreted as per-bit-trial wait, not total latency --</text>
+  <text x="300" y="2267" font-family="Arial" font-size="20" fill="#212121">  the real comparator regeneration time isn't characterized yet (MAS GAP-2), so this is tunable with no respin.</text>
+  <text x="300" y="2305" font-family="Arial" font-size="20" fill="#212121">- adc_dac_o presents the trial code (decided bits + bit under test); at idle it holds the last converged code.</text>
+  <text x="300" y="2343" font-family="Arial" font-size="20" fill="#212121">- eval_code is computed combinationally so the LAST bit's decision is captured the same cycle it is made --</text>
+  <text x="300" y="2371" font-family="Arial" font-size="20" fill="#212121">  no extra cycle of lag between the register update and the value stored into d_plus_o/d_minus_o.</text>
+
+  <line x1="300" y1="2760" x2="480" y2="2760" stroke="#1565C0" stroke-width="2" marker-end="url(#s1)"/>
+  <text x="520" y="2768" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA/STATUS</text>
+  <line x1="1380" y1="2760" x2="1560" y2="2760" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#s2)"/>
+  <text x="1600" y="2768" font-family="Arial" font-size="18" fill="#212121">WIRE.STATE SEQUENCE</text>
 </svg>

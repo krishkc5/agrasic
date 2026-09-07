@@ -26,11 +26,12 @@
 module tb_settle_timing;
 
   localparam int unsigned BUDGET   = 4000;  // cycles before a run is called hung
-  localparam int unsigned D_PLUS   = 180;
-  localparam int unsigned D_MINUS  = 60;
+  // Same four-target I/Q model as the smoke tests (section 6.11):
+  // D(0)=220, D(180)=100, D(90)=170, D(270)=90.
   localparam int unsigned N_PAIRS  = 4;     // pair_log2 = 2
   // Raw accumulation, scaling is the host's job: M * (D+ - D-).
-  localparam int unsigned EXPECTED = N_PAIRS * (D_PLUS - D_MINUS);
+  localparam int signed EXPECTED_I = N_PAIRS * (220 - 100);
+  localparam int signed EXPECTED_Q = N_PAIRS * (170 - 90);
 
   logic       clk = 1'b0;
   logic       rst_n = 1'b0;
@@ -48,7 +49,8 @@ module tb_settle_timing;
   logic       adc_comp_i;
   logic       busy_o;
   logic       done_o;
-  logic [15:0] result_o;
+  logic signed [15:0] result_i_o;
+  logic signed [15:0] result_q_o;
 
   int errors = 0;
 
@@ -71,24 +73,35 @@ module tb_settle_timing;
     .adc_comp_i          (adc_comp_i),
     .busy_o              (busy_o),
     .done_o              (done_o),
-    .result_o            (result_o)
+    .result_i_o          (result_i_o),
+    .result_q_o          (result_q_o)
   );
 
   // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See
   // sar_controller's header for the adc_comp_i convention this implements.
-  // Rev 4.3 Phase 4: latch the target on adc_sample_o (track-and-hold);
-  // exc_drive_p_o can move during a multi-cycle conversion now.
+  // Rev 4.3 Phase 5: four distinct targets keyed on measurement_fsm's own
+  // state -- see tb_agriasic_digital_top's header comment on this model for
+  // why phase_index itself can't be used directly (one-cycle sample-accept
+  // lag inside sar_controller).
+  //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
   logic [7:0] adc_target_held_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      adc_target_held_q <= exc_drive_p_o ? D_PLUS[7:0] : D_MINUS[7:0];
+      unique case (4'(dut.u_measurement_fsm.state_q))
+        4'd3:  adc_target_held_q <= 8'd220;
+        4'd8:  adc_target_held_q <= 8'd170;
+        4'd5:  adc_target_held_q <= 8'd100;
+        4'd10: adc_target_held_q <= 8'd90;
+        default: begin end
+      endcase
     end
   end
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   int  elapsed;
   bit  hung;
-  int  captured;
+  int  captured_i;
+  int  captured_q;
 
   // Run one measurement at the given settle/conv configuration.
   task automatic run_one(input logic [7:0] settle, input logic [7:0] conv);
@@ -114,13 +127,15 @@ module tb_settle_timing;
         @(posedge clk);
         n = n + 1;
       end
-      hung     = (done_o !== 1'b1);
-      elapsed  = n;
-      captured = int'(result_o);
+      hung       = (done_o !== 1'b1);
+      elapsed    = n;
+      captured_i = int'(result_i_o);
+      captured_q = int'(result_q_o);
     end
   endtask
 
-  // Run and check: must not hang, and must produce the expected accumulation.
+  // Run and check: must not hang, and must produce the expected accumulation
+  // on both channels.
   task automatic check_run(input logic [7:0] settle, input logic [7:0] conv,
                            output int el);
     begin
@@ -131,14 +146,19 @@ module tb_settle_timing;
         errors++;
         el = -1;
       end else begin
-        if (captured !== EXPECTED) begin
-          $error("SETTLE_RESULT_FAIL: settle=%0d conv=%0d expected=%0d got=%0d",
-                 settle, conv, EXPECTED, captured);
+        if (captured_i !== EXPECTED_I) begin
+          $error("SETTLE_RESULT_FAIL: settle=%0d conv=%0d expected I=%0d got=%0d",
+                 settle, conv, EXPECTED_I, captured_i);
+          errors++;
+        end
+        if (captured_q !== EXPECTED_Q) begin
+          $error("SETTLE_RESULT_FAIL: settle=%0d conv=%0d expected Q=%0d got=%0d",
+                 settle, conv, EXPECTED_Q, captured_q);
           errors++;
         end
         el = elapsed;
-        $display("[TB]   settle=%0d conv=%0d -> %0d cycles, result=%0d",
-                 settle, conv, elapsed, captured);
+        $display("[TB]   settle=%0d conv=%0d -> %0d cycles, I=%0d Q=%0d",
+                 settle, conv, elapsed, captured_i, captured_q);
       end
     end
   endtask
@@ -146,7 +166,7 @@ module tb_settle_timing;
   int e0, e2, e5, e20;
 
   initial begin
-    $display("[TB] settle timing regression (expected result = %0d)", EXPECTED);
+    $display("[TB] settle timing regression (expected I=%0d Q=%0d)", EXPECTED_I, EXPECTED_Q);
 
     // Defect 2: every one of these hung before the fix.
     check_run(8'd0,  8'd1, e0);

@@ -27,8 +27,8 @@
 
   <rect width="1240" height="800" fill="#ffffff"/>
 
-  <text x="40" y="42" class="title">Rev 4.3 — Phase-Locked Measurement Engine</text>
-  <text x="40" y="66" class="sub">Excitation is free-running; the sampler locks to its phase. This inversion is the structural change from Rev 4.2.</text>
+  <text x="40" y="42" class="title">Rev 4.3 — Phase-Locked Measurement Engine [IMPL as of Phase 6]</text>
+  <text x="40" y="66" class="sub">Excitation is free-running; the sampler locks to its phase. This inversion is the structural change from Rev 4.2, implemented and verified Phases 4-6.</text>
 
   <!-- die boundary -->
   <rect x="228" y="96" width="962" height="566" rx="14" class="die"/>
@@ -39,9 +39,9 @@
   <text x="115" y="371" class="lbl" text-anchor="middle">Electrodes</text>
   <text x="115" y="392" class="sml" text-anchor="middle">soil probe</text>
 
-  <!-- ============ analog / hybrid column ============ -->
-  <rect x="278" y="146" width="330" height="92" rx="9" class="hybrid"/>
-  <text x="443" y="180" class="lbl" text-anchor="middle">Excitation generator</text>
+  <!-- ============ analog column ============ -->
+  <rect x="278" y="146" width="330" height="92" rx="9" class="digital"/>
+  <text x="443" y="180" class="lbl" text-anchor="middle">Excitation generator (digital)</text>
   <text x="443" y="201" class="sml" text-anchor="middle">free-running divider + 16-state</text>
   <text x="443" y="219" class="sml" text-anchor="middle">phase counter · f_exc = f_clk/(16·N)</text>
 
@@ -78,8 +78,8 @@
 
   <rect x="812" y="524" width="352" height="80" rx="9" class="digital"/>
   <text x="988" y="555" class="lbl" text-anchor="middle">SPI slave + regfile</text>
-  <text x="988" y="578" class="sml" text-anchor="middle">indexed result readout,</text>
-  <text x="988" y="596" class="sml" text-anchor="middle">freq/phase control, error policy</text>
+  <text x="988" y="578" class="sml" text-anchor="middle">indexed result readout, freq select,</text>
+  <text x="988" y="596" class="sml" text-anchor="middle">error policy (phase select: GAP-10)</text>
 
   <!-- ============ external bottom rail ============ -->
   <rect x="278" y="690" width="886" height="62" rx="9" class="ext"/>
@@ -120,13 +120,11 @@
 
   <!-- ============ legend ============ -->
   <rect x="40" y="500" width="26" height="16" rx="3" class="analog"/>
-  <text x="74" y="513" class="cap">analog on die</text>
+  <text x="74" y="513" class="cap">analog on die (Krishna / Vidhu)</text>
   <rect x="40" y="530" width="26" height="16" rx="3" class="digital"/>
-  <text x="74" y="543" class="cap">digital on die</text>
-  <rect x="40" y="560" width="26" height="16" rx="3" class="hybrid"/>
-  <text x="74" y="573" class="cap">joint (Krishna + Taarana)</text>
-  <rect x="40" y="590" width="26" height="16" rx="3" class="ext"/>
-  <text x="74" y="603" class="cap">external</text>
+  <text x="74" y="543" class="cap">digital on die (Taarana)</text>
+  <rect x="40" y="560" width="26" height="16" rx="3" class="ext"/>
+  <text x="74" y="573" class="cap">external</text>
 
   <text x="40" y="700" class="cap">Core-to-FSM configuration writes and FSM-to-core status reads</text>
   <text x="40" y="720" class="cap">run through the register block and are omitted for clarity.</text>

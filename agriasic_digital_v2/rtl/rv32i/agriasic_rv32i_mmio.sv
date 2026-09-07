@@ -17,12 +17,28 @@
 //                                       see GAP-1. Native 32-bit MMIO writes
 //                                       have no byte-framing constraint, so
 //                                       firmware can reach the full 14-bit
-//                                       range today -- unlike the SPI/prog
-//                                       host paths, which stay 8-bit-windowed
-//                                       until Phase 6 formalizes the encoding)
+//                                       range directly with the raw N value
+//                                       -- Rev 4.3 Phase 6 gave SPI a
+//                                       different register, REG_FREQ_SEL, a
+//                                       2-bit SELECTOR (0/1/2) instead of raw
+//                                       N, because SPI's 1-byte write can't
+//                                       carry 14 bits; MMIO has no such
+//                                       constraint, so DIVIDER keeps its
+//                                       original raw-N meaning and name
+//                                       rather than adopting a name that
+//                                       would suggest matching SPI semantics
+//                                       it doesn't have)
 //   0x8000_0010  CONV       RW  [7:0]
-//   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done
-//   0x8000_0018  RESULT     R   [15:0] signed accumulator
+//   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done, bit4 = overrange
+//                                (Rev 4.3 Phase 6: set when PAIR_LOG2 > 6 was
+//                                written and silently clamped to M=64 --
+//                                same bit position as the SPI REG_STATUS
+//                                byte, section 9.3)
+//   0x8000_0018  RESULT_I   R   [15:0] signed I-channel accumulator
+//   0x8000_001C  RESULT_Q   R   [15:0] signed Q-channel accumulator (Rev 4.3
+//                                      Phase 5: second accumulator added
+//                                      alongside RESULT_I, same register
+//                                      window, next free word slot)
 //
 // Timing contract:
 //   Peripheral reads are registered so the window presents the SAME 1-cycle
@@ -58,7 +74,8 @@ module agriasic_rv32i_mmio #(
   // Status inputs from the measurement engine.
   //   done_i is the FSM's RAW single-cycle done pulse.
   input  logic        done_i,
-  input  logic [15:0] result_i
+  input  logic signed [15:0] result_i_i,   // I channel (Rev 4.3 Phase 5)
+  input  logic signed [15:0] result_q_i    // Q channel (Rev 4.3 Phase 5)
 );
 
   localparam logic [2:0] REG_CTRL      = 3'd0;
@@ -67,7 +84,8 @@ module agriasic_rv32i_mmio #(
   localparam logic [2:0] REG_DIVIDER   = 3'd3;
   localparam logic [2:0] REG_CONV      = 3'd4;
   localparam logic [2:0] REG_STATUS    = 3'd5;
-  localparam logic [2:0] REG_RESULT    = 3'd6;
+  localparam logic [2:0] REG_RESULT_I  = 3'd6;
+  localparam logic [2:0] REG_RESULT_Q  = 3'd7;
 
   // --------------------------------------------------------------------------
   // Address decode
@@ -187,14 +205,20 @@ module agriasic_rv32i_mmio #(
   logic [31:0] periph_rdata;
   logic        periph_rd_q;
 
+  // Rev 4.3 Phase 6: pair_log2 > 6 is silently clamped to M=64 in
+  // measurement_fsm (section 9.3's accumulator-width bound); this makes that
+  // clamp host-visible instead of silent, mirroring the SPI REG_STATUS bit.
+  wire status_overrange_w = (cfg_pair_log2_q > 4'd6);
+
   always_comb begin
     unique case (periph_reg)
       REG_PAIR_LOG2: periph_rdata = {28'd0, cfg_pair_log2_q};
       REG_SETTLE:    periph_rdata = {24'd0, cfg_settle_q};
       REG_DIVIDER:   periph_rdata = {18'd0, cfg_divider_q};
       REG_CONV:      periph_rdata = {24'd0, cfg_conv_q};
-      REG_STATUS:    periph_rdata = {30'd0, meas_done_q, meas_busy_q};
-      REG_RESULT:    periph_rdata = {{16{result_i[15]}}, result_i};
+      REG_STATUS:    periph_rdata = {27'd0, status_overrange_w, 2'b00, meas_done_q, meas_busy_q};
+      REG_RESULT_I:  periph_rdata = {{16{result_i_i[15]}}, result_i_i};
+      REG_RESULT_Q:  periph_rdata = {{16{result_q_i[15]}}, result_q_i};
       default:       periph_rdata = 32'd0;
     endcase
   end

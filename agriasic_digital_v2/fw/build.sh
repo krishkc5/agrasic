@@ -33,7 +33,10 @@ PY
 
 echo "=== verifying volatile stores to the scratch-RAM outputs survived ==="
 riscv64-unknown-elf-objdump -d agriasic_fw.elf > agriasic_fw.dis
-grep -E "sw\s+[a-z0-9]+,(256|260|272|276|280|284)\(" agriasic_fw.dis || echo "(checking by offset below)"
+# Rev 4.3 Phase 7 layout (supersedes the Phase 1-6 single-frequency-demo
+# offsets): 256/260=OUT_COUNT/OUT_NUM_POINTS, 272-280=OUT_DIV[0..2],
+# 288-296=OUT_I[0..2], 304-312=OUT_Q[0..2], 320=OUT_TEMP
+grep -E "sw\s+[a-z0-9]+,(256|260|272|276|280|288|292|296|304|308|312|320)\(" agriasic_fw.dis || echo "(checking by offset below)"
 grep -cE "sw" agriasic_fw.dis | xargs echo "total sw instructions:"
 echo "=== full disassembly of main ==="
 sed -n "/<main>:/,/^$/p" agriasic_fw.dis

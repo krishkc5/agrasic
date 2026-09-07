@@ -4,11 +4,19 @@
 // Exercises the whole stack: program ROM -> core -> MMIO bridge -> measurement
 // FSM -> excitation/SAR -> result back through MMIO to firmware.
 //
-// ADC model: returns a fixed code per excitation polarity, so the expected
-// result is exact.
-//   D+ = 200, D- = 100  ->  contribution = 200-100 = 100 per pair (raw)
-//   pair_log2 = 2       ->  4 pairs      -> accumulator = 400
-//   firmware averages 4 identical measurements -> 400
+// ADC model: returns a fixed code per I/Q sample phase (Rev 4.3 Phase 5), so
+// the expected result on both channels is exact.
+//   D(0)=200, D(180)=100 -> I contribution = 100/pair -> 4 pairs -> I = 400
+//   D(90)=150, D(270)=80 -> Q contribution =  70/pair -> 4 pairs -> Q = 280
+// This model is frequency-invariant (it keys on FSM state, not real analog
+// response), so all three Rev 4.3 Phase 7 sweep points give the SAME I/Q
+// numbers -- that is expected and correct here. What this test actually
+// proves is the SWEEP MECHANISM: REG_DIVIDER really gets written to 1, then
+// 100, then 10000 in sequence, each point's measurement completes and
+// averages correctly, and results land in the right per-point scratch RAM
+// slots. Real frequency-dependent soil response is outside what any
+// testbench in this tree models (that would need an analog behavioral
+// model, not a digital one).
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ns
 
@@ -24,21 +32,32 @@ module tb_agriasic_rv32i_e2e;
   logic adc_enable_o, adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
-  logic [15:0] result_o;
+  logic signed [15:0] result_i_o;
+  logic signed [15:0] result_q_o;
   logic [3:0]  cfg_pair_log2_o;
-  logic [7:0]  cfg_settle_cycles_o, cfg_exc_divider_o, cfg_conv_cycles_o;
+  logic [7:0]  cfg_settle_cycles_o;
+  logic [13:0] cfg_exc_divider_o;  // Rev 4.3 Phase 4.2 width; was left at [7:0] here, fixed
+  logic [7:0]  cfg_conv_cycles_o;
 
   always #5 clk = ~clk;
 
   // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See
   // sar_controller's header for the adc_comp_i convention this implements.
-  // Rev 4.3 Phase 4: excitation free-runs, so exc_drive_p_o can move during a
-  // single multi-cycle conversion. Latch the target on adc_sample_o (real
-  // track-and-hold), don't re-derive it live from the drive signal.
+  // Rev 4.3 Phase 5: four distinct targets keyed on measurement_fsm's own
+  // state -- see tb_agriasic_digital_top's header comment on this model for
+  // why phase_index itself can't be used directly (one-cycle sample-accept
+  // lag inside sar_controller at small divider values).
+  //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
   logic [ADC_WIDTH-1:0] adc_target_held_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      adc_target_held_q <= exc_drive_p_o ? 8'd200 : 8'd100;
+      unique case (4'(dut.u_measurement_top.u_measurement_fsm.state_q))
+        4'd3:  adc_target_held_q <= 8'd200;  // D(0)
+        4'd8:  adc_target_held_q <= 8'd150;  // D(90)
+        4'd5:  adc_target_held_q <= 8'd100;  // D(180)
+        4'd10: adc_target_held_q <= 8'd80;   // D(270)
+        default: begin end
+      endcase
     end
   end
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
@@ -58,7 +77,8 @@ module tb_agriasic_rv32i_e2e;
     .adc_comp_i          (adc_comp_i),
     .busy_o              (busy_o),
     .done_o              (done_o),
-    .result_o            (result_o),
+    .result_i_o          (result_i_o),
+    .result_q_o          (result_q_o),
     .cfg_pair_log2_o     (cfg_pair_log2_o),
     .cfg_settle_cycles_o (cfg_settle_cycles_o),
     .cfg_exc_divider_o   (cfg_exc_divider_o),
@@ -69,13 +89,23 @@ module tb_agriasic_rv32i_e2e;
   // those shell status outputs are currently dangling. Reach in for it here.
   wire fw_halted = dut.u_control_shell.done_o;
 
-  // Scratch RAM: firmware writes its outputs here.
-  //   0x100 -> OUT_AVERAGE  (word 64)
-  //   0x104 -> OUT_COUNT    (word 65)
-  //   0x110 -> OUT_SAMPLES  (word 68..71)
-  localparam int W_AVERAGE = 'h100 / 4;
-  localparam int W_COUNT   = 'h104 / 4;
-  localparam int W_SAMPLES = 'h110 / 4;
+  // Scratch RAM: firmware writes its outputs here. Rev 4.3 Phase 7 layout
+  // (supersedes the Phase 1-6 single-frequency-demo layout -- see fw.c):
+  //   0x100 -> OUT_COUNT       (word 64)  measurements averaged per point
+  //   0x104 -> OUT_NUM_POINTS  (word 65)  frequency points swept (3)
+  //   0x110 -> OUT_DIV[0..2]   (words 68..70)  divider N used per point
+  //   0x120 -> OUT_I[0..2]     (words 72..74)  I average per point
+  //   0x130 -> OUT_Q[0..2]     (words 76..78)  Q average per point
+  //   0x140 -> OUT_TEMP        (word 80)  sentinel -1, not implemented (GAP-11)
+  localparam int W_COUNT      = 'h100 / 4;
+  localparam int W_NUM_POINTS = 'h104 / 4;
+  localparam int W_DIV        = 'h110 / 4;
+  localparam int W_I          = 'h120 / 4;
+  localparam int W_Q          = 'h130 / 4;
+  localparam int W_TEMP       = 'h140 / 4;
+
+  localparam int NUM_FREQ_POINTS  = 3;
+  localparam int NUM_MEASUREMENTS = 2;
 
   int unsigned cycles;
   int unsigned measurements_seen;
@@ -146,9 +176,12 @@ module tb_agriasic_rv32i_e2e;
     $display("[TB] releasing start, firmware begins");
     start_i = 1'b1;
 
-    // Wait for firmware to reach ecall.
+    // Wait for firmware to reach ecall. Rev 4.3 Phase 7: the sweep includes
+    // the real N=10000 (1 kHz) point, whose settle alone is 2 periods x 16 x
+    // 10000 = 320,000 cycles, so the budget has to be generous -- see the
+    // MAS Phase 7 note for the actual measured cycle count.
     cycles = 0;
-    while (!fw_halted && cycles < 100000) begin
+    while (!fw_halted && cycles < 8000000) begin
       @(posedge clk);
       cycles++;
     end
@@ -167,18 +200,29 @@ module tb_agriasic_rv32i_e2e;
     $display("[TB] config applied by firmware: pair_log2=%0d settle=%0d divider=%0d conv=%0d",
              cfg_pair_log2_o, cfg_settle_cycles_o, cfg_exc_divider_o, cfg_conv_cycles_o);
 
-    check_word("OUT_COUNT",   W_COUNT,   32'd4);
-    check_word("OUT_AVERAGE", W_AVERAGE, 32'd400);
-    for (int i = 0; i < 4; i++) begin
-      check_word($sformatf("OUT_SAMPLES[%0d]", i), W_SAMPLES + i, 32'd400);
+    check_word("OUT_COUNT",      W_COUNT,      32'(NUM_MEASUREMENTS));
+    check_word("OUT_NUM_POINTS", W_NUM_POINTS, 32'(NUM_FREQ_POINTS));
+    check_word("OUT_TEMP",       W_TEMP,       32'hFFFFFFFF);  // sentinel -1
+
+    check_word("OUT_DIV[0] (10 MHz)",  W_DIV + 0, 32'd1);
+    check_word("OUT_DIV[1] (100 kHz)", W_DIV + 1, 32'd100);
+    check_word("OUT_DIV[2] (1 kHz)",   W_DIV + 2, 32'd10000);
+
+    // Frequency-invariant ADC model (see header): every point gives the
+    // same I/Q numbers. That is the correct expectation here, not a bug --
+    // see the header comment on what this test actually verifies.
+    for (int p = 0; p < NUM_FREQ_POINTS; p++) begin
+      check_word($sformatf("OUT_I[%0d]", p), W_I + p, 32'd400);
+      check_word($sformatf("OUT_Q[%0d]", p), W_Q + p, 32'd280);
     end
 
     if (cfg_pair_log2_o !== 4'd2) begin
       $error("cfg_pair_log2 = %0d, expected 2", cfg_pair_log2_o);
       errors++;
     end
-    if (measurements_seen !== 4) begin
-      $error("measurements_seen = %0d, expected 4", measurements_seen);
+    if (measurements_seen !== NUM_FREQ_POINTS * NUM_MEASUREMENTS) begin
+      $error("measurements_seen = %0d, expected %0d", measurements_seen,
+             NUM_FREQ_POINTS * NUM_MEASUREMENTS);
       errors++;
     end
 

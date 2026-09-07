@@ -193,7 +193,7 @@ module agriasic_digital_spi_top #(
         stat_wr_addr = REG_RESULT_HI;
         stat_wr_data = {24'd0, result_o[15:8]};
       end
-    end
+    endcase
   end
 
   // Write arbiter: status/result mirror has priority over host writes.

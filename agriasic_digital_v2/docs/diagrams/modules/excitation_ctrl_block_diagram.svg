@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
   <title id="t">excitation_ctrl module block diagram</title>
-  <desc id="d">Detailed block diagram for excitation_ctrl showing divider tick engine, phase latch, and settle counter behavior.</desc>
+  <desc id="d">Rev 4.3 Phase 4 block diagram for excitation_ctrl: a free-running divider and 16-state phase counter with no command input, driving break-before-make excitation and exporting a phase reference to measurement_fsm.</desc>
   <defs>
     <marker id="x1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
     <marker id="x2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
@@ -9,65 +9,78 @@
   </defs>
   <rect width="5000" height="3000" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: excitation_ctrl</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Rev 4.3 Phase 4 -- free-running, no command input (redrawn; replaces the pre-Phase-4 commanded-flip design)</text>
   <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
 
-  <rect x="250" y="490" width="1040" height="500" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <rect x="250" y="490" width="1040" height="360" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="310" y="575" font-family="Arial" font-size="30" font-weight="700" fill="#fff">Inputs</text>
-  <text x="310" y="620" font-family="Arial" font-size="20" fill="#fff">enable_i, set_phase_i, phase_value_i</text>
-  <text x="310" y="655" font-family="Arial" font-size="20" fill="#fff">settle_cycles_i, divider_i</text>
+  <text x="310" y="620" font-family="Arial" font-size="20" fill="#fff">enable_i</text>
+  <text x="310" y="655" font-family="Arial" font-size="20" fill="#fff">divider_i[13:0]  (N)</text>
   <text x="310" y="690" font-family="Arial" font-size="20" fill="#fff">clk, rst_n</text>
+  <text x="310" y="730" font-family="Arial" font-size="17" fill="#BDBDBD">No command input of any kind --</text>
+  <text x="310" y="756" font-family="Arial" font-size="17" fill="#BDBDBD">the pre-Phase-4 set_phase_i/</text>
+  <text x="310" y="782" font-family="Arial" font-size="17" fill="#BDBDBD">phase_value_i inputs are gone.</text>
 
-  <rect x="1500" y="450" width="3200" height="1800" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <rect x="1500" y="450" width="3200" height="1500" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
   <text x="1560" y="530" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Internal blocks</text>
 
-  <rect x="1650" y="670" width="860" height="320" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1710" y="760" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Divider counter</text>
-  <text x="1710" y="805" font-family="Arial" font-size="19" fill="#212121">div_cnt increments to divider_i</text>
-  <text x="1710" y="840" font-family="Arial" font-size="19" fill="#212121">tick_o high on match or divider=0</text>
+  <rect x="1650" y="600" width="900" height="340" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1710" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Divider counter</text>
+  <text x="1710" y="722" font-family="Arial" font-size="19" fill="#212121">div_cnt_q free-runs 0..divider_eff-1</text>
+  <text x="1710" y="754" font-family="Arial" font-size="19" fill="#212121">divider_eff floors divider_i=0 to 1</text>
+  <text x="1710" y="786" font-family="Arial" font-size="19" fill="#212121">tick when div_cnt_q == divider_eff-1</text>
+  <text x="1710" y="818" font-family="Arial" font-size="19" fill="#212121">(exact N cycles/state, no off-by-one)</text>
 
-  <rect x="2760" y="670" width="860" height="320" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2820" y="760" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Phase/settle loader</text>
-  <text x="2820" y="805" font-family="Arial" font-size="19" fill="#212121">set_phase drives polarity_o</text>
-  <text x="2820" y="840" font-family="Arial" font-size="19" fill="#212121">load settle_cnt from settle_cycles</text>
+  <rect x="2760" y="600" width="900" height="340" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="2820" y="680" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Phase counter</text>
+  <text x="2820" y="722" font-family="Arial" font-size="19" fill="#212121">phase_q free-runs 0..15 on each tick</text>
+  <text x="2820" y="754" font-family="Arial" font-size="19" fill="#212121">wraps 15-&gt;0, pulses period_tick_o</text>
+  <text x="2820" y="786" font-family="Arial" font-size="19" fill="#212121">enable_i=0 parks phase_q at 0</text>
 
-  <rect x="2190" y="1140" width="900" height="360" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="2250" y="1230" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Settle countdown</text>
-  <text x="2250" y="1275" font-family="Arial" font-size="19" fill="#212121">if !settled and tick_o: settle_cnt--</text>
-  <text x="2250" y="1310" font-family="Arial" font-size="19" fill="#212121">settled_o asserted when settle_cnt reaches 0</text>
-  <text x="2250" y="1345" font-family="Arial" font-size="19" fill="#212121">enable_i=0 forces idle and settled</text>
+  <rect x="2190" y="1020" width="1000" height="380" rx="10" fill="#C8E6C9" stroke="#2E7D32" stroke-width="2"/>
+  <text x="2250" y="1105" font-family="Arial" font-size="27" font-weight="700" fill="#212121">Phase-to-drive decode (pure combinational)</text>
+  <text x="2250" y="1148" font-family="Arial" font-size="19" fill="#212121">0-6   -&gt; drive_p_o=1  (7 states)</text>
+  <text x="2250" y="1180" font-family="Arial" font-size="19" fill="#212121">7     -&gt; dead (both low)</text>
+  <text x="2250" y="1212" font-family="Arial" font-size="19" fill="#212121">8-14  -&gt; drive_n_o=1  (7 states)</text>
+  <text x="2250" y="1244" font-family="Arial" font-size="19" fill="#212121">15    -&gt; dead (both low)</text>
+  <text x="2250" y="1280" font-family="Arial" font-size="18" fill="#1B5E20">2'b11 structurally unreachable: mutually</text>
+  <text x="2250" y="1305" font-family="Arial" font-size="18" fill="#1B5E20">exclusive ranges of one phase counter</text>
 
-  <rect x="3380" y="1140" width="1120" height="360" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
-  <text x="3440" y="1230" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Outputs</text>
-  <text x="3440" y="1275" font-family="Arial" font-size="19" fill="#212121">polarity_o to analog switch drive</text>
-  <text x="3440" y="1310" font-family="Arial" font-size="19" fill="#212121">settled_o feedback to measurement FSM</text>
-  <text x="3440" y="1345" font-family="Arial" font-size="19" fill="#212121">tick_o optional visibility/diagnostic</text>
+  <rect x="1650" y="1490" width="3200" height="330" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="1710" y="1570" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Outputs</text>
+  <text x="1710" y="1612" font-family="Arial" font-size="19" fill="#212121">drive_p_o / drive_n_o -- break-before-make excitation drive, to analog</text>
+  <text x="1710" y="1644" font-family="Arial" font-size="19" fill="#212121">phase_index_o[3:0] -- free-running phase reference, to measurement_fsm</text>
+  <text x="1710" y="1676" font-family="Arial" font-size="19" fill="#212121">period_tick_o -- one pulse per full 16-phase period, to measurement_fsm's S_SETTLE</text>
 
-  <path d="M1290,620 L1650,620 L1650,780" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#x3)"/>
-  <text x="1320" y="595" font-family="Arial" font-size="17" fill="#212121">divider_i</text>
-  <path d="M1290,690 L2760,690" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#x3)"/>
-  <text x="1320" y="718" font-family="Arial" font-size="17" fill="#212121">set_phase_i, phase_value_i, settle_cycles_i</text>
+  <path d="M1290,600 L1650,600 L1650,730" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#x3)"/>
+  <text x="1320" y="590" font-family="Arial" font-size="17" fill="#212121">divider_i</text>
+  <path d="M1290,670 L1470,670 L1470,300 L2900,300 L2900,600" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#x3)"/>
+  <text x="1500" y="290" font-family="Arial" font-size="17" fill="#212121">enable_i (also gates phase counter and drive decode)</text>
 
-  <path d="M2510,830 L2760,830" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#x2)"/>
-  <text x="2560" y="805" font-family="Arial" font-size="17" fill="#212121">tick_o</text>
-  <path d="M3190,990 L3190,1140" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#x2)"/>
-  <text x="3220" y="1080" font-family="Arial" font-size="17" fill="#212121">settle_cnt init</text>
+  <path d="M2550,770 L2760,770" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#x2)"/>
+  <text x="2600" y="748" font-family="Arial" font-size="17" fill="#212121">tick</text>
+  <path d="M3210,940 L3210,1020" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#x2)"/>
+  <text x="3240" y="990" font-family="Arial" font-size="17" fill="#212121">phase_q</text>
 
-  <path d="M3090,1320 L3380,1320" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#x1)"/>
-  <text x="3140" y="1298" font-family="Arial" font-size="17" fill="#212121">settled_o</text>
-  <path d="M3620,980 L3620,1140" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#x1)"/>
-  <text x="3650" y="1070" font-family="Arial" font-size="17" fill="#212121">polarity_o</text>
+  <path d="M3210,940 L4600,940 L4600,1490" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#x1)"/>
+  <text x="4300" y="920" font-family="Arial" font-size="17" fill="#212121">phase_index_o = phase_q</text>
+  <path d="M2900,940 L2900,1300 L2760,1300" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#x1)"/>
+  <text x="2760" y="1330" font-family="Arial" font-size="17" fill="#212121">period_tick_o (on 15-&gt;0 wrap)</text>
+  <path d="M2690,1400 L2690,1490" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#x1)"/>
+  <text x="2400" y="1460" font-family="Arial" font-size="17" fill="#212121">drive_p_o / drive_n_o</text>
 
-  <rect x="250" y="1690" width="4450" height="1120" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="310" y="1775" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior notes</text>
-  <text x="310" y="1825" font-family="Arial" font-size="20" fill="#212121">- divider_i=0 produces a tick each cycle for fastest settling.</text>
-  <text x="310" y="1865" font-family="Arial" font-size="20" fill="#212121">- set_phase_i atomically updates polarity and reloads settle counter.</text>
-  <text x="310" y="1905" font-family="Arial" font-size="20" fill="#212121">- settled_o is the handshake that permits sampling in the FSM.</text>
-  <text x="310" y="1945" font-family="Arial" font-size="20" fill="#212121">- when enable_i deasserts, block returns to known idle state.</text>
+  <rect x="250" y="1900" width="4450" height="910" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="310" y="1985" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior notes</text>
+  <text x="310" y="2035" font-family="Arial" font-size="20" fill="#212121">- Free-running from the master clock: never waits on measurement_fsm for anything, start command or not.</text>
+  <text x="310" y="2075" font-family="Arial" font-size="20" fill="#212121">- f_exc = f_clk / (16 x N); N=divider_i. Verified exact: N=1 gives 16 cycles/period, N=5 gives 80, N=13 gives 208.</text>
+  <text x="310" y="2115" font-family="Arial" font-size="20" fill="#212121">- Dead time is "one reserved phase state" (index 7 or 15), lasting exactly N clock cycles -- not a separate parameter.</text>
+  <text x="310" y="2155" font-family="Arial" font-size="20" fill="#212121">- measurement_fsm watches phase_index_o for a match; this module never receives a request or acknowledges anything.</text>
+  <text x="310" y="2195" font-family="Arial" font-size="20" fill="#212121">- Off-by-one bug from the pre-Phase-4 design (tick every divider_i+1 cycles) fixed, not carried forward.</text>
 
-  <line x1="310" y1="2035" x2="490" y2="2035" stroke="#1565C0" stroke-width="2" marker-end="url(#x1)"/>
-  <text x="530" y="2043" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA/STATUS</text>
-  <line x1="1500" y1="2035" x2="1680" y2="2035" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#x2)"/>
-  <text x="1720" y="2043" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
-  <line x1="2320" y1="2035" x2="2500" y2="2035" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#x3)"/>
-  <text x="2540" y="2043" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <line x1="310" y1="2740" x2="490" y2="2740" stroke="#1565C0" stroke-width="2" marker-end="url(#x1)"/>
+  <text x="530" y="2748" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA/STATUS</text>
+  <line x1="1500" y1="2740" x2="1680" y2="2740" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#x2)"/>
+  <text x="1720" y="2748" font-family="Arial" font-size="18" fill="#212121">WIRE.INTERNAL</text>
+  <line x1="2320" y1="2740" x2="2500" y2="2740" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#x3)"/>
+  <text x="2540" y="2748" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
 </svg>

@@ -56,7 +56,7 @@
 
   <!-- ================= RIGHT: Rev 4.3 ================= -->
   <rect x="640" y="92" width="560" height="330" rx="12" class="panel"/>
-  <text x="660" y="122" class="hNew">Rev 4.3 — free-running, sampler locks to phase</text>
+  <text x="660" y="122" class="hNew">Rev 4.3 — free-running, sampler locks to phase [IMPL, Phase 4]</text>
 
   <rect x="670" y="146" width="200" height="70" rx="8" class="boxNew"/>
   <text x="770" y="172" class="lbl" text-anchor="middle">excitation generator</text>
@@ -116,7 +116,7 @@
     <!-- one strobe on the selected index -->
     <path d="M110,138 L110,152" class="strobe"/>
     <circle cx="110" cy="138" r="5" fill="#dc2626"/>
-    <text x="126" y="146" class="sml">strobe: only when counter == REG_PHASE_IDX</text>
+    <text x="126" y="146" class="sml">strobe: fires when counter == 0/4/8/12 (fixed in RTL, not a host-set register -- GAP-10)</text>
   </g>
 
   <text x="60" y="640" class="sml">One phase point is taken per excitation cycle. Over many cycles the four points assemble I and Q, so SAR conversion time</text>

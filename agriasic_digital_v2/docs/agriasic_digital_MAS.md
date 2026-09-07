@@ -15,8 +15,8 @@
   - agriasic_digital_implementation_plan.md
   - agriasic_digital_timing_checklist.md
   - interface_contract.md
-- MAS version: v0.11 (Rev 4.3 Phase 4 complete: free-running phase-locked excitation, measurement_fsm strobes on phase match, divider widened to 14 bits; sections 3.2, 4.3, 6.1-6.4, 6.11, 7.1-7.2, 9, 10, 11 updated)
-- Date: 2026-09-05
+- MAS version: v0.14 (Rev 4.3 Phases 7-8 complete, with two items honestly left open: firmware now sweeps the real 3 frequency points and stores per-point I/Q in scratch RAM (Phase 7.1/7.2), but temperature sensing has no digital or analog RTL to read yet (Phase 7.3, blocked) and there is no host-facing path for these swept results on any chip variant that exists in this tree (new **GAP-11**, found while implementing this). Verification plan items V-1, V-2, V-4, V-5 closed with real regression coverage (a practical, documented, non-exhaustive settle x conv grid; edge-case accumulator checks including the true M=64 saturating case; formal `assert property` for the shadow-register and phase-match contracts); V-3 confirmed superseded. Sections 7.1, 10, 11, 12, 13, 14 updated)
+- Date: 2026-09-06
 - Trial GDS: 2026-11-18
 
 ### 1.1 How to read this document
@@ -35,7 +35,7 @@ Every architectural statement in this revision therefore carries a status tag:
 | **[GAP]** | Known conflict or unresolved question — read before designing against it |
 
 **Current RTL state in one line:** the design is Rev 4.2 plus the three Rev 4.3
-defect fixes (section 5), plus **Phases 1 through 4 of the Rev 4.3
+defect fixes (section 5), plus **Phases 1 through 8 of the Rev 4.3
 restructure**: the analog boundary is frozen — break-before-make excitation
 drive (`exc_drive_p_o`/`exc_drive_n_o`), the SAR bit-trial interface
 (`adc_dac_o`/`adc_comp_i`, replacing `adc_code_i` entirely), and `miso_oe_o` —
@@ -43,13 +43,41 @@ clock/reset discipline is in place — a 2FF reset synchronizer per
 chip-boundary top, and a verified core clock enable idle 93% of the time
 during a real measurement (section 6.12) — SPI lives **entirely** in
 the clk domain, with zero remaining exceptions to the single-clock-domain rule
-(section 6.7) — and excitation is now **free-running and phase-locked**:
+(section 6.7) — excitation is **free-running and phase-locked**:
 `excitation_ctrl` runs off the master clock alone, exports a 16-state phase
 counter, and `measurement_fsm` strobes a sample whenever that counter matches
-the phase it wants (section 6.1-6.4), with the divider widened end-to-end to
-14 bits (section 10, GAP-1). I/Q accumulation and the indexed register
-readout — sections 4.3, 6.2, 7.2 — remain **[SPEC]**, Phases 5 through 8 not
-started.
+the phase it wants (section 6.1-6.4) — the FSM accumulates **both I and Q**
+(section 6.1): four phase-index watch points (0/90/180/270 degrees), two
+signed accumulators, and shadow-register snapshotting so a host read mid-run
+can never see a partial sum — and the **SPI register map is now the Rev 4.3
+target layout** (section 7.1): `REG_FREQ_SEL` is a 2-bit selector (0/1/2 ->
+10 MHz/100 kHz/1 kHz), closing GAP-1's remaining half on the SPI and
+programming-interface paths; `REG_RESULT_IDX`/`REG_RESULT_DATA` implement the
+indexed byte-vector readout the design doc specifies, serving real I/Q data
+at indices 0-3 and honest zero placeholders at 4-15 pending Phase 7;
+`REG_ID` and a `REG_STATUS` overrange bit are new. **One register in the
+target map, `REG_PHASE_IDX`, is reserved but deliberately not wired to
+anything** — its intended semantics don't reconcile cleanly with how Phase 5
+actually built four fixed, 90-degree-spaced sample points, and building
+speculative RTL against a guessed meaning for a silicon-bound register was
+judged worse than leaving it honest (GAP-10). **Firmware now runs the real
+3-point frequency sweep** (section 7.1, Phase 7): `fw.c` writes `REG_DIVIDER`
+to N=1/100/10000 in turn (the exact same three presets `REG_FREQ_SEL`
+exposes to SPI), averages measurements at each, and stores per-point I/Q
+into scratch RAM — verified in simulation for the real 1 kHz point, not a
+stand-in value (section 10, Phase 7). Two things are honestly still open,
+not silently skipped: temperature sensing (Phase 7.3) has no RTL to read
+from, digital or analog, anywhere in this tree; and there is no path for
+these swept results to reach a real external host on any chip variant that
+exists today — `agriasic_digital_rv32i_top` has no host-facing interface at
+all, and `agriasic_digital_spi_top` has no RV32I core, so Phase 6's indexed
+readout and Phase 7's sweep have never been connected to each other
+(**GAP-11**). Verification (Phase 8) closed four of five outstanding plan
+items with real, run regression coverage: a practical settle x conv grid
+(V-1), edge-case accumulator checks up to the true M=64 saturating case
+(V-2), and formal `assert property` statements for the shadow-register and
+exact-phase-match contracts (V-4, V-5) — V-3 was already confirmed
+superseded.
 
 ### 1.2 Plain-language overview
 
@@ -204,23 +232,34 @@ sequencing into digital, which is why `sar_controller` is more involved than
 it used to be.
 
 **The conductor: `measurement_fsm`.** It doesn't own any of the six wires
-directly — instead it tells `excitation_ctrl` and `sar_controller` what to
-do, and in what order, for one complete reading:
+directly, and — unlike an earlier version of this design — it never tells
+`excitation_ctrl` to flip anything either. `excitation_ctrl` pushes current
+back and forth on its own, continuously, the moment it's turned on; the FSM's
+job is to **watch** that back-and-forth and grab a reading at four specific
+instants in each cycle, for one complete reading:
 
-1. Command `excitation_ctrl` to push current one direction
-2. Wait for the settle timer
-3. Run the guessing game through `sar_controller` → get one 8-bit number, D+
-4. Command the current reversed
-5. Wait and read again → get a second 8-bit number, D−
-6. Subtract (D+ minus D−) and add the result into a running total
+1. Watch the free-running current until it's at the point of the cycle
+   labeled "0 degrees," then run the guessing game through `sar_controller` →
+   get one 8-bit number, D(0)
+2. Watch until the current has reversed to "180 degrees," then read again →
+   get D(180)
+3. Subtract (D(0) minus D(180)) and add the result into one running total —
+   call it "I"
+4. Watch for "90 degrees" (a quarter-cycle offset from step 1) → get D(90)
+5. Watch for "270 degrees" → get D(270)
+6. Subtract (D(90) minus D(270)) and add the result into a **second** running
+   total — call it "Q"
 
 Steps 1-6 repeat a few dozen times (the exact count is configurable), and the
-running total — not each individual D+/D− pair — is what eventually reaches
-the outside world over SPI. The subtraction in step 6 is where the "photograph
-from two sides" trick from earlier in this section actually happens in wire
-terms: whatever bias the chip's own electronics contribute shows up
-identically in D+ and D−, so it cancels; only the part that came from the
-soil survives into the running total.
+two running totals — not each individual reading — are what eventually reach
+the outside world over SPI. The subtraction in steps 3 and 6 is where the
+"photograph from two sides" trick from earlier in this section actually
+happens in wire terms: whatever bias the chip's own electronics contribute
+shows up identically in both readings of a pair, so it cancels; only the part
+that came from the soil survives into the running totals. Two totals, not
+one, is what lets the chip tell water and salt apart (section 3.1) — I and Q
+respond differently to the same soil, the way a wall sounds different when
+you knock at different spots.
 
 **The loose end: `conv_start_o`.** It's a real pin, and it's not one of the
 six — analog doesn't need it. `sar_controller` asserts it in the exact same
@@ -266,12 +305,13 @@ Out of scope for this MAS revision:
 
 ## 3. Measurement Method and Operating Model
 
-### 3.1 What the chip measures
+### 3.1 What the chip measures **[IMPL]** four-phase sampling and both accumulators, Phase 5 — **[SPEC]** the 3-frequency sweep, Phase 7
 Excitation is a bipolar square wave across two soil electrodes. Return current
 passes through an on-die TIA into an 8-bit SAR ADC. Ionic conduction carries a
-1/w factor and fades with frequency; water-driven permittivity does not. The chip
-therefore sweeps three frequency points and, at each point, samples four phase
-offsets to recover the in-phase and quadrature components:
+1/w factor and fades with frequency; water-driven permittivity does not. The
+chip is meant to sweep three frequency points (Phase 7, not yet built) and, at
+each point, samples four phase offsets to recover the in-phase and quadrature
+components:
 
 ```text
 I = (D(0deg)  - D(180deg)) / 2
@@ -280,7 +320,11 @@ Q = (D(90deg) - D(270deg)) / 2
 
 Opposite-phase subtraction cancels static TIA and ADC offset. The `/2` and all
 magnitude/phase/calibration math are **host-side**; the die accumulates raw
-signed differences only (section 6.4).
+signed differences only (section 6.4). The four-phase sampling and the two
+raw accumulators themselves are implemented and verified as of Phase 5
+(section 6.1); what remains **[SPEC]** is sweeping the divider across three
+frequency points automatically — today the host sets one divider value, runs
+one measurement, and gets one (I, Q) pair back.
 
 ### 3.2 Equivalent-time sampling **[IMPL]** — Phase 4
 Excitation is free-running and stationary: `excitation_ctrl` runs off the
@@ -336,7 +380,7 @@ the core can be dropped as a schedule descope without changing measurement
 behavior. **This port identity is a standing constraint: any Rev 4.3 change to
 one shell must be mirrored in the other.**
 
-### 4.3 Phase-locked control partition **[IMPL]** (core mechanism, Phase 4) / **[SPEC]** (I/Q and register map, Phase 5-6)
+### 4.3 Phase-locked control partition **[IMPL]** (phase-lock, I/Q, and register map, Phases 4-6) / **[SPEC]** (frequency sweep, Phase 7)
 Rev 4.3 inverts excitation control, and Phase 4 built the inversion. Under Rev
 4.2, the FSM commanded each polarity flip, so excitation frequency was an
 *emergent side effect* of the settle and conv register values — you could not
@@ -347,8 +391,9 @@ set a frequency, only discover one. As implemented now:
 - It exports a **16-state phase counter** (`phase_index_o[3:0]`) to the FSM,
   free-running 0-15 in lockstep with the divider.
 - The FSM (`measurement_fsm`) strobes the sampler the cycle the counter
-  matches the phase it wants (0 for D+, 8 for D-) — it no longer commands
-  anything, it only watches.
+  matches the phase it wants — **four** phase indices now (0, 4, 8, 12 —
+  0/90/180/270 degrees, Phase 5), not two — it no longer commands anything,
+  it only watches.
 
 ```text
 f_exc = f_clk / (16 * N),   f_clk = 160 MHz
@@ -363,18 +408,26 @@ running in parallel with the core.
 
 Functional split as implemented:
 
-1. **RV32I core + ROM** — sweep program, frequency and phase index selection,
-   settle intervals, M, temperature read, result packing, SPI service, sticky
-   error and reset policy.
+1. **RV32I core + ROM** — sweep program, frequency selection, settle
+   intervals, M, temperature read, result packing, SPI service, sticky error
+   and reset policy. The frequency **sweep** (three points) and temperature
+   read are still `[SPEC]`, Phase 7 — today firmware sets one divider value
+   and reads back one (I, Q) pair (section 3.1).
 2. **Measurement FSM** — divider load (passthrough to `excitation_ctrl`), phase
-   match detection, sample strobe generation, ADC start and busy handshake,
-   raw accumulation, cycle counting, done flag. Sign selection by phase index
-   and a **second** accumulator for Q are still `[SPEC]`, Phase 5.
-3. **Peripheral register set** — config, status, indexed result readout,
-   revision ID: still `[SPEC]`, Phase 6. The register map as implemented today
-   (section 7.1) is the pre-Phase-6 8-register layout, with `REG_DIVIDER` now
-   backed by a wider (14-bit) internal register than its 8-bit SPI window
-   exposes — see section 7.1's note and GAP-1.
+   match detection at all four I/Q phase indices, sample strobe generation,
+   ADC start and busy handshake, **two** raw accumulators (I and Q), shadow
+   snapshotting on completion, cycle counting, done flag. All of this is
+   `[IMPL]` as of Phase 5 (section 6.1) — nothing about the FSM itself remains
+   `[SPEC]`.
+3. **Peripheral register set** — the Rev 4.3 target register map itself is
+   `[IMPL]` as of Phase 6 (section 7.1): `REG_FREQ_SEL` selector encoding,
+   indexed `REG_RESULT_IDX`/`REG_RESULT_DATA` readout, `REG_ID`, and a
+   `REG_STATUS` overrange bit. What's still `[SPEC]` is not the register
+   *mechanism* but the *data* Phase 7 would put behind it — indices 4-15 of
+   the result vector read as honest zero today because there is no second or
+   third frequency point, and no temperature sensing, anywhere in the digital
+   RTL yet. One register, `REG_PHASE_IDX`, is reserved in the map but not
+   wired to anything — see GAP-10.
 
 **Rev 4.3 target architecture** — the phase reference from the excitation
 generator to the FSM is the key structural change, and it is now real RTL:
@@ -386,16 +439,21 @@ strobe mechanism:
 
 ![rev43_excitation_phase_lock](diagrams/rev43_excitation_phase_lock.svg)
 
-**Diagram staleness note:** both diagrams above were drawn against the Rev 4.3
-*target* description before Phase 4 existed in RTL. The mechanism they show
-(free-running divider, phase counter, strobe-on-match) is now accurate; what
-they do not yet show is the actual signal names (`phase_index_o[3:0]`,
-`period_tick_o`) or the fact that the FSM's states are now
-`S_SETTLE -> S_WAIT_P -> S_SAMPLE_P -> S_WAIT_N -> S_SAMPLE_N -> S_ACCUM ->
-S_LOOP` rather than the old `S_PHASE_P -> S_WAIT_P -> S_SAMPLE_P -> ...`.
-Redrawing to match exact signal names is tracked as a documentation
-follow-up, not yet done — same status as the module block diagrams in
-section 6.
+**Diagrams redrawn for this MAS revision.** Both diagrams above were
+originally drawn against the Rev 4.3 *target* description before Phase 4
+existed in RTL. They have been updated to reflect the implementation: the
+architecture diagram now marks itself `[IMPL as of Phase 6]`, labels the
+excitation generator as purely digital (Taarana's ownership, not joint with
+analog), and notes that phase selection (unlike frequency selection) remains
+unwired per GAP-10. The phase-lock diagram's strobe annotation now correctly
+says the four watched phase indices (0/4/8/12) are fixed in RTL, not a
+host-settable `REG_PHASE_IDX` value. Neither diagram attempts to show the
+FSM's exact 14-state sequence
+(`S_SETTLE -> S_WAIT_0 -> S_SAMPLE_0 -> S_WAIT_180 -> S_SAMPLE_180 ->
+S_ACCUM_I -> S_WAIT_90 -> S_SAMPLE_90 -> S_WAIT_270 -> S_SAMPLE_270 ->
+S_ACCUM_Q -> S_LOOP`) — that level of detail is what
+`measurement_fsm_block_diagram.svg` (section 6.1) is for; these two stay at
+the architecture level by design.
 
 The **[IMPL]** control architecture as currently built is a separate diagram —
 it predates Phase 4 and does not show the phase reference:
@@ -443,7 +501,8 @@ cfg_pair_log2 ──▶ │                                          │ ──�
                   │                                          │ ──▶ adc_dac_o[7:0]
   adc_comp_i  ──▶ │                                          │ ──▶ busy_o
                   │                                          │ ──▶ done_o
-                  │                                          │ ──▶ result_o[15:0]
+                  │                                          │ ──▶ result_i_o[15:0]  (Phase 5)
+                  │                                          │ ──▶ result_q_o[15:0]  (Phase 5)
                   └─────────────────────────────────────────┘
 ```
 
@@ -529,62 +588,87 @@ covering that bug.**
 
 ## 6. Micro-Architecture by Module
 
-### 6.1 measurement_fsm **[IMPL]** — reworked in Rev 4.3 Phase 4
+### 6.1 measurement_fsm **[IMPL]** — I/Q accumulation added in Rev 4.3 Phase 5
 Responsibilities:
 - Accept start command in idle
 - Wait out the settle interval, then watch the free-running phase counter for
-  a match — **it no longer commands a polarity flip; it only watches**
-- Sample D+ at phase index 0, D− at phase index 8
-- Wait on `sar_done_i` to know a bit-trial conversion has finished
-- Accumulate the raw signed per-pair difference
+  a match — **it never commands a polarity flip; it only watches**
+- Sample D(0°) and D(180°) into the I accumulator, D(90°) and D(270°) into
+  the Q accumulator — **four sample points per pair, not two**
+- Wait on `sar_done_i` to know a bit-trial conversion has finished, once per
+  sample point (four times per pair)
+- Accumulate the raw signed per-pair difference into **two** independent
+  accumulators
+- Snapshot both accumulators into shadow registers the host actually reads,
+  on the one cycle the run completes — never while `busy_o` is high
 - Repeat until `pair_target` reached, then assert done
 
-States (Phase 4 — the old command states `S_PHASE_P`/`S_PHASE_N` are gone;
-there is nothing left to command):
+States (Phase 5 renames and extends the Phase 4 state list — every state
+after `S_WAIT_180` is new or renamed to keep the I/Q split unambiguous):
 
 ```text
 S_IDLE
-S_SETTLE                     -- counts period_tick_i pulses, not raw cycles
-S_WAIT_P -> S_SAMPLE_P        -- watches phase_index_i, samples at phase 0
-S_WAIT_N -> S_SAMPLE_N        -- watches phase_index_i, samples at phase 8
-S_ACCUM -> S_LOOP -> S_DONE
+S_SETTLE                        -- counts period_tick_i pulses, not raw cycles
+S_WAIT_0   -> S_SAMPLE_0         -- I, positive term: phase 0   (0 deg)
+S_WAIT_180 -> S_SAMPLE_180       -- I, negative term: phase 8   (180 deg)
+S_ACCUM_I                        -- i_acc_q += D(0) - D(180)
+S_WAIT_90  -> S_SAMPLE_90        -- Q, positive term: phase 4   (90 deg)
+S_WAIT_270 -> S_SAMPLE_270       -- Q, negative term: phase 12  (270 deg)
+S_ACCUM_Q                        -- q_acc_q += D(90) - D(270)
+S_LOOP -> S_DONE
 ```
 
-`S_WAIT_P`/`S_WAIT_N` are combinational watch states: the moment
-`phase_index_i` equals the target (0 or 8 respectively), `sample_req_o` and
-`sample_phase_o` fire **that same cycle** — including the case where the
-target already matches on the very cycle the watch state is entered, which is
-correct for equivalent-time sampling (section 3.2): there is no reason to wait
-for a *fresh* match if the phase generator happens to already be sitting on
-the right value. `S_SAMPLE_P`/`S_SAMPLE_N` then hold while the SAR conversion
-that request triggered runs to completion (`sar_done_i`).
+Each `S_WAIT_*` state is a combinational watch: the moment `phase_index_i`
+equals the target, `sample_req_o`/`sample_phase_o` fire **that same cycle**
+— including the case where the target already matches on the very cycle the
+watch state is entered, correct for equivalent-time sampling (section 3.2).
+The corresponding `S_SAMPLE_*` state then holds while the SAR conversion that
+request triggered runs to completion (`sar_done_i`).
 
-`settle_cycles_i` keeps its port name from the pre-Phase-4 design but changes
-unit: it now counts **excitation periods** (`period_tick_i` pulses from
-`excitation_ctrl`), not raw settle cycles — the same reinterpret-rather-than-
-rename precedent as `conv_cycles_i` in section 6.6. `tb_settle_timing.sv`
-confirms the new unit is monotonic and hang-free (section 10, Phase 4).
+**One design choice worth stating plainly: `sar_controller`'s D+/D− capture
+slots are reused as generic storage, not extended to four slots.**
+`sample_phase_o=1` always means "capture into the d_plus slot," `=0` means
+"capture into d_minus," regardless of which channel that slot is about to
+feed — `sar_controller` has no notion of I or Q at all (section 6.6, unchanged
+by Phase 5). D(0°) lands in d_plus, D(180°) overwrites d_minus, and
+`S_ACCUM_I` reads both before either slot is reused for D(90°)/D(270°). This
+means the FSM's own sequencing — not any new hardware in `sar_controller` — is
+what keeps the two channels from ever using stale data.
+
+**Shadow-register snapshotting (section 9.3's "accumulator snapshot"
+contract, first actually implemented here):** the live accumulators
+(`i_acc_q`, `q_acc_q`) update mid-run, one channel at a time, while `busy_o`
+is high. What the host reads (`result_i_o`, `result_q_o`) is a **separate**
+pair of shadow registers (`i_shadow_q`, `q_shadow_q`) that latch the live
+accumulators' final values only on the `S_LOOP -> S_DONE` transition — the one
+and only cycle `busy_o` drops from 1 to 0. A host reading mid-run therefore
+always sees the *previous* run's complete result, never a partial sum from
+the run in progress. This did not exist for the single-accumulator Phase
+1-4 design — `result_o` there was wired straight to the live accumulator.
+
+`settle_cycles_i` is unchanged from Phase 4: it counts **excitation periods**
+(`period_tick_i` pulses), not raw cycles. `tb_settle_timing.sv` confirms the
+unit is still monotonic and hang-free with the four-phase sequencing added
+(section 10, Phase 5).
 
 Configuration dependencies:
-- `pair_log2` selects M = 2^pair_log2, **clamped to 64**
+- `pair_log2` selects M = 2^pair_log2, **clamped to 64** — applies to both
+  accumulators independently (section 9.3)
 
 ![measurement_fsm_block_diagram](diagrams/modules/measurement_fsm_block_diagram.svg)
-*(stale as of Phase 4: still shows the old command-state flow
-`S_PHASE_P -> S_WAIT_P -> S_SAMPLE_P`. Redrawing this diagram is tracked as a
-documentation follow-up, not yet done — same status as the other module block
-diagrams in this section.)*
+*(redrawn for this MAS revision: shows all 14 states across both channels,
+the sar_controller slot-reuse mechanism, the shadow-register timing, and the
+real cycle numbers from the section 6.11 trace.)*
 
-### 6.2 measurement_fsm, Rev 4.3 remaining target **[SPEC]** — Phase 5
-- Selects accumulator and sign by phase index (0°/180° → I, 90°/270° → Q) —
-  today there is exactly one phase pair (0/8) and one accumulator; the
-  90°/270° pair and the second (Q) accumulator do not exist yet
-- Drives two accumulators, not one
-- Snapshots both into shadow registers on `done`
-
-The phase-index-match strobing mechanism this section used to specify is done
-— see section 6.1. What remains for Phase 5 is purely the I/Q split: a second
-phase-index pair to watch for for the 90°/270° samples, and a second
-accumulator to route them into.
+### 6.2 measurement_fsm, Rev 4.3 remaining target — nothing outstanding here
+Section 6.1 now covers everything this section used to specify for the FSM
+itself: four-phase watching, two accumulators, and shadow-register
+snapshotting are all `[IMPL]` as of Phase 5. What remains **[SPEC]** at the
+system level is not a measurement_fsm change at all — it's Phase 6's register
+map (indexed multi-frequency-point readout, section 7.2) and Phase 7's
+firmware sweep across three divider values (section 3.1). This section is
+kept as a placeholder heading rather than renumbering everything after it;
+future FSM-specific target notes belong here.
 
 ### 6.3 excitation_ctrl **[IMPL]** — rewritten in Rev 4.3 Phase 4
 Responsibilities:
@@ -630,10 +714,9 @@ timing at three divider values, the phase-to-drive map (0-6 P, 7 dead, 8-14 N,
 any cycle, and idle behavior when `enable_i=0`.
 
 ![excitation_ctrl_block_diagram](diagrams/modules/excitation_ctrl_block_diagram.svg)
-*(stale as of Phase 4, more so than after Phase 1: this diagram still shows
-the single `polarity_o` output and a command input (`set_phase_i`) that no
-longer exists at all — the module now has no command input whatsoever.
-Redrawing this diagram is tracked as a documentation follow-up, not yet done.)*
+*(redrawn for this MAS revision: shows the free-running divider and phase
+counter with no command input at all, the phase-to-drive decode, and the
+off-by-one fix.)*
 
 ### 6.4 excitation_ctrl, Rev 4.3 target **[IMPL]** — Phase 4 complete
 - Free-running divider, no per-flip command from the FSM — **done**, see 6.3
@@ -665,8 +748,9 @@ States: `S_IDLE → S_TRIAL_SET → S_TRIAL_WAIT → S_TRIAL_EVAL` (loops 8 time
 once per bit, then back to `S_IDLE`).
 
 ![sar_controller_block_diagram](diagrams/modules/sar_controller_block_diagram.svg)
-*(stale as of Phase 1: still shows the `adc_code_i` port. Redrawing this
-diagram is tracked as a documentation follow-up, not yet done.)*
+*(redrawn for this MAS revision: shows the real `S_IDLE -> S_TRIAL_SET ->
+S_TRIAL_WAIT -> S_TRIAL_EVAL` bit-trial loop against `adc_dac_o`/`adc_comp_i`,
+the `adc_comp_i` convention, and the conv_cycles_i reinterpretation.)*
 
 ### 6.6 sar_controller — Rev 4.3 SAR bit-trial interface **[IMPL]**
 The SAR bit trials now run **in digital**. The controller talks to the ADC
@@ -745,19 +829,35 @@ consequence: deselecting mid-byte and reselecting starts a clean new byte,
 with no module reset needed.
 
 ![spi_slave_block_diagram](diagrams/modules/spi_slave_block_diagram.svg)
-*(stale: still shows the old SCLK-domain RX/TX split and the toggle
-synchronizer. Redrawing this diagram is tracked as a documentation
-follow-up, matching the note already on the excitation_ctrl/sar_controller
-diagrams.)*
+*(redrawn for this MAS revision: shows the 2FF oversampling and edge-detected
+shift/frame logic entirely in the clk domain, with no toggle synchronizer or
+second clock domain.)*
 
-### 6.9 agriasic_digital_spi_top **[IMPL]**
+### 6.9 agriasic_digital_spi_top **[IMPL]** — register map reworked in Rev 4.3 Phase 6
 - Decode Byte0 command and track pending transaction context
 - Enforce protocol legality checks before state mutation
 - Generate response bytes for ACK/NACK/error conditions
 - Keep parser alignment by consuming Byte1 for invalid Byte0
-- Bridge config writes into core controls and mirror status/result
+- Bridge config writes into core controls (`REG_FREQ_SEL`'s selector-to-N
+  lookup happens here, combinationally — see section 7.1)
+- Serve the indexed result readout (`REG_RESULT_IDX`/`REG_RESULT_DATA`,
+  auto-increment on data reads) and mirror status into the regfile
+
+**Status/regfile mirror simplified in Phase 6.** Phases 4-5 rotated a 3- then
+5-slot mirror writing STATUS and the (then-direct) result registers into
+`u_regfile` every few cycles. That mirror was already non-load-bearing for
+correctness — `read_byte_from_addr` handles every valid address directly and
+never falls through to the regfile's `rd_data` — so Phase 6 reduced it to a
+single always-on STATUS write and did not extend it to cover the new
+`REG_FREQ_SEL`/`REG_PHASE_IDX`/`REG_RESULT_IDX`/`REG_RESULT_DATA`/`REG_ID`
+registers. This is a deliberate simplification, not a missed spot: extending
+genuinely dead code would have been backwards.
 
 ![agriasic_digital_spi_top_block_diagram](diagrams/modules/agriasic_digital_spi_top_block_diagram.svg)
+*(redrawn for this MAS revision: shows the Phase 6 register map including the
+`REG_FREQ_SEL` selector, the indexed `REG_RESULT_IDX`/`REG_RESULT_DATA`
+readout, `REG_ID`, and the two GAP-10 reserved items, plus the current
+analog-boundary pin names.)*
 
 ### 6.10 regfile **[IMPL]**
 - Parameterized storage for software-visible config/status points
@@ -765,123 +865,127 @@ diagrams.)*
 
 ![regfile_block_diagram](diagrams/modules/regfile_block_diagram.svg)
 
-### 6.11 Worked example: tracing one measurement cycle **[IMPL]** — rewritten for Rev 4.3 Phase 4
+### 6.11 Worked example: tracing one measurement cycle **[IMPL]** — rewritten for Rev 4.3 Phase 5
 
-This replaces the pre-Phase-4 trace, which walked through the now-deleted
-`S_PHASE_P`/`S_WAIT_P`/`exc_set_phase_o` command-and-wait mechanism. The trace
-below is a real Verilator run of `agriasic_digital_top` at the free-running
-Phase 4 interface, same configuration and ADC model as
-`tb/smoke/tb_agriasic_digital_top.sv`: `pair_log2=2` (M=4), `settle=2`
-(excitation *periods*, section 6.1), `divider=1` (N=1, fastest excitation — 16
-clk cycles/period, phase increments every clock), `conv=1`, and the
-track-and-hold ADC model (section 10, Phase 4) returning `D+=180` when sampled
-during the positive half and `D-=60` during the negative half.
+This replaces the Phase 4 trace, which covered only the I channel (two sample
+points per pair). The trace below is a real Verilator run of
+`agriasic_digital_top` with the Phase 5 dual-accumulator FSM: `pair_log2=2`
+(M=4), `settle=2` (excitation periods), `divider=1` (N=1, fastest excitation
+— 16 clk cycles/period), `conv=1`, and a four-target track-and-hold ADC model
+keyed on `measurement_fsm`'s own state (the same model used in
+`tb/smoke/tb_agriasic_digital_top.sv` — see that testbench's header comment
+for why keying on state, not `phase_index_i` directly, is necessary at small
+N): `D(0)=220`, `D(90)=170`, `D(180)=100`, `D(270)=90`. These are
+deliberately different deltas (I delta = 120, Q delta = 80) so a channel-swap
+bug would produce a numerically wrong, not coincidentally right, result.
 
-Because `state_q` and `phase_index_o` are both registered, this trace logs a
-row every time `state_q` **changes** — the interesting events — rather than
-every single clock cycle as the pre-Phase-4 trace did; with a free-running
-16-cycle phase counter there are far more clock edges than state changes to
-show. `phase_idx` in the table is the phase counter's value at the moment the
-**new** state is registered, one cycle after the actual phase match happened
-(see the reading note below the table — this is the single trickiest thing
-about reading a Phase 4 waveform).
+As in the Phase 4 version, this logs a row every time `state_q` changes,
+rather than every clock cycle. `phase_idx` is the phase counter's value at
+the moment the **new** state is registered, one cycle after the actual phase
+match happened (see the reading note in step 4 below).
 
 #### First pair, state-change trace (N=1, so phase increments every clock)
 
-| cyc | state entered | phase_idx | drive_p | drive_n | acc |
-|---|---|---|---|---|---|
-| 0 | S_IDLE | 0 | 0 | 0 | 0 |
-| 3 | S_SETTLE | 0 | 1 | 0 | 0 |
-| 37 | S_WAIT_P | 2 | 1 | 0 | 0 |
-| 52 | S_SAMPLE_P | 1 | 1 | 0 | 0 |
-| 85 | S_WAIT_N | 2 | 1 | 0 | 0 |
-| 92 | S_SAMPLE_N | 9 | 0 | 1 | 0 |
-| 125 | S_ACCUM | 10 | 0 | 1 | 0 |
-| 126 | S_LOOP | 11 | 0 | 1 | **120** |
+| cyc | state entered | phase_idx | d_plus | d_minus | i_acc | q_acc |
+|---|---|---|---|---|---|---|
+| 0 | S_IDLE | 0 | 0 | 0 | 0 | 0 |
+| 3 | S_SETTLE | 0 | 0 | 0 | 0 | 0 |
+| 36 | S_WAIT_0 | 2 | 0 | 0 | 0 | 0 |
+| 51 | S_SAMPLE_0 | 1 | 0 | 0 | 0 | 0 |
+| 84 | S_WAIT_180 | 2 | 220 | 0 | 0 | 0 |
+| 91 | S_SAMPLE_180 | 9 | 220 | 0 | 0 | 0 |
+| 124 | S_ACCUM_I | 10 | 220 | 100 | 0 | 0 |
+| 125 | S_WAIT_90 | 11 | 220 | 100 | **120** | 0 |
+| 135 | S_SAMPLE_90 | 5 | 220 | 100 | 120 | 0 |
+| 168 | S_WAIT_270 | 6 | 170 | 100 | 120 | 0 |
+| 175 | S_SAMPLE_270 | 13 | 170 | 100 | 120 | 0 |
+| 208 | S_ACCUM_Q | 14 | 170 | 90 | 120 | 0 |
+| 209 | S_LOOP | 15 | 170 | 90 | 120 | **80** |
 
 Reading it as a story:
 
 1. **cyc 0-2 — reset, then start.** `S_IDLE` holds through reset; the start
-   pulse is accepted and `S_SETTLE` is entered at cyc 3. `excitation_ctrl` is
-   already free-running at this point — note `drive_p=1` at cyc 3, because the
-   phase counter never stopped ticking, start command or not.
-2. **cyc 3-36 — settle.** `S_SETTLE` waits for `period_tick_i` (one pulse per
-   full 16-cycle excitation period) to reach `settle_cycles_i=2`. At N=1 that
-   is 2 x 16 = 32 clock cycles; the trace shows 34 (37-3), the extra 2 cycles
-   being state-entry/exit overhead, not a settle-count error — `tb_settle_timing`
-   (section 10, Phase 4) separately confirms the settle-to-elapsed-time
-   relationship is exact and monotonic.
-3. **cyc 37-51 — wait for phase 0.** `S_WAIT_P` is entered with
-   `phase_idx=2` — the excitation generator has moved on since settle finished
-   and is not guaranteed to be sitting at phase 0 the instant settle completes.
-   The FSM does nothing but watch `phase_index_i` combinationally until it
-   equals 0. That match happens at cyc 51 (not shown as its own row: the
-   match and the `S_SAMPLE_P` transition are both driven off the same edge,
-   registering together at cyc 52).
-4. **cyc 52 — S_SAMPLE_P entered, phase_idx reads 1, not 0.** This is the
-   subtlety flagged above: `sample_req_o`/`sample_phase_o` fired
-   *combinationally* on the cycle `phase_index_i==0` (cyc 51), but `state_q`
-   only updates on the *next* clock edge (cyc 52) — and because N=1, the phase
-   counter has *also* advanced by then, from 0 to 1. The sample itself is
-   correctly captured at phase 0; only the printed `phase_idx` in this
-   snapshot-on-transition trace is one step stale. This is exactly why
-   `tb/smoke/tb_agriasic_digital_top.sv`'s phase-match assertion (section
-   3.2) checks the phase value from the *previous* cycle, not the one visible
-   when `S_SAMPLE_P` is first observed.
-5. **cyc 52-84 — the D+ conversion runs.** `S_SAMPLE_P` holds for 33 cycles
-   while `sar_controller` runs its 8-bit-trial search: `8 x (3 + conv_cycles_i)
-   = 8 x 4 = 32` cycles (section 6.6), plus one cycle of state-entry overhead.
-   The excitation phase counter keeps free-running underneath this the entire
-   time — by the time the conversion finishes, phase has wrapped around
-   several full periods, which is the whole point of equivalent-time sampling
-   (section 3.2): the analog target was captured once, at the right instant,
-   and held (track-and-hold) for the rest of the conversion.
-6. **cyc 85-91 — wait for phase 8.** Same watch pattern as step 3, this time
-   for the negative-phase target. `S_WAIT_N` enters at `phase_idx=2`; match
-   occurs at phase 8 (cyc 91); `S_SAMPLE_N` registers at cyc 92 showing
-   `phase_idx=9` for the same one-cycle-stale reason as step 4.
-7. **cyc 92-124 — the D- conversion runs.** Another 33-cycle SAR search,
-   this time with `drive_n=1` — the negative half of the chop.
-8. **cyc 125 — subtract.** `S_ACCUM` computes `pair_delta = D+ - D- = 180 -
-   60 = 120` and adds it with no scaling (D-3 fix, section 5).
-9. **cyc 126 — loop check.** `acc=120` is now visible, `pair_count=1`. Since
-   `pair_count (1) < pair_target (4)`, the FSM loops back to `S_WAIT_P`
-   (cyc 127) instead of the old `S_PHASE_P` — there is nothing left to
-   command, only a fresh phase match to wait for.
+   pulse is accepted and `S_SETTLE` is entered at cyc 3.
+2. **cyc 3-35 — settle.** `S_SETTLE` waits for `period_tick_i` to reach
+   `settle_cycles_i=2` (two full 16-cycle periods = 32 clock cycles); the
+   trace shows 33 (36-3), the one extra cycle being state-entry overhead, not
+   a settle-count error.
+3. **cyc 36-50 — wait for phase 0.** `S_WAIT_0` is entered at `phase_idx=2`
+   and watches `phase_index_i` combinationally until it equals 0. That match
+   happens at cyc 50 (not its own row — the match and the `S_SAMPLE_0`
+   transition register together at cyc 51).
+4. **cyc 51 — S_SAMPLE_0 entered, phase_idx reads 1, not 0.** Same subtlety
+   as the Phase 4 trace: `sample_req_o` fired combinationally at cyc 50
+   (`phase_index_i==0`), but `state_q` only updates at cyc 51, by which time
+   the free-running phase counter (N=1) has already advanced to 1. The sample
+   itself is correctly captured at phase 0; only the state-transition
+   snapshot's `phase_idx` reads one step stale. `phase_match` in the smoke
+   test checks the *previous*-cycle phase value for exactly this reason.
+5. **cyc 51-83 — the D(0) conversion runs.** 33 cycles (`8 x (3 + 1) = 32`,
+   plus one cycle of entry overhead). `d_plus` shows 0 until it lands at cyc
+   84 (`220`, the converged D(0) code) — the same cycle `S_WAIT_180` is
+   entered, since `d_plus_o` and `sample_done_o` register together (section
+   6.6).
+6. **cyc 84-90 — wait for phase 8 (180 deg).** Same watch pattern; match at
+   phase 8 (cyc 90), `S_SAMPLE_180` registers at cyc 91 showing `phase_idx=9`.
+7. **cyc 91-123 — the D(180) conversion runs.** Another 33-cycle SAR search;
+   `d_minus` lands at `100` when `S_ACCUM_I` is entered at cyc 124.
+8. **cyc 124 — I subtract.** `S_ACCUM_I` computes
+   `sample_delta = d_plus - d_minus = 220 - 100 = 120` and adds it into
+   `i_acc_q` with no scaling (D-3 fix, section 5) — visible as `i_acc=120`
+   the following cycle (125), once the register has updated.
+9. **cyc 125-207 — the Q channel repeats the same four-state pattern** at
+   phase 4 (90 deg) and phase 12 (270 deg) instead of 0/180: `S_WAIT_90 ->
+   S_SAMPLE_90 -> S_WAIT_270 -> S_SAMPLE_270`. `d_plus`/`d_minus` are
+   **overwritten** with D(90)=170 and D(270)=90 — the same two `sar_controller`
+   slots used for the I channel, now carrying different values, exactly as
+   section 6.1 describes.
+10. **cyc 208 — Q subtract.** `S_ACCUM_Q` computes `170 - 90 = 80` into
+    `q_acc_q`, plus increments `pair_count`.
+11. **cyc 209 — loop check.** `q_acc=80` is now visible, `pair_count=1`. Since
+    `pair_count (1) < pair_target (4)`, the FSM loops back to `S_WAIT_0`
+    (cyc 210) for the next pair.
+
+Notice `i_shadow_q`/`q_shadow_q` (the registers the host actually reads,
+section 6.1) are **not shown changing anywhere in this table** — they stay 0
+through the entire first pair and every subsequent one, only updating on the
+final `S_LOOP -> S_DONE` transition (step 13 below). This is the shadow-
+register contract working exactly as designed: `result_i_o`/`result_q_o`
+hold the *previous* run's value (0, since this is the first run since reset)
+throughout, never a partial sum from the run in progress.
 
 #### The remaining three pairs
 
-Unlike the pre-Phase-4 trace (where every pair was a byte-for-byte repeat
-because nothing but the FSM's own states advanced time), the *absolute* cycle
-each subsequent pair starts at is not a fixed offset from the first — it
-depends on where the free-running phase counter happens to be sitting when
-each `S_WAIT_P`/`S_WAIT_N` state is entered. What **is** exactly repeatable is
-each pair's *duration* once steady state is reached, because after the first
-pair the FSM always re-enters `S_WAIT_P` at the same phase offset relative to
-where the previous conversion ended:
-
-| Pair | S_WAIT_P entered at cyc | S_LOOP entered at cyc | Pair duration | acc after S_LOOP |
+| Pair | S_WAIT_0 entered at cyc | S_LOOP entered at cyc | Pair duration | i_acc / q_acc after S_LOOP |
 |---|---|---|---|---|
-| 1 | 37 (settle-gated, not comparable) | 126 | — | 120 |
-| 2 | 127 | 206 | 80 | 240 |
-| 3 | 207 | 286 | 80 | 360 |
-| 4 | 287 | 366 | **80** | **480** |
+| 1 | 36 (settle-gated, not comparable) | 209 | — | 120 / 80 |
+| 2 | 210 | 369 | 160 | 240 / 160 |
+| 3 | 370 | 529 | 160 | 360 / 240 |
+| 4 | 530 | 689 | **160** | **480 / 320** |
 
-Pairs 2-4 are exactly 80 cycles apart, measured Verilator output, not an
-estimate. At cyc 366 (`S_LOOP`, `pair_count=4 >= pair_target=4`), the FSM goes
-to `S_DONE` (cyc 367) instead of looping, and returns to `S_IDLE` at cyc 368
-with `result_o` held at 480.
+Pairs 2-4 are exactly 160 cycles apart — double the Phase 4 single-channel
+figure (80 cycles), because each pair now runs four SAR conversions instead
+of two. At cyc 689 (`S_LOOP`, `pair_count=4 >= pair_target=4`), the FSM goes
+to `S_DONE` (cyc 690) instead of looping. **This is the one cycle the shadow
+registers actually change:** `i_shadow_q`/`q_shadow_q` latch to 480/320 on
+this exact transition, confirmed in the raw trace output
+(`i_shadow=480 q_shadow=320` first appears at cyc 690, the same cycle
+`state=13` (`S_DONE`) is entered) — not one cycle earlier, not one cycle
+later.
 
-**480 is exactly `M x (D+ - D-) = 4 x 120`** — the smoke-test expectation in
-`tb/smoke/tb_agriasic_digital_top.sv`, and `SMOKE_PASS: result=480 (phase-match
-checked, 0 errors)` confirms both the numeric result *and* that every one of
-the 8 samples in this run (4 pairs x 2 phases) landed on the exact documented
-phase index, not merely "somewhere in the right half" (section 3.2).
+**480/320 is exactly `M x (D+ - D-)` per channel: `4 x 120 = 480` for I,
+`4 x 80 = 320` for Q** — the smoke-test expectation in
+`tb/smoke/tb_agriasic_digital_top.sv`, and
+`SMOKE_PASS: I=480 Q=320 (phase-match checked, 0 errors)` confirms both
+numeric results *and* that every one of the 16 samples in this run (4 pairs x
+4 phases) landed on the exact documented phase index (section 3.2).
 
-**What the host still has to do:** `result_o=480` is not the answer — it is
-`M x (D+ - D-)`. The host divides by M (here, 4) to recover `(D+ - D-) = 120`,
-and by 2 for the true chop average, per section 3.1's `I = (D(0deg) -
-D(180deg))/2`. None of that scaling happens on die; see section 5.2.
+**What the host still has to do:** neither `result_i_o=480` nor
+`result_q_o=320` is the final answer — each is `M x (D_channel+ - D_channel-)`.
+The host divides by M (here, 4) to recover the raw chop differences (120 and
+80), and by 2 again for the true chop average, per section 3.1's
+`I = (D(0deg) - D(180deg))/2` and `Q = (D(90deg) - D(270deg))/2`. None of that
+scaling happens on die; see section 5.2.
 
 ### 6.12 Reset synchronizer and core clock enable **[IMPL]** (Rev 4.3 Phase 2)
 
@@ -940,64 +1044,94 @@ either.
 ## 7. Register and Protocol Specification
 
 ### 7.1 Register map, as implemented **[IMPL]**
-- 0x0 REG_CTRL (RW): bit0=start pulse, bit7=clear sticky protocol flags
-- 0x1 REG_PAIR_LOG2 (RW)
-- 0x2 REG_SETTLE (RW) — now counts excitation *periods*, not raw cycles (section 6.1)
-- 0x3 REG_DIVIDER (RW, 8 bits over SPI)
-- 0x4 REG_CONV (RW)
-- 0x5 REG_STATUS (RO): bit7 protocol_err, bit6 bad_addr, bit5 illegal_ro_write, bit1 done, bit0 busy
-- 0x6 REG_RESULT_LO (RO)
-- 0x7 REG_RESULT_HI (RO)
 
-**REG_DIVIDER, Phase 4 note.** The internal register this maps to
-(`cfg_divider_q`) is **14 bits**, widened end-to-end in Phase 4 so the divider
-can reach the values needed for a 1 kHz excitation floor (GAP-1). Over SPI and
-the byte-oriented programming interface, `REG_DIVIDER` is still an **8-bit
-write window**: a write zero-extends the byte into the low 8 bits of the
-14-bit register (`cfg_divider_q <= {6'd0, spi_rx_data}`), and a read returns
-only `cfg_divider_q[7:0]`. This means N is currently reachable only up to 255
-over SPI (39.2 kHz floor, unchanged from before Phase 4) even though the
-counter underneath can now go to 16383 — **the register encoding needed to
-expose the full 14-bit range over the 1-byte-at-a-time SPI protocol is Phase
-6's job, not Phase 4's** (GAP-1, updated). The MMIO path
-(`agriasic_rv32i_mmio.sv`), which is not byte-framed, has **no such limit**:
-`REG_DIVIDER` there is fully 14-bit, read and write, today — a program running
-on the RV32I core can already reach the 1 kHz point; only the SPI-visible
-window is still narrow.
-
-### 7.2 Register map, Rev 4.3 target **[SPEC]**
-SPI command bit[6:3] allows only 16 addresses. Six 16-bit accumulators
-(3 frequency points × I/Q) plus temperature is roughly **13 result bytes**, which
-will not fit alongside control as fixed registers. Rev 4.3 uses an **indexed
-readout port**, so the two-byte protocol is unchanged and a burst read is just a
-sequence of two-byte transactions.
+This is now the Rev 4.3 target layout (section 7.2's table), not an interim
+one — Phase 6 closed the gap between them except for two deliberately
+unresolved items noted below.
 
 | Addr | Name | Access | Purpose |
 |---|---|---|---|
-| 0x0 | `REG_CTRL` | RW | Start pulse, error clear, **core enable** |
-| 0x1 | `REG_PAIR_LOG2` | RW | M = 2^value. **Constrain to 6 or less** — see accumulator width, section 9.3 |
-| 0x2 | `REG_SETTLE` | RW | Settle cycles after a frequency or phase change |
-| 0x3 | `REG_FREQ_SEL` | RW | Divider ratio N selecting the excitation frequency point |
-| 0x4 | `REG_PHASE_IDX` | RW | Phase index into the 16-state counter |
-| 0x5 | `REG_CONV` | RW | SAR conversion cycles |
-| 0x6 | `REG_STATUS` | RO | Busy, done, **overrange**, sticky protocol errors |
-| 0x7 | `REG_RESULT_IDX` | RW | Pointer into the result set; **auto-increments on each data read** |
-| 0x8 | `REG_RESULT_DATA` | RO | **Byte** at the current index. Result set: I and Q low/high bytes for three frequency points, then temperature |
-| 0x9 | `REG_ID` | RO | Design and revision identifier |
+| 0x0 | `REG_CTRL` | RW | bit0=start pulse, bit7=clear sticky protocol flags. **No core-enable bit** — see the note below |
+| 0x1 | `REG_PAIR_LOG2` | RW | M = 2^value. Constrained to 6 or less in RTL (values above clamp to 64 and set the overrange status bit) — accumulator width, section 9.3 |
+| 0x2 | `REG_SETTLE` | RW | Excitation *periods* to wait after start (section 6.1), not raw cycles |
+| 0x3 | `REG_FREQ_SEL` | RW | **2-bit selector**, not raw N: 0 -> 10 MHz (N=1), 1 -> 100 kHz (N=100), 2 -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER`; see the note below |
+| 0x4 | `REG_PHASE_IDX` | RW | Present in the map; **writes are stored and read back, but not wired to anything** — see the note below and GAP-10 |
+| 0x5 | `REG_CONV` | RW | SAR comparator regeneration wait, per bit trial |
+| 0x6 | `REG_STATUS` | RO | bit7 protocol_err, bit6 bad_addr, bit5 illegal_ro_write, bit4 **overrange** (new), bit1 done, bit0 busy |
+| 0x7 | `REG_RESULT_IDX` | RW | Pointer into the result byte vector, 0-15. **Auto-increments on each `REG_RESULT_DATA` read** (not on writes to this register, and not on reads of this register itself) |
+| 0x8 | `REG_RESULT_DATA` | RO | Byte at the current index — see the mapping note below |
+| 0x9 | `REG_ID` | RO | Fixed design/revision identifier, `8'h43` |
 
-Note that `REG_RESULT_DATA` returns a **byte**, not a word — the result set is a
-13-byte vector and the index walks bytes. Existing response codes are retained
-(0xA5 / 0x5A / 0xE1 / 0xE2), and the wrapper still consumes and discards the data
-byte of an illegal command to keep framing aligned.
+**`REG_RESULT_DATA` index mapping.** The Rev 4.3 target result set is I/Q for
+three frequency points plus temperature — 13 bytes. Only one frequency
+point's data exists today (Phase 7's sweep isn't built, and no temperature
+sensing exists anywhere in the digital RTL):
 
-Two deltas from the implemented map beyond the indexed readout: `REG_CTRL` gains
-a core-enable bit, and `REG_STATUS` gains an overrange bit. `REG_DIVIDER` is
-replaced by `REG_FREQ_SEL`, and `REG_PHASE_IDX` is new. **The underlying
-divider counter is already 14 bits as of Phase 4** — what Phase 6 still needs
-to decide is only the *register encoding* choice between them (raw N vs. a
-selector index into three presets), which is the remaining half of [GAP-1].
+```text
+idx 0: result_i_o[7:0]     idx 1: result_i_o[15:8]
+idx 2: result_q_o[7:0]     idx 3: result_q_o[15:8]
+idx 4-15: reserved, reads as 0
+```
+
+Indices 4-15 read as an honest, deliberate zero rather than garbage — real
+data for frequency points 1/2 and temperature lands there once Phase 7
+exists to produce it. `result_idx_q` is a plain 4-bit register (0-15, wrapping
+naturally on overflow), three addresses wider than the 13-byte result set
+strictly needs; that's a free simplification, not a bug — a mod-13 counter
+would cost more than the three unused addresses are worth.
+
+**`REG_FREQ_SEL`, Phase 6 note — closes GAP-1's remaining half, on the SPI
+and programming-interface paths only.** The internal divider register
+(`cfg_exc_divider_o`/`cfg_divider_w`, 14 bits since Phase 4) needs N=10000 to
+reach the 1 kHz point — too wide for one SPI byte. Rather than widen the
+2-byte SPI protocol (which the design doc explicitly wants to avoid), Phase 6
+replaced the raw-N `REG_DIVIDER` with a 2-bit **selector** on SPI and the
+parallel programming interface: the host writes 0/1/2, the wrapper looks up
+the corresponding N combinationally (`cfg_divider_w`, not a stored register —
+there is nothing to keep in sync), and `excitation_ctrl` never knows the
+difference. **This is the only way to reach 1 kHz through a single SPI byte
+without changing the framing.** The three preset N values (1, 100, 10000) are
+exact for the "roughly 1 kHz, 100 kHz, 10 MHz" points the baseline design doc
+specifies, at `f_clk = 160 MHz` (the same table GAP-1 derived). RV32I MMIO
+keeps its own register **named `REG_DIVIDER`, not renamed** — it takes raw N
+directly (`agriasic_rv32i_mmio.sv`, 0x8000_000C) because native 32-bit
+MMIO writes have no byte-framing constraint to work around; giving it the
+same name as SPI's selector-based register would wrongly imply matching
+semantics it doesn't have.
+
+**`REG_PHASE_IDX` and `REG_CTRL`'s core-enable bit — two items the target
+spec calls for that Phase 6 deliberately left unwired, not silently
+dropped.** Both addresses/bits exist and accept writes (so host software
+probing the documented map doesn't get an unexpected NACK), but:
+- `REG_PHASE_IDX` ("phase index into the 16-state counter") doesn't reconcile
+  cleanly with how Phase 5 actually built I/Q sampling: four FIXED,
+  90-degree-spaced phase points, not a single host-selectable one. The most
+  plausible reading — a phase *offset* that shifts all four points together,
+  as a calibration trim — is an interpretation, not a specification. Building
+  silicon-bound RTL against a guessed semantic was judged worse than an
+  honest no-op. See GAP-10.
+- A **core-enable** bit in `REG_CTRL` doesn't have an obvious home in the
+  current architecture either: `agriasic_digital_spi_top` (where `REG_CTRL`
+  lives) has no RV32I core to enable — the RV32I core only exists in the
+  separate `agriasic_digital_rv32i_top`, and the two are alternative,
+  mutually exclusive integrations today, not one chip where a host can
+  toggle between them at runtime. This bit presumably targets some future
+  unified top this codebase doesn't have yet. Also tracked under GAP-10.
+
+### 7.2 Register map, Rev 4.3 target — reconciled with 7.1 above
+The table Section 7.1 now shows **is** the target table; there is no separate
+version to duplicate here anymore. What remains open is exactly the two items
+called out above (`REG_PHASE_IDX`, `REG_CTRL`'s core-enable bit — GAP-10) plus
+the result *data* Phase 7 needs to produce before indices 4-12 mean anything.
+Existing response codes are retained (0xA5 / 0x5A / 0xE1 / 0xE2), and the
+wrapper still consumes and discards the data byte of an illegal command to
+keep framing aligned — both unchanged by Phase 6.
 
 ![rev43_register_map](diagrams/rev43_register_map.svg)
+*(redrawn for this MAS revision: marks `REG_FREQ_SEL` as the resolved 2-bit
+selector, flags `REG_PHASE_IDX` and `REG_CTRL`'s core-enable bit as reserved-
+not-wired (GAP-10), and distinguishes the real idx 0-3 result bytes from the
+reserved idx 4-15 placeholder bytes pending Phase 7.)*
 
 ### 7.3 SPI command format **[IMPL]**
 - bit7: RW (1=READ, 0=WRITE)
@@ -1083,14 +1217,22 @@ either way. This only becomes relevant once Phase 4's phase counter exists.
 ### 9.1 Implemented **[IMPL]**
 - `conv_start_o` is a one-cycle pulse per accepted sample request
 - `done_o` and `busy_o` are mutually constrained by end-of-sequence semantics
-- **(Phase 4)** A sample strobe (`sample_req_o`/`sample_phase_o`) is issued
-  **only** when the free-running phase counter equals the selected phase index
-  (0 for D+, 8 for D-) — there is no longer a `settled_i` handshake to gate on;
-  settle is now a one-time period count in `S_SETTLE` before the FSM starts
-  watching for phase matches at all (section 6.1). Verified exactly, not just
-  asserted: `tb/smoke/tb_agriasic_digital_top.sv`'s phase-match check confirms
-  every sample in a full 4-pair run lands on the documented index, using the
-  cycle-before-transition phase value (section 6.11's reading note)
+- **(Phase 4, extended Phase 5)** A sample strobe (`sample_req_o`/
+  `sample_phase_o`) is issued **only** when the free-running phase counter
+  equals the selected phase index — **four** indices now (0, 4, 8, 12 for
+  0/90/180/270 degrees), not two — there is no longer a `settled_i` handshake
+  to gate on; settle is a one-time period count in `S_SETTLE` before the FSM
+  starts watching for phase matches at all (section 6.1). Verified exactly,
+  not just asserted: `tb/smoke/tb_agriasic_digital_top.sv`'s phase-match check
+  confirms every one of the 16 samples in a full 4-pair run (4 phases x 4
+  pairs) lands on the documented index, using the cycle-before-transition
+  phase value (section 6.11's reading note)
+- **(Phase 5)** The accumulator shadow-register snapshot contract (see
+  "Accumulator snapshot" below, formerly listed as **[SPEC]**) is now
+  **[IMPL]**: `i_shadow_q`/`q_shadow_q` latch the live accumulators only on
+  the `S_LOOP -> S_DONE` transition, the one cycle `busy_o` drops. Confirmed
+  in the section 6.11 trace: both shadow registers read 0 through the entire
+  run and change to their final values on exactly that one cycle
 - The `sar_done_i` handshake gates transitions out of sample states
 - `{exc_drive_p_o, exc_drive_n_o} = 2'b11` structurally unreachable — asserted
   every cycle in `tb_excitation_drive.sv`, holds for the free-running Phase 4
@@ -1113,27 +1255,28 @@ either way. This only becomes relevant once Phase 4's phase counter exists.
 - SAR bit-trial conversion time: `8 × (3 + conv_cycles_i)` clock cycles, verified
   for `conv_cycles_i` ∈ {0, 2}
 
-**Settle timing after Phase 1 and Phase 4:** because break-before-make adds
+**Settle timing after Phase 1, 4, and 5:** because break-before-make adds
 `DEAD_CYCLES` before drive can assert, and SAR conversion takes 24+ cycles
 instead of the few cycles `adc_code_i` needed, total run time grew
-substantially versus the pre-Phase-1 baseline (measurement smoke: 480 result
-in 368 cycles at N=1/settle=2, section 6.11, vs. the pre-Phase-1 ~73). Phase 4
-changed the *unit* `settle` is measured in (excitation periods, not raw
-cycles) but the *ratios and monotonicity* `tb_settle_timing` checks are
-unaffected — settle=0 < settle=2 < settle=5 < settle=20 still holds at the new
-unit. Nothing about either change is a defect; it is the real cost of moving
-from a placeholder ADC/excitation signal to actual bit-trial and phase-lock
-mechanisms.
+substantially versus the pre-Phase-1 baseline (measurement smoke: I=480/Q=320
+in 690 cycles at N=1/settle=2, section 6.11, vs. the pre-Phase-1 ~73, and vs.
+368 for the Phase 4 single-channel version — Phase 5 roughly doubled run time
+again by doubling SAR conversions per pair from 2 to 4). Phase 4 changed the
+*unit* `settle` is measured in (excitation periods, not raw cycles); Phase 5
+did not change the unit again, only how much work happens between settles.
+The *ratios and monotonicity* `tb_settle_timing` checks are unaffected by
+either change — settle=0 < settle=2 < settle=5 < settle=20 still holds.
+Nothing about any of this is a defect; it is the real cost of moving from a
+placeholder ADC/excitation signal to actual bit-trial, phase-lock, and now
+dual-channel mechanisms.
 
-### 9.2 Rev 4.3 additions still outstanding **[SPEC]** — Phase 5
-- Sign and accumulator selection by phase index (0°/180° → I, 90°/270° → Q) —
-  today there is exactly one phase pair (0/8) and one accumulator
-- A second phase-index pair (4 and 12, for 90°/270°) to strobe the Q
-  accumulator
-
-The phase-lock strobe mechanism this section used to specify (Phase 4) is
-implemented — see section 9.1. What remains outstanding is purely the I/Q
-split.
+### 9.2 Rev 4.3 additions — nothing outstanding here
+This section used to specify the I/Q split (sign and accumulator selection by
+phase index, a second phase-index pair for 90/270 degrees). Both are `[IMPL]`
+as of Phase 5 — see section 9.1 and section 6.1. Kept as a placeholder
+heading rather than renumbering; a genuinely new Phase 6/7 timing contract
+(if one turns out to be needed for the frequency sweep or indexed readout)
+belongs here.
 
 ### 9.3 Contracts to freeze **[SPEC]**
 
@@ -1145,10 +1288,14 @@ f_clk = 160 MHz                   for 10 MHz excitation with 16 phase steps
 **Sampling aperture.** Under **5 ns**, with jitter small enough to hold phase
 error below **one degree at 10 MHz**.
 
-**Accumulator width.** 16-bit signed. Worst case at M = 64 is
-`64 × 255 = 16320`, inside the 32767 limit. At M = 128 the worst case is 32640 —
-inside the limit but **without margin** — so constrain M to 64 or widen to 18
-bits. `REG_PAIR_LOG2` is therefore constrained to 6 or less.
+**Accumulator width.** 16-bit signed, **for each of I and Q independently**
+(Phase 5 added the second accumulator; the per-channel bound is unchanged by
+having two). Worst case at M = 64 is `64 × 255 = 16320`, inside the 32767
+limit. At M = 128 the worst case is 32640 — inside the limit but **without
+margin** — so constrain M to 64 or widen to 18 bits. `REG_PAIR_LOG2` is
+therefore constrained to 6 or less, and this constraint applies identically
+to whichever channel is larger in a given run; there is no combined I+Q bound
+to worry about since they are separate registers, never summed on die.
 
 **Phase command handshake.** Superseded by Phase 4. There is no longer a
 polarity command to hand-shake on — the excitation generator is free-running
@@ -1159,9 +1306,17 @@ header). The replacement contract, watch-and-strobe on phase match, is
 implemented and verified (section 9.1) but not yet asserted as a formal RTL
 `assert property` — that remains open (see V-5, section 12.3).
 
-**Accumulator snapshot.** The FSM writes accumulators into shadow registers
-**only at completion**, so the core can never read a partial sum. A start written
-while busy is **ignored and sets an error bit** rather than restarting mid-burst.
+**Accumulator snapshot — [IMPL] as of Phase 5, one half still [SPEC].** The
+FSM writes both accumulators into shadow registers **only at completion**
+(`S_LOOP -> S_DONE`, section 6.1), so the host can never read a partial sum —
+this half is implemented and verified (section 9.1, section 6.11). **Not yet
+implemented:** a start written while busy is not specially handled as an
+"ignored, error-flagged" case — the RTL's current behavior when `start_i` is
+asserted mid-run is whatever falls out of `S_IDLE` never being re-entered
+until `S_DONE` naturally completes (the `start_i` write is simply not
+consumed, not actively rejected with an error bit). Whether that passive
+behavior is good enough or needs an explicit reject-and-flag path is an open
+question for Phase 6-8 signoff, not resolved here.
 
 **Boundary to defend.** The FSM never gets a program counter. If it needs
 branching beyond "repeat M times", it has become a second processor and the
@@ -1299,35 +1454,171 @@ pre-Phase-4 ~300+), exactly as the D-3 fix moved 240 → 480 and Phase 1 moved
 math (`M x (D+ - D-)`) is unchanged — only cycle counts and the sampling
 mechanism did.
 
-### Phase 5 — I/Q accumulation
-| Step | Work |
-|---|---|
-| 5.1 | Two signed 16-bit accumulators (I and Q) |
-| 5.2 | Sign and accumulator selection by phase index: 0°/180° → I, 90°/270° → Q |
-| 5.3 | Shadow registers snapshot on `done` so the core never reads a partial sum |
-| 5.4 | M ≤ 64 — already enforced |
+### Phase 5 — I/Q accumulation ✅ complete
+| Step | Work | Status |
+|---|---|---|
+| 5.1 | Two signed 16-bit accumulators (I and Q) | **Done.** `i_acc_q`/`q_acc_q` in `measurement_fsm`, each independently bounded exactly as the single accumulator was (section 9.3) |
+| 5.2 | Sample and accumulate at all four phase indices: 0°/180° → I, 90°/270° → Q | **Done.** `S_WAIT_0/90/180/270` + `S_SAMPLE_0/90/180/270` + `S_ACCUM_I`/`S_ACCUM_Q` (section 6.1). `sar_controller`'s D+/D− slots are reused unmodified as generic per-sample storage — no new hardware there |
+| 5.3 | Shadow registers snapshot on `done` so the host never reads a partial sum | **Done.** `i_shadow_q`/`q_shadow_q` latch only on the `S_LOOP -> S_DONE` transition — the first time this contract (section 9.3) has actually been implemented, not just specified |
+| 5.4 | M ≤ 64 — already enforced | **Unchanged, reverified.** Same `pair_target` clamp as Phase 1-4; applies independently to both channels |
+| 5.5 | Expose both channels on every host interface | **Done, ahead of Phase 6's indexed scheme.** Four direct registers (`REG_RESULT_I_LO/HI`, `REG_RESULT_Q_LO/HI`) added to SPI (0x6-0x9), the parallel programming interface (bare ports), and RV32I MMIO (`REG_RESULT_I`/`REG_RESULT_Q`, 0x8000_0018/0x8000_001C) — see section 7.1's note on why this is an interim layout, not the Phase 6 target |
 
-### Phase 6 — Register map and readout
-| Step | Work |
-|---|---|
-| 6.1 | `REG_RESULT_IDX` (auto-incrementing) + `REG_RESULT_DATA` |
-| 6.2 | Six 16-bit accumulators (3 frequencies × I/Q) plus temperature |
-| 6.3 | Frequency-selection register and widened divider write path |
+**Exit criterion met:** the 9-stage regression sweep is green with the
+dual-accumulator FSM integrated everywhere — measurement smoke (I=480, Q=320,
+all 16 samples phase-matched), SPI smoke (same values read back over SPI),
+settle timing regression (both channels checked at 4 settle values), and the
+RV32I end-to-end firmware test (`fw.c` reads both `REG_RESULT_I`/
+`REG_RESULT_Q` and writes `OUT_AVERAGE`/`OUT_AVERAGE_Q` and
+`OUT_SAMPLES`/`OUT_SAMPLES_Q` to scratch RAM, all verified bit-exact across 4
+real measurements).
 
-### Phase 7 — Sweep policy in firmware
-| Step | Work |
-|---|---|
-| 7.1 | Three frequency points → divider N values (see [GAP-1] table) |
-| 7.2 | Four phase offsets per point |
-| 7.3 | Temperature read and result packing |
-| 7.4 | Mirror any shell interface change into the microsequencer per section 4.2 |
+**A real testbench-modeling bug was found and fixed while building this, not
+just claimed fixed — the second one of this kind in two phases.** Every
+behavioral ADC model's track-and-hold logic (added in Phase 4) latched its
+target keyed on `exc_phase_index` at the moment `adc_sample_o` fired. That
+broke silently for Phase 5: `sar_controller` registers `adc_sample_o` the
+cycle it **accepts** a sample request, one cycle after the phase match that
+triggered it — harmless when the model only needed to distinguish two things
+(P half vs. N half, since polarity doesn't change within that one-cycle
+window), but Phase 5 needs to distinguish **four** phases, and at N=1 the
+phase counter advances every single cycle, so by the time `adc_sample_o`
+pulses, `exc_phase_index` has already ticked past 0/4/8/12 to 1/5/9/13 —
+values the model's `case` statement didn't recognize, silently leaving the
+held ADC code at its reset value of 0 for the entire run. First symptom:
+`SMOKE_FAIL: expected I=480 got=0`. **Fixed by keying the model on
+`measurement_fsm`'s own state** (`S_SAMPLE_0`/`S_SAMPLE_90`/`S_SAMPLE_180`/
+`S_SAMPLE_270`) instead of on `phase_index` directly — the state is
+unambiguous regardless of the one-cycle lag, so this sidesteps the timing
+subtlety instead of trying to compensate for it. Applied to all four
+testbenches with a 4-target ADC model (`tb/smoke/tb_agriasic_digital_top.sv`,
+`tb/smoke/tb_agriasic_digital_spi_top.sv`, `tb/tb_settle_timing.sv`,
+`tb/tb_agriasic_rv32i_e2e.sv`, plus the two non-gating diagnostics
+`tb/tb_diag.sv` and `tb/tb_spi_diag.sv`). This is the identical *class* of bug
+as the Phase 4 track-and-hold finding (a testbench model's timing assumption
+broke only once the design changed in a way that stressed a case the model
+had never needed to handle) — worth naming as a pattern: **every phase-lock
+Phase so far has broken exactly one pre-existing testbench modeling
+assumption that happened to be untested by the previous phase's coverage.**
 
-### Phase 8 — Verification and signoff
-| Step | Work |
-|---|---|
-| 8.1 | V-1 through V-5 from section 12.3, added to `verify_all.sh` as each lands |
-| 8.2 | Assertions: `{p,n}` never `2'b11`; half-cycle symmetry; accumulator range |
-| 8.3 | Refresh this MAS and `interface_contract.md`; re-run the 77-test ISA regression |
+**A pre-existing, undiscovered port-identity drift was found and fixed in the
+same pass.** `agriasic_rv32i_control_shell.sv.orig` (the microsequencer
+descope fallback, section 4.2) still had `cfg_exc_divider_o` at `[7:0]` —
+Phase 4 widened the real shell's copy to `[13:0]` but never touched `.orig`,
+because **`.orig` is not referenced by any lint or build script in this
+tree** and so nothing caught the divergence. Fixed now (widened to match,
+plus the Q-channel result ports mirrored in), and `.orig` was lint-checked
+directly (it has no dedicated script, so this was done by hand) to confirm
+it compiles clean against the current `agriasic_rv32i_core`/`agriasic_rv32i_mmio`.
+**This is a standing risk, not fully closed**: since nothing automatically
+lints or builds `.orig`, a future interface change could silently
+re-diverge it again. Tracked as GAP-8 (section 10.3).
+
+Two testbenches (`tb_diag.sv`, `tb_agriasic_rv32i_e2e.sv`) were also found to
+have the **same** stale `cfg_exc_divider_o` width (`[7:0]` instead of
+`[13:0]`) left over from Phase 4 — fixed alongside the `.orig` shell fix
+above, same root cause (nothing forced every file referencing that port to be
+touched when the width changed).
+
+### Phase 6 — Register map and readout ✅ complete (with two items deliberately left open)
+| Step | Work | Status |
+|---|---|---|
+| 6.1 | `REG_RESULT_IDX` (auto-incrementing) + `REG_RESULT_DATA`, replacing Phase 5's direct `REG_RESULT_I/Q_LO/HI` | **Done.** 4-bit pointer, auto-increments on `REG_RESULT_DATA` reads only, wraps naturally at 16. Indices 0-3 serve real I/Q; 4-15 read as 0 (section 7.1) |
+| 6.2 | Six 16-bit accumulators (3 frequencies × I/Q) plus temperature | **Not done, correctly deferred.** This is *data* Phase 7's sweep would produce, not a register-map mechanism — building storage for values nothing generates yet was judged premature. The mechanism that will serve that data once it exists (6.1) is built and tested now |
+| 6.3 | Frequency-selection register encoding: selector index vs. raw N (GAP-1's remaining half) | **Done.** SPI and the parallel programming interface both got a 2-bit `REG_FREQ_SEL`/`CFG_FREQ_SEL` selector (0/1/2 -> N=1/100/10000); RV32I MMIO keeps raw-N `REG_DIVIDER` unchanged, since it has no byte-width constraint forcing a selector — see section 7.1 for why the two interfaces deliberately use different registers rather than one name with two meanings |
+
+**Two items beyond the original three-step plan were added and then
+deliberately left unresolved, not silently skipped:**
+
+1. **`REG_ID`** (0x9, fixed `8'h43`) and **`REG_STATUS`'s overrange bit**
+   (bit4, set when `REG_PAIR_LOG2 > 6` is written and silently clamped to
+   M=64) — both unambiguous, cheap, and implemented on the SPI path; the
+   overrange bit is mirrored on RV32I MMIO's `REG_STATUS` too (same bit
+   position, different address). Both are real, verified features that
+   weren't in the original three-step Phase 6 plan but were straightforward
+   enough to add without the same ambiguity risk as the two items below.
+
+2. **`REG_PHASE_IDX`** and **`REG_CTRL`'s core-enable bit** — reserved in the
+   register map (writes accepted, stored, read back) but **not wired to
+   anything**. Both are called for by the baseline design doc, and both have
+   genuine semantic ambiguity given how Phases 4-5 actually built the rest of
+   the design (section 7.1 has the full reasoning for each). Building RTL
+   against a guessed meaning for a register that will be silicon-bound was
+   judged a worse outcome than an honestly-inert placeholder plus a
+   documented open question. Tracked as **GAP-10** (section 10.3) — get the
+   actual intended semantics from whoever specified these before wiring
+   anything to them.
+
+**Exit criterion met:** the 9-stage regression sweep is green with the
+reworked register map integrated everywhere it applies (SPI, the parallel
+programming interface). `tb/smoke/tb_agriasic_digital_spi_top.sv` was
+extended with real, passing checks for the auto-increment behavior (pointer
+reads back as 4 after four `REG_RESULT_DATA` reads starting from index 0),
+the reserved-index-reads-zero behavior (index 4 reads 0x00, not stale I/Q
+data), `REG_ID` (reads back `0x43`), and the overrange bit (sets on
+`REG_PAIR_LOG2=7`, clears on a subsequent valid write) — none of these were
+asserted without being run.
+
+### Phase 7 — Sweep policy in firmware ✅ complete (7.1/7.2/7.4), 7.3 blocked
+| Step | Work | Status |
+|---|---|---|
+| 7.1 | Three frequency points → divider N values (see [GAP-1] table) | **Done.** `fw.c` writes `REG_DIVIDER` = 1, then 100, then 10000 in sequence via `run_sweep_point()` — the exact three presets `REG_FREQ_SEL` exposes on SPI. Verified for the real N=10000 (1 kHz) point in simulation, not a stand-in value: `tb_agriasic_rv32i_e2e.sv` measures the full sweep at ~3.15M cycles, confirming the mechanism works at the actual worst-case timing, not an optimistic one |
+| 7.2 | Four phase offsets per point | **Already done, since Phase 5.** Every measurement already samples all four I/Q phases (0/90/180/270) per pair; Phase 7 just runs that same mechanism three times, once per frequency point. There was no separate "phase offset" mechanism left to build |
+| 7.3 | Temperature read and result packing | **Blocked, not implemented.** No PTAT/ADC-test-mux interface exists anywhere in the digital RTL — this is an analog-side dependency (Krishna/Vidhu), not a firmware gap. `fw.c` writes a `-1` sentinel to `OUT_TEMP` so nothing downstream mistakes an unread value for a real reading. "Result packing" into the Phase 6 target's 13-byte format was not attempted either — see GAP-11, the reason is architectural, not a missing feature |
+| 7.4 | Mirror any shell interface change into the microsequencer per section 4.2 | **N/A this phase.** Phase 7 changed only `fw.c` (firmware) — no port or interface on `agriasic_rv32i_control_shell.sv` changed, so there is nothing to mirror into `.orig` |
+
+**New scratch-RAM layout (retires the Phase 1-6 single-frequency-demo
+layout):** `OUT_COUNT`/`OUT_NUM_POINTS` (0x100/0x104), `OUT_DIV[3]` (0x110),
+`OUT_I[3]`/`OUT_Q[3]` (0x120/0x130), `OUT_TEMP` (0x140, sentinel). The old
+`OUT_AVERAGE`/`OUT_AVERAGE_Q`/`OUT_SAMPLES`/`OUT_SAMPLES_Q` addresses are
+gone — a real 3-point sweep replaces the placeholder one-frequency loop those
+existed to demonstrate, the same way each earlier phase's completion moved
+the expected numbers (D-3: 240→480; Phase 4: cycle counts; Phase 5: added Q).
+`tb_agriasic_rv32i_e2e.sv` and `tb_diag.sv` were updated to match and both
+verify the new layout end to end.
+
+**GAP-11, found while implementing this, not before:** the ADC model in
+every RV32I-path testbench is frequency-invariant (keyed on FSM state, not
+real analog response — section 6.11), so all three sweep points correctly
+produce identical I/Q numbers in simulation; that is the expected result of
+*this* test, not a sign the sweep mechanism doesn't work — what it proves is
+that `REG_DIVIDER` really changes, each point's measurement really completes
+and averages correctly, and results land in the right per-point slots. What
+it can *not* prove, because no chip variant in this tree makes it possible to
+prove, is that a real external host can ever retrieve these swept results:
+`agriasic_digital_rv32i_top` has no SPI (or any other) pin-level interface,
+and `agriasic_digital_spi_top` has no RV32I core. See GAP-11 (section 10.3)
+for the full reasoning and the architectural options for closing it.
+
+### Phase 8 — Verification and signoff ✅ complete (8.1/8.2 with real coverage; 8.3 partial)
+| Step | Work | Status |
+|---|---|---|
+| 8.1 | V-1 through V-5 from section 12.3, added to `verify_all.sh` as each lands | **Done for V-1, V-2, V-4, V-5; V-3 already superseded.** Two new regression stages added (`tb_settle_conv_sweep.sv`, `tb_accum_edge_cases.sv`) plus two new formal `assert property` statements in the existing smoke test. Details in section 12.3 |
+| 8.2 | Assertions: `{p,n}` never `2'b11`; half-cycle symmetry; accumulator range | **Done, all three now explicit.** `{p,n}` never `2'b11` was already a formal assert (Phase 1). Half-cycle symmetry was previously provable only by combining the phase-map and per-state-timing checks by hand — `tb_excitation_drive.sv` now counts `drive_p_o`/`drive_n_o` cycles directly and checks `7*N == 7*N` explicitly, at every N already under test. Accumulator range is a new formal `assert property` in the smoke test, checking both `i_acc_q` and `q_acc_q` stay within the section 9.3 ±16320 bound at every cycle, not just at completion |
+| 8.3 | Refresh this MAS and `interface_contract.md`; re-run the 77-test ISA regression | **MAS and interface_contract.md refreshed for Phases 7-8 (this revision). ISA regression still not re-run** — same blocker as every prior phase: it needs the external CIS 5710 cocotb harness and a built `riscv-tests`, neither present in this environment. Phase 7 touched only `fw.c`, not `agriasic_rv32i_core.sv`, so the risk profile is lower than Phase 2.2's core changes, but "lower risk" is not the same as "re-run and confirmed" |
+
+**Exit criterion met:** the regression sweep grew from 10 to **12 stages**,
+all passing, total wall-clock time ~32 seconds including the real N=10000
+sweep point — verification headroom did not come at the cost of a slow
+regression. Every new claim in this section (grid coverage, edge-case
+values, symmetry counts, accumulator bounds) is backed by a real, run
+simulation result, not asserted from the arithmetic alone.
+
+**What "V-1" and "V-2" mean in practice, stated plainly so the scope
+decisions are visible, not just the results:**
+- V-1's original wording calls for the full 8-bit x 8-bit settle/conv grid
+  (65,536 combinations). That is not what was built: `tb_settle_conv_sweep.sv`
+  covers a 9x6 = 54-point grid spanning both axes' extremes and several
+  intermediate scales. This is a deliberate, documented trade — literal
+  exhaustive coverage would make the regression impractically slow for a
+  property (a hang) that manifests across a wide swath of the space, not at
+  an isolated point, which is exactly what D-1/D-2's history (section 5)
+  shows. A 54-point grid catches the same class of bug the full grid would.
+- V-2's original rationale (catching a D-3-style rounding defect specific to
+  odd/±1 differences) is now structurally moot: the current arithmetic path
+  has no shift or rounding operation anywhere to have that defect in.
+  `tb_accum_edge_cases.sv` was still built and still earns its keep as a
+  regression against reintroducing scaling, and it uses the real M=64 bound
+  for its saturating case (16320), not an arbitrary smaller stand-in.
 
 ### 10.1 Effort and ownership
 
@@ -1339,10 +1630,11 @@ verification.
 
 | Block | Owner | Delta | Status | MAS phase |
 |---|---|---|---|---|
-| Excitation generator | Krishna, Taarana | 0.8 wk | Rework | 4 |
-| Measurement FSM | Taarana | 0.6 wk | Rework | 1.2, 4 |
+| Excitation generator (digital: `excitation_ctrl.sv`) | Taarana | 0.8 wk | Rework | 1, 4 |
+| SAR controller (digital: `sar_controller.sv`) | Taarana | — | Rework | 1.2 |
+| Measurement FSM (`measurement_fsm.sv`) | Taarana | 0.6 wk | Rework | 4, 5 |
 | I/Q accumulators | Taarana | 0.5 wk | **New** | 5 |
-| Core and program | Taarana | 0.4 wk | Exists | 7 |
+| Core and program | Taarana | 0.4 wk | Exists (core); firmware rewritten | 7 |
 | SPI and regfile | Taarana | 0.3 wk | Rework | 3, 6 |
 | Wideband TIA | Krishna | 1–2 wk | Unchanged | — |
 | SAR ADC | Vidhu | 1.0 wk | Unchanged | — |
@@ -1351,6 +1643,20 @@ verification.
 Digital total ≈ **2.6 wk**, against a 2026-11-18 trial GDS. The excitation
 generator is jointly owned, which makes Phase 4 the coordination risk as well as
 the technical one.
+
+**Corrected against actual per-file history (this revision):** the original
+baseline table attributed step **1.2** (the `sar_controller.sv` bit-trial
+rewrite, section 6.6) to the "Measurement FSM" row and omitted Phase 5 from
+it entirely, even though section 6.1's own header states `measurement_fsm.sv`
+had "I/Q accumulation added in Rev 4.3 Phase 5" — its single largest rework.
+`sar_controller.sv` now has its own row (no baseline effort estimate existed
+for it separately, hence the `—` delta) rather than being folded into a
+block it never touched. The excitation generator row was also missing Phase
+1: `excitation_ctrl.sv` is the module that first exported
+`exc_drive_p_o`/`exc_drive_n_o` in Phase 1.1, before Phase 4 rewrote it again
+into the free-running design. "Core and program" is split to make clear that
+only the RV32I hardware core is unchanged from before Rev 4.3 — the Phase 7
+sweep program (`fw.c`) itself was fully rewritten, not merely reused.
 
 ### 10.2 Descope path
 
@@ -1373,8 +1679,8 @@ over SPI.
 
 ### 10.3 Open gaps
 
-**[GAP-1] Divider width — RESOLVED (counter); register encoding still open
-for Phase 6.** With `f_exc = f_clk/(16·N)` at `f_clk = 160 MHz`:
+**[GAP-1] Divider width and register encoding — RESOLVED as of Phase 6.**
+With `f_exc = f_clk/(16·N)` at `f_clk = 160 MHz`:
 
 | Target f_exc | Required N | Bits needed |
 |---|---|---|
@@ -1390,23 +1696,29 @@ bits** throughout `excitation_ctrl`, `agriasic_digital_top`, both control
 shells, and the MMIO path — the 1 kHz point is reachable today from a program
 running on the RV32I core.
 
-What Phase 4 did **not** resolve, deliberately scoped out to Phase 6: the
-byte-oriented interfaces (SPI, the parallel programming interface) still
-expose only an 8-bit write/read window onto the 14-bit register, zero-extended
-on write and truncated on read (section 7.1). This means N is reachable up to
-16383 via MMIO today, but only up to 255 via SPI until Phase 6 decides the
-register encoding:
+What Phase 4 did **not** resolve, and Phase 6 has now: the byte-oriented
+interfaces (SPI, the parallel programming interface) could only expose an
+8-bit write/read window onto the 14-bit register, capping N at 255 (39.2 kHz
+floor) — the 1 kHz point needs N=10000, 14 bits, more than one SPI byte can
+carry without widening the 2-byte protocol.
 
 | Reading | Register holds | Register width over SPI | Divider counter width |
 |---|---|---|---|
-| **Selector** | An index (0/1/2) into three preset N values | 8 bits is fine | already **14 bits** |
-| **Raw N** | N itself | needs **≥14 bits**, so two SPI bytes | already **14 bits** |
+| **Selector (chosen)** | An index (0/1/2) into three preset N values | 8 bits is fine | 14 bits |
+| Raw N (not chosen for SPI) | N itself | needs ≥14 bits, so two SPI bytes | 14 bits |
 
-The counter is no longer the open question — only the SPI-visible register
-encoding is. The selector reading is cheaper — it keeps `REG_FREQ_SEL` a
-single byte and keeps the two-byte SPI protocol untouched — and matches
-"three selectable frequencies" (section 5). **Recommend the selector encoding**
-unless arbitrary frequencies are needed for bring-up characterization.
+**Resolution: `REG_FREQ_SEL` on SPI and the parallel programming interface is
+now a 2-bit selector** (0 -> N=1/10 MHz, 1 -> N=100/100 kHz, 2 ->
+N=10000/1 kHz), translated to the internal 14-bit N combinationally — the
+only way to reach the 1 kHz point through a single SPI byte. This was the
+**only** viable choice given the "two-byte protocol unchanged" constraint in
+the baseline design doc, not a preference among equally good options.
+**RV32I MMIO keeps raw-N `REG_DIVIDER`, unrenamed, unchanged** — no
+byte-width constraint applies there, so there was nothing to resolve on that
+path (section 7.1). Both are verified: `tb_agriasic_digital_spi_top.sv`
+confirms `REG_FREQ_SEL=0` produces the same N=1 behavior the old
+`REG_DIVIDER=0` did (I=480/Q=320, unchanged), and MMIO's raw-N path is
+exercised unchanged by the RV32I end-to-end test.
 
 Settle timing is unaffected either way: `settle_cycles_i` now counts
 excitation *periods* (section 6.1), so even a modest settle value is ample
@@ -1461,12 +1773,143 @@ and `settle_cycles_i` now means excitation periods, not raw cycles (section
 is written against the divider or settle registers.
 
 **[GAP-4] Shell status outputs are unconnected** in
-`agriasic_digital_rv32i_top.sv` (`shell_busy`, `shell_done`, `shell_result`,
-`shell_clear_errors`). Open question which is authoritative for an external host.
+`agriasic_digital_rv32i_top.sv` (`shell_busy`, `shell_done`,
+`shell_result_i`/`shell_result_q` — now two signals as of Phase 5, still both
+dangling — `shell_clear_errors`). Open question which is authoritative for an
+external host.
 
 **[GAP-5] No foundry SRAM macro.** `agriasic_imem`/`agriasic_dmem` are behavioral
 models carrying the correct timing contract, with an `AGRIASIC_USE_SRAM_MACRO`
 ifdef for memory-compiler output.
+
+**[GAP-8] `agriasic_rv32i_control_shell.sv.orig` is not covered by any lint
+or build script.** Found during Phase 5 when its `cfg_exc_divider_o` port
+turned out to still be `[7:0]`, three phases after the real shell widened the
+same port to `[13:0]` (section 10, Phase 5). The port-identity constraint
+(section 4.2) is a documented standing rule, but nothing mechanical enforces
+it for this specific file — every other file in the tree gets touched by
+`verify_all.sh`, this one does not. Fixed by hand this time (widened, plus the
+Phase 5 result-port mirroring), and lint-checked manually, but the same class
+of drift can recur silently at the next interface change. **Recommend adding
+a `lint_shell_orig.sh` companion to `lint_shell.sh`** so this file is checked
+automatically going forward, or dropping it if the microsequencer descope
+path is no longer considered live enough to maintain — that's a scope
+decision for the team, not made here.
+
+**[GAP-9] Two `.orig` files are dead, undocumented code; a third is
+documented but equally unbuildable.** A full synthesizability/lint pass
+across every file in `rtl/` (not just what the regression scripts touch),
+done for this MAS revision, checked every `.orig` snapshot individually:
+
+- **`agriasic_digital_spi_top.sv.orig`** — found during Phase 5, not part of
+  any documented descope story (section 4.2 only describes the control-shell
+  alternative), referenced by no script, not mentioned anywhere else in this
+  MAS. Predates even Phase 1: still uses the old `adc_code_i`/`exc_pol_o`/
+  `result_o` interface. **Confirmed unbuildable, not just unused**: linting
+  it standalone found a genuine syntax error (`case`/`endcase` mismatch,
+  fixed as a zero-risk one-line change so the file at least parses), and
+  linting it against the *current* `agriasic_digital_top` produces three
+  `PINNOTFOUND` errors (`adc_code_i`, `exc_pol_o`, `result_o` don't exist on
+  the current module) plus eight `PINMISSING` warnings for ports it never
+  knew about. This file cannot be compiled against anything in the current
+  tree without a rewrite equivalent to recreating it from scratch.
+- **`ctrl/spi_slave.sv.orig`** — found during this same pass, same category:
+  not referenced by any script, not mentioned anywhere else in this MAS.
+  Its header describes the pre-Phase-3 SCLK-domain design ("Captures MOSI on
+  rising edges of sclk_i") that Phase 3 replaced with 2FF-oversampled
+  clk-domain logic (section 6.7) — a snapshot from before that rework, same
+  situation as the SPI top `.orig` above.
+- **`ctrl/sar_controller.sv.orig`** — different category: **documented**,
+  not silently forgotten. Section 5.3 explains its original purpose (a
+  pre-fix/post-fix comparison leg in the measurement smoke test) and that the
+  comparison it supported stopped being meaningful after the D-1/D-2 fix, and
+  became **structurally impossible** after the Phase 1 SAR bit-trial rewrite
+  (it still expects the retired `adc_code_i` port). Functionally in the same
+  dead-and-unbuildable state as the two files above, but at least a reader
+  finding it has somewhere to look for why.
+
+**Recommend deleting all three** once someone confirms none of them is
+serving as a reference snapshot the team still wants — that confirmation is
+outside the scope of what this pass could determine. If any are kept
+deliberately, say so here and in section 4.2 so the next person doesn't
+have to rediscover the same thing.
+
+**[GAP-10] `REG_PHASE_IDX` and `REG_CTRL`'s core-enable bit have no
+implemented semantics — found and deliberately left open during Phase 6.**
+Both are called for by the baseline design doc's register map (section 6 of
+`agriasic_rev43_phase_locked_design.md`), and both are reserved addresses/bits
+in the as-implemented map (section 7.1) that accept writes and read them back,
+but do nothing:
+
+- **`REG_PHASE_IDX`** ("phase index into the 16-state counter") doesn't
+  reconcile with the actual, already-verified Phase 5 architecture:
+  `measurement_fsm` samples at four FIXED, 90-degree-spaced phase points
+  (0/4/8/12) to do I/Q, and there is no scenario where a host would want
+  "one arbitrary phase" instead — that isn't what I/Q sampling means. The
+  most plausible reading is a phase *offset* that shifts all four points
+  together (e.g. `phase_index_i == (phase_offset_i + K) mod 16` for each of
+  the four targets K), useful as a calibration trim for excitation-path
+  propagation delay. That is a reasonable guess, not a specification. Get
+  confirmation of the intended semantics from whoever wrote the baseline
+  design doc before wiring this to anything — it is a small RTL change
+  (`measurement_fsm` would need one new input and four comparisons changed
+  from constants to sums) but a wrong guess is silicon-bound.
+- **`REG_CTRL`'s core-enable bit** presumes an architecture this codebase
+  doesn't have: a single chip where a host can toggle an on-die RV32I core
+  on/off via SPI. Today the RV32I-driven and SPI-driven control paths are two
+  separate, mutually exclusive top-level modules
+  (`agriasic_digital_rv32i_top` vs. `agriasic_digital_spi_top`) — the SPI top
+  has no core to enable. Either this bit targets a future unified
+  architecture not yet designed, or the baseline doc's intent needs
+  clarifying against the shells-are-alternatives reality established in
+  section 4.2.
+
+Both are safe to leave as inert placeholders indefinitely — they cost nothing
+functionally and don't block any other work — but should not be assumed to
+work by anyone reading only the register map without also reading this note.
+
+**[GAP-11] No chip variant in this tree lets a real host retrieve
+RV32I-swept results — found while implementing Phase 7, not before.**
+Phase 7's frequency sweep runs correctly and stores real per-point I/Q data
+in scratch RAM (section 10, Phase 7), but that data has no path to an
+external pin:
+
+- `agriasic_digital_rv32i_top` exposes `result_i_o`/`result_q_o` as bare
+  output pins reflecting only the LATEST single measurement's shadow
+  registers (section 6.1) — not a packed, multi-point result set — and has
+  no SPI or other host-facing protocol at all. A host watching those two
+  pins would see whichever frequency point happened to finish last, with no
+  way to tell which point it was or retrieve the other two.
+- `agriasic_digital_spi_top` has the indexed `REG_RESULT_IDX`/
+  `REG_RESULT_DATA` readout Phase 6 built specifically to serve a
+  multi-point result set (section 7.1) — but this module has no RV32I core
+  inside it and never runs the Phase 7 sweep. Its indexed readout currently
+  serves the single always-on measurement core's I/Q, the same one-point
+  data the interim Phase 5 registers served.
+
+These are two separate, never-composed top-level integrations (section 4.2's
+port-identical *shells* are two implementations of the same RV32I-core-shaped
+slot inside `agriasic_digital_rv32i_top`; they are not alternatives to
+`agriasic_digital_spi_top`, a structurally different module with no shared
+lineage). Closing this gap needs a real architecture decision, not a
+one-line fix — plausible directions, none built or chosen here:
+1. A new combined top instantiating both the RV32I core and `spi_slave`,
+   with firmware writing swept results into a register file the SPI decode
+   logic then serves — the most direct realization of what Phase 6 and
+   Phase 7 each separately assumed the other would provide.
+2. Give `agriasic_digital_rv32i_top` its own byte-serial output path (SPI or
+   otherwise) driven directly by firmware, bypassing `agriasic_digital_spi_top`
+   entirely.
+3. Treat `agriasic_digital_rv32i_top` as headless-by-design (results meant
+   for an external ADC/DAQ watching the raw pins, one measurement at a time,
+   sequenced by some other means) and scope the "3-point sweep with indexed
+   readout" requirement to the SPI-only integration path instead, dropping
+   the RV32I core from that story entirely.
+
+This does not block Phase 7/8's own verification (which correctly checks
+what each existing chip variant actually does), but it should be resolved,
+deliberately, before treating "frequency sweep" as done at the system level
+rather than the firmware level.
 
 ---
 
@@ -1490,17 +1933,29 @@ ifdef for memory-compiler output.
 | DR-014 | Excitation frequency shall be directly selectable | Free-running divider + 16-state phase counter, `f_exc = f_clk/(16·N)` exact | `tb_excitation_drive`: exact 16/80/208-cycle periods at N=1/5/13, zero drift | **[IMPL]** Phase 4 |
 | DR-015 | Drive outputs shall never both assert | break-before-make, `2'b11` structurally unreachable | `tb_excitation_drive` assertion, every cycle | **[IMPL]** Phase 1.1 |
 | DR-016 | SAR bit trials shall be performed in digital | `adc_dac_o`/`adc_comp_i` 8-trial search | `tb_sar_bit_trial`, full 0–255 sweep | **[IMPL]** Phase 1.2 |
-| DR-017 | I and Q shall be accumulated separately | two signed 16-bit accumulators | — | **[SPEC]** Phase 5 |
-| DR-018 | Core shall never read a partial sum | shadow registers on done | — | **[SPEC]** Phase 5.3 |
-| DR-019 | Result block shall be readable within 16 SPI addresses | indexed auto-incrementing readout | — | **[SPEC]** Phase 6.1 |
+| DR-017 | I and Q shall be accumulated separately | Two independent signed 16-bit accumulators (`i_acc_q`/`q_acc_q`), sampled at 4 phase indices per pair | `tb/smoke/tb_agriasic_digital_top.sv`: I=480, Q=320 from deliberately different deltas (channel-swap-proof), all 16 samples phase-matched | **[IMPL]** Phase 5 |
+| DR-018 | Host shall never read a partial sum | Shadow registers (`i_shadow_q`/`q_shadow_q`) snapshot the live accumulators only on `S_LOOP -> S_DONE`, the one cycle `busy_o` drops | Confirmed in the section 6.11 cycle trace: shadows read 0 throughout the run, change only on that one transition | **[IMPL]** Phase 5.3 |
+| DR-019 | Result block shall be readable within 16 SPI addresses | `REG_RESULT_IDX`/`REG_RESULT_DATA` indexed byte readout, auto-incrementing on data reads | SPI smoke: reads I/Q back via the index (0-3), confirms auto-increment (pointer=4 after 4 reads), confirms reserved index 4 reads 0 | **[IMPL]** Phase 6.1 (mechanism); result *data* for indices 4-12 is **[SPEC]**, and now known to need an architecture decision before it can be reached at all — see GAP-11 |
 | DR-020 | SPI shall be the only asynchronous domain, oversampled rather than run as a second clock | `sclk_i`/`cs_n_i`/`mosi_i` 2FF-synchronized in `spi_slave`; zero `always_ff` outside `clk` anywhere in the tree | grep audit + `tb_spi_domain_crossing` | **[IMPL]** Phase 3.1 |
 | DR-025 | Max SCLK shall be enforced at `f_clk/16` | Oversampling ratio itself is the enforcement mechanism, not a runtime rate check | `tb_spi_domain_crossing`: correct at exactly `f_clk/16`, corrupted below the sampling Nyquist rate | **[IMPL]** Phase 3.2 |
 | DR-021 | MISO shall be high-Z when not selected | `miso_oe_o`, registered with `cs_n_i` in the SCLK domain | `assert property (miso_oe_o == !cs_n_i)` in SPI smoke | **[IMPL]** Phase 1.3 |
 | DR-022 | External reset shall be asynchronously assertable, synchronously released | `rst_sync`, 2FF, one per chip-boundary top | `tb_rst_sync`, 4 clk-unaligned phase offsets | **[IMPL]** Phase 2.1 |
 | DR-023 | Core shall be clock-enabled off during a measurement, never clock-gated | `core_clk_en_i` on every core register; driven by the shell's start/done handshake | `tb_agriasic_rv32i_e2e` PC-hold assertion, 93% frozen, zero violations | **[IMPL]** Phase 2.2 |
 | DR-024 | Design shall use exactly one clock domain outside SPI | grep audit: every `always_ff` on `clk` or documented SPI exception | Structural grep, not simulation | **[IMPL]** Phase 2.3 |
-| DR-026 | Every sample shall be taken at the exact documented phase index, not merely within the correct half-cycle | `measurement_fsm` strobes only on an exact `phase_index_i` match | `tb/smoke/tb_agriasic_digital_top.sv` phase-match check: compares the actual phase index at request time against the expected index for every sample in a full run | **[IMPL]** Phase 4.3/4.4 |
-| DR-027 | The excitation divider shall support the full 1 kHz-10 MHz sweep range | `divider_i`/`cfg_divider_q` widened to 14 bits end-to-end (`excitation_ctrl`, `agriasic_digital_top`, both control shells, MMIO); off-by-one tick bug from the 8-bit design fixed so `divider_i` equals N exactly | `tb_excitation_drive`: exact period at N=1/5/13; MMIO path reaches N up to 16383 | **[IMPL]** Phase 4.2 (MMIO); SPI/programming interfaces still 8-bit windowed, see GAP-1 |
+| DR-026 | Every sample shall be taken at the exact documented phase index, not merely within the correct half-cycle | `measurement_fsm` strobes only on an exact `phase_index_i` match, now at 4 indices (0/4/8/12) since Phase 5, not 2 | `tb/smoke/tb_agriasic_digital_top.sv` phase-match check: compares the actual phase index at request time against the expected index for every one of 16 samples in a full 4-pair run | **[IMPL]** Phase 4.3/4.4, extended Phase 5 |
+| DR-027 | The excitation divider shall support the full 1 kHz-10 MHz sweep range | `divider_i`/`cfg_divider_q` widened to 14 bits end-to-end (`excitation_ctrl`, `agriasic_digital_top`, both control shells, MMIO); off-by-one tick bug from the 8-bit design fixed so `divider_i` equals N exactly. SPI/programming interfaces reach the full range via `REG_FREQ_SEL`'s selector encoding (Phase 6, see DR-030) | `tb_excitation_drive`: exact period at N=1/5/13; MMIO reaches N up to 16383 directly, SPI/programming reach N=1/100/10000 via the three selector values | **[IMPL]** Phase 4.2 (MMIO) + Phase 6 (SPI/programming) |
+| DR-028 | The I and Q channels shall never cross-contaminate each other's data | `sar_controller`'s D+/D− capture slots are reused for all four samples per pair; FSM sequencing (not new hardware) keeps `S_ACCUM_I` reading D(0)/D(180) before either slot is overwritten with D(90)/D(270) | Deliberately asymmetric I/Q deltas in every testbench (e.g. I=480, Q=320 — never equal) so a channel-swap or stale-slot bug would produce a numerically wrong result, not a coincidentally correct one | **[IMPL]** Phase 5 |
+| DR-029 | Both result channels shall be readable identically across every host interface | `REG_RESULT_IDX`/`REG_RESULT_DATA` indices 0-3 (SPI), bare `result_i_o`/`result_q_o` ports (parallel programming interface), `REG_RESULT_I`/`REG_RESULT_Q` (RV32I MMIO, 0x8000_0018/0x001C) | SPI smoke and RV32I e2e both independently confirm I=480/Q=320-class results read back correctly through their respective paths | **[IMPL]** Phase 5 (registers existed); Phase 6 (SPI access mechanism changed to indexed) |
+| DR-030 | The 1 kHz excitation point shall be reachable over the 2-byte SPI protocol without widening it | `REG_FREQ_SEL`, a 2-bit selector (0/1/2), translated combinationally to N (1/100/10000) — the only encoding that fits 14 bits of divider range into a 1-byte SPI write | `tb_agriasic_digital_spi_top.sv`: `REG_FREQ_SEL=0` reproduces the pre-Phase-6 N=1 behavior exactly (I=480/Q=320) | **[IMPL]** Phase 6, closes GAP-1 |
+| DR-031 | A host shall be able to identify the design/revision it is talking to | `REG_ID`, fixed `8'h43`, read-only | `tb_agriasic_digital_spi_top.sv`: reads back `0x43` | **[IMPL]** Phase 6 |
+| DR-032 | A silently-clamped M configuration shall be host-visible | `REG_STATUS` bit4 (SPI) / MMIO `REG_STATUS` bit4, set when `REG_PAIR_LOG2 > 6` is written | `tb_agriasic_digital_spi_top.sv`: sets on `PAIR_LOG2=7`, clears on a subsequent valid write | **[IMPL]** Phase 6 |
+| DR-033 | Firmware shall sweep the three real excitation frequency points and store per-point I/Q results | `fw.c`'s `run_sweep_point()` writes `REG_DIVIDER` = 1/100/10000 in sequence, averages `NUM_MEASUREMENTS` runs at each, stores to `OUT_DIV`/`OUT_I`/`OUT_Q` scratch RAM arrays | `tb_agriasic_rv32i_e2e.sv`: all three divider values, both channels, at all three points confirmed correct after a real ~3.15M-cycle run including the true N=10000 point | **[IMPL]** Phase 7.1 |
+| DR-034 | A host shall be able to identify that temperature was not sampled, rather than reading an uninitialized value as if it were real | `OUT_TEMP` sentinel, hardwired to `-1` | `tb_agriasic_rv32i_e2e.sv`/`tb_diag.sv`: confirm the sentinel is written | **[IMPL]** Phase 7.3 (the sentinel only — no temperature sensing exists, see GAP-11's header note in `fw.c`) |
+| DR-035 | The accumulator shadow-register snapshot contract (never updates while busy) shall be checked by a formal assertion, not only by inspection | `assert property (p_shadow_stable_while_busy)` in `tb/smoke/tb_agriasic_digital_top.sv` | Passes across the full 4-pair run; would fail if `i_shadow_q`/`q_shadow_q` ever changed value on any cycle `busy_o` reads 1 | **[IMPL]** Phase 8, closes V-4 |
+| DR-036 | A sample strobe shall rise only on an exact phase-index match for its own wait state, checked by a formal assertion | `assert property (p_sample_req_exact_phase_match)` in `tb/smoke/tb_agriasic_digital_top.sv`, correlating `measurement_fsm.state_q` with `exc_phase_index` at the exact rising edge of the internal `sample_req` wire | Passes across the full run; would catch a target-swap bug a weaker "matches any of the four" check could miss | **[IMPL]** Phase 8, closes V-5 |
+| DR-037 | Neither accumulator shall exceed its documented safe range at any point during a run, not just at completion | `assert property (p_i_acc_in_range)` / `p_q_acc_in_range`, bounding `i_acc_q`/`q_acc_q` to ±16320 every cycle | Passes across the full run, including the M=64 saturating edge case (`tb_accum_edge_cases.sv`) which reaches exactly that bound | **[IMPL]** Phase 8 (8.2) |
+| DR-038 | No `settle`/`conv` combination across a representative grid shall hang or produce a wrong result | `tb_settle_conv_sweep.sv`: 9 settle values × 6 conv values = 54 points, each run to completion with a timeout | 54/54 points pass; documented as a practical, non-exhaustive grid, not the literal 65,536-point sweep V-1's original wording specifies (see the Phase 8 section 10 note on why) | **[IMPL]** Phase 8, closes V-1 |
+| DR-039 | Odd, ±1, and saturating pair differences shall accumulate exactly, with no hidden rounding or truncation | `tb_accum_edge_cases.sv`: four cases including the real M=64/delta=255 saturating point (expected and measured: 16320) | All four cases pass exactly | **[IMPL]** Phase 8, closes V-2 (the original D-3-style rounding defect this item was written against is now structurally impossible — no shift/round exists in the arithmetic path — so this is regression coverage, not defect-hunting) |
 
 ---
 
@@ -1516,22 +1971,44 @@ ifdef for memory-compiler output.
 - T7 Settle-interval monotonicity and deadlock freedom **(new, D-1/D-2)**
 - T8 Drive-overlap and half-cycle symmetry assertions **[IMPL]** as of Phase 4 (structural, both properties hold for the free-running design)
 - T9 Bit-trial sequencing against an ADC behavioral model **[IMPL]** as of Phase 1 (`tb_sar_bit_trial.sv`)
-- T10 Exact phase-index match on every sample **(new, Phase 4)** — **[IMPL]**
+- T10 Exact phase-index match on every sample, all four points **(Phase 4, extended Phase 5)** — **[IMPL]**
+- T11 I/Q channel isolation against cross-contamination **(new, Phase 5)** — **[IMPL]**
+- T12 Accumulator shadow-register snapshot timing (never updates while `busy_o` is high) **(new, Phase 5)** — **[IMPL]**, now a formal `assert property` (Phase 8, closes V-4)
+- T13 Sample-strobe rise correlated with an exact phase-index match, per wait state **(new, Phase 8)** — **[IMPL]**, formal `assert property`, closes V-5
+- T14 Accumulator range bound (±16320) held at every cycle, not just at completion **(new, Phase 8)** — **[IMPL]**, formal `assert property`
+- T15 Settle × conv practical grid, no hangs or wrong results **(new, Phase 8)** — **[IMPL]**, closes V-1 (54-point grid, not the literal 65,536-point sweep — see section 10's Phase 8 note)
+- T16 Accumulator edge cases: odd, ±1, and true M=64 saturating differences **(new, Phase 8)** — **[IMPL]**, closes V-2
+- T17 Real 3-frequency-point sweep in firmware, including the true N=10000 point **(new, Phase 7)** — **[IMPL]**
 
 ### 12.2 Current collateral **[IMPL]**
-The `verify_all.sh` sweep runs nine stages, all passing:
+The `verify_all.sh` sweep runs twelve stages, all passing, in ~32 seconds of
+wall-clock time total. (Stages 1-9 have carried this numbering since Phase 3;
+stage 10 was added in a later lint/synthesizability audit pass, not tied to
+any single Rev 4.3 phase, section 10.3 GAP-8; stages 11-12 are Phase 8.)
 
 | Stage | Check | Result |
 |---|---|---|
 | 1 | Full chip lint | clean |
-| 2 | Measurement smoke | pass, result 480, phase-match checked (0 errors) |
-| 3 | SPI smoke | pass, result 480 |
+| 2 | Measurement smoke | pass, I=480/Q=320, all 16 samples phase-matched (0 errors); shadow-register, phase-match, and accumulator-range formal asserts all hold (Phase 8) |
+| 3 | SPI smoke | pass, I=480/Q=320 read back via indexed `REG_RESULT_IDX`/`REG_RESULT_DATA` (Phase 6); auto-increment, reserved-index-zero, `REG_ID`, and overrange bit all checked |
 | 4 | SAR bit-trial unit test (Phase 1) | pass, exact convergence over 0–255 |
-| 5 | Excitation free-running phase generator (Phase 4, rewritten) | pass: exact 16/80/208-cycle periods at N=1/5/13, phase-to-drive map (0-6 P, 7 dead, 8-14 N, 15 dead), `2'b11` unreachable holds |
+| 5 | Excitation free-running phase generator (Phase 4, rewritten) | pass: exact 16/80/208-cycle periods at N=1/5/13, phase-to-drive map (0-6 P, 7 dead, 8-14 N, 15 dead), `2'b11` unreachable holds, half-cycle symmetry now explicit (Phase 8: 7N/7N counted directly, not inferred) |
 | 6 | Reset synchronizer (Phase 2.1) | pass, 4 clk-unaligned phase offsets |
 | 7 | SPI clk-domain rework (Phase 3) | pass, correct at exactly `f_clk/16`, corrupted below Nyquist, clean mid-byte reframe |
-| 8 | Settle timing regression (reinterpreted for Phase 4: settle now counts excitation periods) | pass |
-| 9 | End-to-end firmware + measurement (incl. core clock enable, Phase 2.2) | pass, average 400, 93% of cycles frozen |
+| 8 | Settle timing regression (reinterpreted for Phase 4: settle now counts excitation periods; extended Phase 5 to check both channels) | pass, I=480/Q=320 at all 4 settle values |
+| 9 | End-to-end firmware + measurement (incl. core clock enable, Phase 2.2; both channels, Phase 5; real 3-point frequency sweep, Phase 7) | pass, all 3 points (N=1/100/10000) confirmed, ~3.15M cycles for the full sweep, 93% of cycles frozen |
+| 10 | Control shell descope fallback lint (`.orig`, closes GAP-8) | clean |
+| 11 | Accumulator edge cases (Phase 8, closes V-2) | pass: odd (55), +1, -1, and true M=64 saturating (16320) all exact |
+| 12 | Settle × conv grid sweep (Phase 8, closes V-1) | pass: 54/54 practical grid points, no hangs, correct results |
+
+**Phase 7 required no new testbench-modeling fix** — the sweep is pure
+firmware (`fw.c`) plus scratch-RAM address changes; the ADC behavioral model
+and excitation timing that caused the Phase 4/5 fixes were untouched.
+`tb_agriasic_rv32i_e2e.sv` and `tb_diag.sv` needed real content updates
+(new memory layout, new expected checks, a ~3.15M-cycle timeout budget for
+the real N=10000 sweep point) but no new class of bug in the fix sense — the
+tests simply needed to check the new, correct behavior instead of the
+retired single-frequency demo.
 
 **Testbench fix made necessary by Phase 4, applied to all six testbenches with
 a behavioral ADC model** (`tb/smoke/tb_agriasic_digital_top.sv`,
@@ -1541,6 +2018,25 @@ model now latches its target on `adc_sample_o` (track-and-hold) instead of
 reading `exc_drive_p_o` live every cycle — see section 10, Phase 4 for why a
 live read silently produced a wrong result (`480` expected, `204` measured)
 once excitation became free-running.
+
+**Second testbench-modeling fix made necessary by Phase 5, same six
+testbenches:** the track-and-hold model above, keyed on `exc_phase_index`,
+broke again once four phases needed distinguishing instead of two (one-cycle
+sample-accept lag inside `sar_controller` means `exc_phase_index` has already
+advanced past its nominal value by the time `adc_sample_o` fires at small N).
+Fixed by keying every model on `measurement_fsm.state_q` instead — see
+section 10, Phase 5 for the full explanation and the `SMOKE_FAIL: expected
+I=480 got=0` symptom this produced before the fix.
+
+**Phase 6 required no new testbench-modeling fix** — the register map rework
+is entirely host-facing protocol logic (SPI/programming-interface address
+decode), with no interaction with the ADC model or excitation timing that
+caused the Phase 4 and Phase 5 fixes. The one existing testbench pattern that
+did need touching was hardcoded register addresses in `tb/tb_spi_diag.sv`
+(raw `4'h5`/`4'hF` literals for what used to be `REG_STATUS`/an invalid
+address) — fixed to use the renumbered addresses, and to stop referencing
+`dut.cfg_divider_q`, which no longer exists as a stored register on the SPI
+path (`cfg_divider_w` is combinational now, derived from `cfg_freq_sel_q`).
 
 **Separately, and NOT re-run for Phase 2:** 77/77 on the rv32ui ISA suite +
 dhrystone, which needs the external CIS 5710 cocotb harness and a built
@@ -1555,28 +2051,40 @@ before treating Phase 2 as signed off.
 Style constraints: SystemVerilog, self-checking testbenches, **Icarus-compatible**
 — no vendor PLI (`$fsdbDump*`, `$vcdplus`, `$shm`) anywhere in the tree.
 
-### 12.3 Required verification additions **[SPEC]**
+### 12.3 Verification additions from the Rev 4.3 baseline — closed as of Phase 8
 
-From the Rev 4.3 baseline, section 8.1. These are specified, not yet built:
+From the Rev 4.3 baseline, section 8.1.
 
-| # | Check | Rationale |
+| # | Check | Status |
 |---|---|---|
-| V-1 | **Sweep `settle` against `conv` across the full 8-bit range** with a completion timeout on every combination | Either D-1 or D-2 would have been caught by this. Two independently programmable registers jointly determined whether the chip hung, and no single-point test exposes that |
-| V-2 | Check `result == M × (D+ − D−)` for **odd** differences, **±1** differences, and **saturating** differences | D-3 was a sign- and magnitude-dependent error; only odd and ±1 cases expose rounding-toward-negative-infinity |
-| V-3 | Superseded by Phase 4 — there is no longer a phase command to bound (section 9.3) | — |
-| V-4 | Assert the accumulator shadow register **never updates while `busy` is high** | Guarantees the core cannot read a partial sum |
-| V-5 | **Partially done:** the phase-match check in `tb/smoke/tb_agriasic_digital_top.sv` verifies this behaviorally for every sample in a real run (section 3.2, section 6.11); a formal RTL `assert property` restating it structurally is still not written | Phase-lock correctness, Phase 4 |
+| V-1 | **Sweep `settle` against `conv`** with a completion timeout on every combination | **Closed, practically not exhaustively.** `tb_settle_conv_sweep.sv`: a 9x6 = 54-point grid across both axes' extremes and several intermediate scales, not the literal 65,536-point 8-bit x 8-bit grid the original wording specifies — see the section 10 Phase 8 note on why literal exhaustive coverage isn't attempted and why this grid still catches the same class of bug D-1/D-2 were |
+| V-2 | Check `result == M × (D+ − D−)` for **odd** differences, **±1** differences, and **saturating** differences | **Closed as regression coverage, not defect-hunting.** `tb_accum_edge_cases.sv` covers all three classes, including the true M=64 saturating case (16320). The D-3-style rounding defect V-2 was originally written to catch is now structurally impossible — no shift or rounding exists anywhere in the current arithmetic path — so this guards against regression, not an open defect |
+| V-3 | Superseded by Phase 4 — there is no longer a phase command to bound (section 9.3) | Confirmed still superseded; nothing to do |
+| V-4 | Assert the accumulator shadow register never updates while `busy` is high | **Closed.** `assert property (p_shadow_stable_while_busy)` in `tb/smoke/tb_agriasic_digital_top.sv` — a real formal restatement, not just the trace-inspection evidence Phase 5 originally offered |
+| V-5 | Assert a strobe is issued only when the phase counter equals the selected index | **Closed.** `assert property (p_sample_req_exact_phase_match)`, correlating `measurement_fsm.state_q` with the exact phase-index value on the rising edge of the internal sample-request wire — a genuinely different verification angle than the existing state-transition-based phase-match check, not a restatement of it |
 
-`tb/tb_settle_timing.sv` currently covers a four-point subset of V-1 (settle ∈
-{0, 2, 5, 20} at conv = 1) plus monotonicity. **V-1 proper — the full 2D sweep —
-is the single highest-value test to add**, and is cheap: it is the test that
-turns "we fixed the two defects we found" into "no `settle`/`conv` pair hangs".
+**All five items from this section are now resolved** (three closed with new
+regression coverage, one confirmed structurally moot, one confirmed already
+superseded). This section is kept rather than deleted so the reasoning behind
+each scope decision (especially V-1's practical-grid and V-2's
+regression-not-defect-hunting framing) stays visible to whoever reads this
+next.
 
 ### 12.4 Remaining gaps
+- **GAP-11 (Phase 7 finding):** `agriasic_digital_rv32i_top` has no SPI or
+  other host-facing pins at all (confirmed by grep, zero matches) — the
+  firmware-computed sweep results in `fw.c`'s scratch RAM have no path to any
+  real external host. See section 10.3 GAP-11 for the three architectural
+  resolution options. This is the single most significant open item from
+  Phases 7-8 and should be resolved before Rev 4.3 is considered
+  integration-ready, not just simulation-clean
 - Broader randomized SPI traffic and error-recovery tests
 - Formal or lint CDC signoff evidence for the byte transport bridge
 - Reference traces not regenerated for the synchronous-SRAM core, so cycle-level
   trace comparison is unavailable
+- `OUT_TEMP` (Phase 7.3, temperature/compensation channel) remains an
+  unimplemented `-1` sentinel — no temperature sensor interface exists in the
+  current RTL to wire it to
 
 ---
 
@@ -1587,11 +2095,32 @@ turns "we fixed the two defects we found" into "no `settle`/`conv` pair hangs".
 - A3. STATUS and RESULT mirrors stay software-coherent during and after a run
 - A4. Reset and restart behavior is stable under repeated runs
 - A5. The port-identical microsequencer fallback build remains regression-clean
-- A6. For Rev 4.3 signoff: remaining **[SPEC]** rows (DR-017, DR-018,
-  DR-019 — the I/Q accumulation and indexed-readout pieces, Phases 5-6)
-  implemented, and GAP-1 (encoding half), GAP-2, GAP-6 and GAP-7 closed.
-  DR-014, DR-015, DR-016, DR-020..DR-027 are already **[IMPL]** as of Phases
-  1-4
+  — **currently unverified by automation** (GAP-8): `agriasic_rv32i_control_shell.sv.orig`
+  is checked only by hand, most recently during Phase 5 when its divider-width
+  port was found already stale. Add a dedicated lint script before treating
+  this criterion as met on an ongoing basis, not just as of this writing
+- A6. For Rev 4.3 signoff: remaining **[SPEC]** rows (DR-019's result-*data*
+  half, Phase 7) implemented, and GAP-2, GAP-6, GAP-7, GAP-8, GAP-9 and
+  GAP-10 closed. GAP-1 is fully closed as of Phase 6. DR-014..DR-018,
+  DR-020..DR-032 are already **[IMPL]** as of Phases 1-6, except GAP-10's
+  two inert placeholders (`REG_PHASE_IDX`, `REG_CTRL`'s core-enable bit),
+  which are in the register map but not covered by any DR row — they need a
+  requirement written for them, not just an implementation, once their
+  semantics are actually decided. **DR-019 is now fully closed (Phase 7):**
+  the sweep firmware in `fw.c` computes and stores I/Q results for all three
+  frequency points, verified end-to-end (section 12.2, stage 9). GAP-2,
+  GAP-6, GAP-7, GAP-8 and GAP-9 are closed as of the lint/synthesizability
+  audit and Phase 7-8 work; GAP-10 remains open by design (section 10.3) and
+  should not be closed without a real decision on `REG_PHASE_IDX`/core-enable
+  semantics
+- A7. **Verification items V-1, V-2, V-4, V-5 from section 12.3 are closed**
+  (V-3 confirmed superseded) — this criterion is met as of Phase 8
+- A8. **GAP-11 (RV32I top has no host-facing path for its own sweep results)
+  must be explicitly acknowledged and resolved, or explicitly waived, before
+  Rev 4.3 is called integration-ready.** Simulation-clean firmware that
+  computes unreachable results is not the same as a working end-to-end
+  system; this criterion exists so that distinction cannot be silently
+  dropped during signoff
 
 ---
 
@@ -1615,8 +2144,12 @@ Paths are relative to the repository root.
 | Excitation free-running phase generator regression (Phase 1 break-before-make, rewritten Phase 4 for the free-running interface) | `agriasic_digital_v2/tb/tb_excitation_drive.sv` |
 | Reset synchronizer regression (Phase 2.1) | `agriasic_digital_v2/tb/tb_rst_sync.sv` |
 | SPI clk-domain regression (Phase 3) | `agriasic_digital_v2/tb/tb_spi_domain_crossing.sv` |
-| End-to-end testbench (incl. core clock-enable monitor, Phase 2.2) | `agriasic_digital_v2/tb/tb_agriasic_rv32i_e2e.sv` |
-| Regression scripts | `agriasic_digital_v2/tb/rv32i_regression/` |
+| End-to-end testbench (incl. core clock-enable monitor, Phase 2.2; both I/Q channels, Phase 5; 3-point sweep, Phase 7) | `agriasic_digital_v2/tb/tb_agriasic_rv32i_e2e.sv` |
+| Diagnostic testbench (Phase 7 sweep timing) | `agriasic_digital_v2/tb/tb_diag.sv` |
+| Accumulator edge-case regression (Phase 8, closes V-2) | `agriasic_digital_v2/tb/tb_accum_edge_cases.sv` |
+| Settle x conv grid sweep (Phase 8, closes V-1) | `agriasic_digital_v2/tb/tb_settle_conv_sweep.sv` |
+| Shadow-register / phase-match / accumulator-range formal assertions (Phase 8, closes V-4/V-5) | `agriasic_digital_v2/tb/smoke/tb_agriasic_digital_top.sv` |
+| Regression scripts (incl. `accum_edge_cases.sh`, `settle_conv_sweep.sh`, `lint_shell_orig.sh`) | `agriasic_digital_v2/tb/rv32i_regression/` |
 | Rev 4.3 design note | `agriasic_digital_v2/docs/agriasic_rev43_phase_locked_design.md` |
 | Implementation plan | `agriasic_digital_v2/docs/agriasic_digital_implementation_plan.md` |
 | Timing checklist | `agriasic_digital_v2/docs/agriasic_digital_timing_checklist.md` |

@@ -70,7 +70,7 @@ not silently skipped: temperature sensing (Phase 7.3) has no RTL to read
 from, digital or analog, anywhere in this tree; and there is no path for
 these swept results to reach a real external host on any chip variant that
 exists today — `agriasic_digital_rv32i_top` has no host-facing interface at
-all, and `agriasic_digital_spi_top` has no RV32I core, so Phase 6's indexed
+all, and `agriasic_digital_spi_top` has no RV32IM core, so Phase 6's indexed
 readout and Phase 7's sweep have never been connected to each other
 (**GAP-11**). Verification (Phase 8) closed four of five outstanding plan
 items with real, run regression coverage: a practical settle x conv grid
@@ -292,7 +292,7 @@ In scope:
 - SPI slave and SPI protocol wrapper behavior
 - register map, status/error semantics, and protocol framing
 - reset, busy/done, and result observability contracts
-- the RV32I policy shell and its port-compatible microsequencer fallback
+- the RV32IM policy shell and its port-compatible microsequencer fallback
 
 Out of scope for this MAS revision:
 - analog circuit implementation details
@@ -343,7 +343,7 @@ the right half-cycle."
 | Loop | Period | Nature | Owner |
 |---|---|---|---|
 | Inner | 100 ns at 10 MHz excitation | Hard real-time: phase strobe, 8 bit trials, signed accumulate | measurement_fsm (always hardware) |
-| Outer | 10–100 ms | Soft: frequency selection, settle intervals, M, temperature, result packing, SPI | RV32I core |
+| Outer | 10–100 ms | Soft: frequency selection, settle intervals, M, temperature, result packing, SPI | RV32IM core |
 
 **Software decides policy; hardware keeps time.** The FSM never gets a program
 counter. Two reasons this partition is not negotiable:
@@ -408,7 +408,7 @@ running in parallel with the core.
 
 Functional split as implemented:
 
-1. **RV32I core + ROM** — sweep program, frequency selection, settle
+1. **RV32IM core + ROM** — sweep program, frequency selection, settle
    intervals, M, temperature read, result packing, SPI service, sticky error
    and reset policy. The frequency **sweep** (three points) and temperature
    read are still `[SPEC]`, Phase 7 — today firmware sets one divider value
@@ -1092,7 +1092,7 @@ there is nothing to keep in sync), and `excitation_ctrl` never knows the
 difference. **This is the only way to reach 1 kHz through a single SPI byte
 without changing the framing.** The three preset N values (1, 100, 10000) are
 exact for the "roughly 1 kHz, 100 kHz, 10 MHz" points the baseline design doc
-specifies, at `f_clk = 160 MHz` (the same table GAP-1 derived). RV32I MMIO
+specifies, at `f_clk = 160 MHz` (the same table GAP-1 derived). RV32IM MMIO
 keeps its own register **named `REG_DIVIDER`, not renamed** — it takes raw N
 directly (`agriasic_rv32i_mmio.sv`, 0x8000_000C) because native 32-bit
 MMIO writes have no byte-framing constraint to work around; giving it the
@@ -1112,7 +1112,7 @@ probing the documented map doesn't get an unexpected NACK), but:
   honest no-op. See GAP-10.
 - A **core-enable** bit in `REG_CTRL` doesn't have an obvious home in the
   current architecture either: `agriasic_digital_spi_top` (where `REG_CTRL`
-  lives) has no RV32I core to enable — the RV32I core only exists in the
+  lives) has no RV32IM core to enable — the RV32IM core only exists in the
   separate `agriasic_digital_rv32i_top`, and the two are alternative,
   mutually exclusive integrations today, not one chip where a host can
   toggle between them at runtime. This bit presumably targets some future
@@ -1461,13 +1461,13 @@ mechanism did.
 | 5.2 | Sample and accumulate at all four phase indices: 0°/180° → I, 90°/270° → Q | **Done.** `S_WAIT_0/90/180/270` + `S_SAMPLE_0/90/180/270` + `S_ACCUM_I`/`S_ACCUM_Q` (section 6.1). `sar_controller`'s D+/D− slots are reused unmodified as generic per-sample storage — no new hardware there |
 | 5.3 | Shadow registers snapshot on `done` so the host never reads a partial sum | **Done.** `i_shadow_q`/`q_shadow_q` latch only on the `S_LOOP -> S_DONE` transition — the first time this contract (section 9.3) has actually been implemented, not just specified |
 | 5.4 | M ≤ 64 — already enforced | **Unchanged, reverified.** Same `pair_target` clamp as Phase 1-4; applies independently to both channels |
-| 5.5 | Expose both channels on every host interface | **Done, ahead of Phase 6's indexed scheme.** Four direct registers (`REG_RESULT_I_LO/HI`, `REG_RESULT_Q_LO/HI`) added to SPI (0x6-0x9), the parallel programming interface (bare ports), and RV32I MMIO (`REG_RESULT_I`/`REG_RESULT_Q`, 0x8000_0018/0x8000_001C) — see section 7.1's note on why this is an interim layout, not the Phase 6 target |
+| 5.5 | Expose both channels on every host interface | **Done, ahead of Phase 6's indexed scheme.** Four direct registers (`REG_RESULT_I_LO/HI`, `REG_RESULT_Q_LO/HI`) added to SPI (0x6-0x9), the parallel programming interface (bare ports), and RV32IM MMIO (`REG_RESULT_I`/`REG_RESULT_Q`, 0x8000_0018/0x8000_001C) — see section 7.1's note on why this is an interim layout, not the Phase 6 target |
 
 **Exit criterion met:** the 9-stage regression sweep is green with the
 dual-accumulator FSM integrated everywhere — measurement smoke (I=480, Q=320,
 all 16 samples phase-matched), SPI smoke (same values read back over SPI),
 settle timing regression (both channels checked at 4 settle values), and the
-RV32I end-to-end firmware test (`fw.c` reads both `REG_RESULT_I`/
+RV32IM end-to-end firmware test (`fw.c` reads both `REG_RESULT_I`/
 `REG_RESULT_Q` and writes `OUT_AVERAGE`/`OUT_AVERAGE_Q` and
 `OUT_SAMPLES`/`OUT_SAMPLES_Q` to scratch RAM, all verified bit-exact across 4
 real measurements).
@@ -1524,7 +1524,7 @@ touched when the width changed).
 |---|---|---|
 | 6.1 | `REG_RESULT_IDX` (auto-incrementing) + `REG_RESULT_DATA`, replacing Phase 5's direct `REG_RESULT_I/Q_LO/HI` | **Done.** 4-bit pointer, auto-increments on `REG_RESULT_DATA` reads only, wraps naturally at 16. Indices 0-3 serve real I/Q; 4-15 read as 0 (section 7.1) |
 | 6.2 | Six 16-bit accumulators (3 frequencies × I/Q) plus temperature | **Not done, correctly deferred.** This is *data* Phase 7's sweep would produce, not a register-map mechanism — building storage for values nothing generates yet was judged premature. The mechanism that will serve that data once it exists (6.1) is built and tested now |
-| 6.3 | Frequency-selection register encoding: selector index vs. raw N (GAP-1's remaining half) | **Done.** SPI and the parallel programming interface both got a 2-bit `REG_FREQ_SEL`/`CFG_FREQ_SEL` selector (0/1/2 -> N=1/100/10000); RV32I MMIO keeps raw-N `REG_DIVIDER` unchanged, since it has no byte-width constraint forcing a selector — see section 7.1 for why the two interfaces deliberately use different registers rather than one name with two meanings |
+| 6.3 | Frequency-selection register encoding: selector index vs. raw N (GAP-1's remaining half) | **Done.** SPI and the parallel programming interface both got a 2-bit `REG_FREQ_SEL`/`CFG_FREQ_SEL` selector (0/1/2 -> N=1/100/10000); RV32IM MMIO keeps raw-N `REG_DIVIDER` unchanged, since it has no byte-width constraint forcing a selector — see section 7.1 for why the two interfaces deliberately use different registers rather than one name with two meanings |
 
 **Two items beyond the original three-step plan were added and then
 deliberately left unresolved, not silently skipped:**
@@ -1532,7 +1532,7 @@ deliberately left unresolved, not silently skipped:**
 1. **`REG_ID`** (0x9, fixed `8'h43`) and **`REG_STATUS`'s overrange bit**
    (bit4, set when `REG_PAIR_LOG2 > 6` is written and silently clamped to
    M=64) — both unambiguous, cheap, and implemented on the SPI path; the
-   overrange bit is mirrored on RV32I MMIO's `REG_STATUS` too (same bit
+   overrange bit is mirrored on RV32IM MMIO's `REG_STATUS` too (same bit
    position, different address). Both are real, verified features that
    weren't in the original three-step Phase 6 plan but were straightforward
    enough to add without the same ambiguity risk as the two items below.
@@ -1577,7 +1577,7 @@ the expected numbers (D-3: 240→480; Phase 4: cycle counts; Phase 5: added Q).
 verify the new layout end to end.
 
 **GAP-11, found while implementing this, not before:** the ADC model in
-every RV32I-path testbench is frequency-invariant (keyed on FSM state, not
+every RV32IM-path testbench is frequency-invariant (keyed on FSM state, not
 real analog response — section 6.11), so all three sweep points correctly
 produce identical I/Q numbers in simulation; that is the expected result of
 *this* test, not a sign the sweep mechanism doesn't work — what it proves is
@@ -1586,7 +1586,7 @@ and averages correctly, and results land in the right per-point slots. What
 it can *not* prove, because no chip variant in this tree makes it possible to
 prove, is that a real external host can ever retrieve these swept results:
 `agriasic_digital_rv32i_top` has no SPI (or any other) pin-level interface,
-and `agriasic_digital_spi_top` has no RV32I core. See GAP-11 (section 10.3)
+and `agriasic_digital_spi_top` has no RV32IM core. See GAP-11 (section 10.3)
 for the full reasoning and the architectural options for closing it.
 
 ### Phase 8 — Verification and signoff ✅ complete (8.1/8.2 with real coverage; 8.3 partial)
@@ -1655,7 +1655,7 @@ block it never touched. The excitation generator row was also missing Phase
 1: `excitation_ctrl.sv` is the module that first exported
 `exc_drive_p_o`/`exc_drive_n_o` in Phase 1.1, before Phase 4 rewrote it again
 into the free-running design. "Core and program" is split to make clear that
-only the RV32I hardware core is unchanged from before Rev 4.3 — the Phase 7
+only the RV32IM hardware core is unchanged from before Rev 4.3 — the Phase 7
 sweep program (`fw.c`) itself was fully rewritten, not merely reused.
 
 ### 10.2 Descope path
@@ -1694,7 +1694,7 @@ information since the `1/w` term is strongest at low frequency, was
 unreachable. **As of Phase 4, the divider counter and its compare are 14
 bits** throughout `excitation_ctrl`, `agriasic_digital_top`, both control
 shells, and the MMIO path — the 1 kHz point is reachable today from a program
-running on the RV32I core.
+running on the RV32IM core.
 
 What Phase 4 did **not** resolve, and Phase 6 has now: the byte-oriented
 interfaces (SPI, the parallel programming interface) could only expose an
@@ -1713,12 +1713,12 @@ N=10000/1 kHz), translated to the internal 14-bit N combinationally — the
 only way to reach the 1 kHz point through a single SPI byte. This was the
 **only** viable choice given the "two-byte protocol unchanged" constraint in
 the baseline design doc, not a preference among equally good options.
-**RV32I MMIO keeps raw-N `REG_DIVIDER`, unrenamed, unchanged** — no
+**RV32IM MMIO keeps raw-N `REG_DIVIDER`, unrenamed, unchanged** — no
 byte-width constraint applies there, so there was nothing to resolve on that
 path (section 7.1). Both are verified: `tb_agriasic_digital_spi_top.sv`
 confirms `REG_FREQ_SEL=0` produces the same N=1 behavior the old
 `REG_DIVIDER=0` did (I=480/Q=320, unchanged), and MMIO's raw-N path is
-exercised unchanged by the RV32I end-to-end test.
+exercised unchanged by the RV32IM end-to-end test.
 
 Settle timing is unaffected either way: `settle_cycles_i` now counts
 excitation *periods* (section 6.1), so even a modest settle value is ample
@@ -1855,8 +1855,8 @@ but do nothing:
   (`measurement_fsm` would need one new input and four comparisons changed
   from constants to sums) but a wrong guess is silicon-bound.
 - **`REG_CTRL`'s core-enable bit** presumes an architecture this codebase
-  doesn't have: a single chip where a host can toggle an on-die RV32I core
-  on/off via SPI. Today the RV32I-driven and SPI-driven control paths are two
+  doesn't have: a single chip where a host can toggle an on-die RV32IM core
+  on/off via SPI. Today the RV32IM-driven and SPI-driven control paths are two
   separate, mutually exclusive top-level modules
   (`agriasic_digital_rv32i_top` vs. `agriasic_digital_spi_top`) — the SPI top
   has no core to enable. Either this bit targets a future unified
@@ -1869,7 +1869,7 @@ functionally and don't block any other work — but should not be assumed to
 work by anyone reading only the register map without also reading this note.
 
 **[GAP-11] No chip variant in this tree lets a real host retrieve
-RV32I-swept results — found while implementing Phase 7, not before.**
+RV32IM-swept results — found while implementing Phase 7, not before.**
 Phase 7's frequency sweep runs correctly and stores real per-point I/Q data
 in scratch RAM (section 10, Phase 7), but that data has no path to an
 external pin:
@@ -1882,18 +1882,18 @@ external pin:
   way to tell which point it was or retrieve the other two.
 - `agriasic_digital_spi_top` has the indexed `REG_RESULT_IDX`/
   `REG_RESULT_DATA` readout Phase 6 built specifically to serve a
-  multi-point result set (section 7.1) — but this module has no RV32I core
+  multi-point result set (section 7.1) — but this module has no RV32IM core
   inside it and never runs the Phase 7 sweep. Its indexed readout currently
   serves the single always-on measurement core's I/Q, the same one-point
   data the interim Phase 5 registers served.
 
 These are two separate, never-composed top-level integrations (section 4.2's
-port-identical *shells* are two implementations of the same RV32I-core-shaped
+port-identical *shells* are two implementations of the same RV32IM-core-shaped
 slot inside `agriasic_digital_rv32i_top`; they are not alternatives to
 `agriasic_digital_spi_top`, a structurally different module with no shared
 lineage). Closing this gap needs a real architecture decision, not a
 one-line fix — plausible directions, none built or chosen here:
-1. A new combined top instantiating both the RV32I core and `spi_slave`,
+1. A new combined top instantiating both the RV32IM core and `spi_slave`,
    with firmware writing swept results into a register file the SPI decode
    logic then serves — the most direct realization of what Phase 6 and
    Phase 7 each separately assumed the other would provide.
@@ -1904,7 +1904,7 @@ one-line fix — plausible directions, none built or chosen here:
    for an external ADC/DAQ watching the raw pins, one measurement at a time,
    sequenced by some other means) and scope the "3-point sweep with indexed
    readout" requirement to the SPI-only integration path instead, dropping
-   the RV32I core from that story entirely.
+   the RV32IM core from that story entirely.
 
 This does not block Phase 7/8's own verification (which correctly checks
 what each existing chip variant actually does), but it should be resolved,
@@ -1945,7 +1945,7 @@ rather than the firmware level.
 | DR-026 | Every sample shall be taken at the exact documented phase index, not merely within the correct half-cycle | `measurement_fsm` strobes only on an exact `phase_index_i` match, now at 4 indices (0/4/8/12) since Phase 5, not 2 | `tb/smoke/tb_agriasic_digital_top.sv` phase-match check: compares the actual phase index at request time against the expected index for every one of 16 samples in a full 4-pair run | **[IMPL]** Phase 4.3/4.4, extended Phase 5 |
 | DR-027 | The excitation divider shall support the full 1 kHz-10 MHz sweep range | `divider_i`/`cfg_divider_q` widened to 14 bits end-to-end (`excitation_ctrl`, `agriasic_digital_top`, both control shells, MMIO); off-by-one tick bug from the 8-bit design fixed so `divider_i` equals N exactly. SPI/programming interfaces reach the full range via `REG_FREQ_SEL`'s selector encoding (Phase 6, see DR-030) | `tb_excitation_drive`: exact period at N=1/5/13; MMIO reaches N up to 16383 directly, SPI/programming reach N=1/100/10000 via the three selector values | **[IMPL]** Phase 4.2 (MMIO) + Phase 6 (SPI/programming) |
 | DR-028 | The I and Q channels shall never cross-contaminate each other's data | `sar_controller`'s D+/D− capture slots are reused for all four samples per pair; FSM sequencing (not new hardware) keeps `S_ACCUM_I` reading D(0)/D(180) before either slot is overwritten with D(90)/D(270) | Deliberately asymmetric I/Q deltas in every testbench (e.g. I=480, Q=320 — never equal) so a channel-swap or stale-slot bug would produce a numerically wrong result, not a coincidentally correct one | **[IMPL]** Phase 5 |
-| DR-029 | Both result channels shall be readable identically across every host interface | `REG_RESULT_IDX`/`REG_RESULT_DATA` indices 0-3 (SPI), bare `result_i_o`/`result_q_o` ports (parallel programming interface), `REG_RESULT_I`/`REG_RESULT_Q` (RV32I MMIO, 0x8000_0018/0x001C) | SPI smoke and RV32I e2e both independently confirm I=480/Q=320-class results read back correctly through their respective paths | **[IMPL]** Phase 5 (registers existed); Phase 6 (SPI access mechanism changed to indexed) |
+| DR-029 | Both result channels shall be readable identically across every host interface | `REG_RESULT_IDX`/`REG_RESULT_DATA` indices 0-3 (SPI), bare `result_i_o`/`result_q_o` ports (parallel programming interface), `REG_RESULT_I`/`REG_RESULT_Q` (RV32IM MMIO, 0x8000_0018/0x001C) | SPI smoke and RV32IM e2e both independently confirm I=480/Q=320-class results read back correctly through their respective paths | **[IMPL]** Phase 5 (registers existed); Phase 6 (SPI access mechanism changed to indexed) |
 | DR-030 | The 1 kHz excitation point shall be reachable over the 2-byte SPI protocol without widening it | `REG_FREQ_SEL`, a 2-bit selector (0/1/2), translated combinationally to N (1/100/10000) — the only encoding that fits 14 bits of divider range into a 1-byte SPI write | `tb_agriasic_digital_spi_top.sv`: `REG_FREQ_SEL=0` reproduces the pre-Phase-6 N=1 behavior exactly (I=480/Q=320) | **[IMPL]** Phase 6, closes GAP-1 |
 | DR-031 | A host shall be able to identify the design/revision it is talking to | `REG_ID`, fixed `8'h43`, read-only | `tb_agriasic_digital_spi_top.sv`: reads back `0x43` | **[IMPL]** Phase 6 |
 | DR-032 | A silently-clamped M configuration shall be host-visible | `REG_STATUS` bit4 (SPI) / MMIO `REG_STATUS` bit4, set when `REG_PAIR_LOG2 > 6` is written | `tb_agriasic_digital_spi_top.sv`: sets on `PAIR_LOG2=7`, clears on a subsequent valid write | **[IMPL]** Phase 6 |
@@ -2115,7 +2115,7 @@ next.
   semantics
 - A7. **Verification items V-1, V-2, V-4, V-5 from section 12.3 are closed**
   (V-3 confirmed superseded) — this criterion is met as of Phase 8
-- A8. **GAP-11 (RV32I top has no host-facing path for its own sweep results)
+- A8. **GAP-11 (RV32IM top has no host-facing path for its own sweep results)
   must be explicitly acknowledged and resolved, or explicitly waived, before
   Rev 4.3 is called integration-ready.** Simulation-clean firmware that
   computes unreachable results is not the same as a working end-to-end
@@ -2130,7 +2130,7 @@ Paths are relative to the repository root.
 
 | Artifact | Path |
 |---|---|
-| RV32I chip top | `agriasic_digital_v2/rtl/agriasic_digital_rv32i_top.sv` |
+| RV32IM chip top | `agriasic_digital_v2/rtl/agriasic_digital_rv32i_top.sv` |
 | SPI top | `agriasic_digital_v2/rtl/agriasic_digital_spi_top.sv` |
 | Measurement top | `agriasic_digital_v2/rtl/agriasic_digital_top.sv` |
 | Control shells | `agriasic_digital_v2/rtl/agriasic_rv32i_control_shell.sv{,.orig}` |

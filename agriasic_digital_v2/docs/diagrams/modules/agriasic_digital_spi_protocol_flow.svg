@@ -18,14 +18,14 @@
   <rect x="220" y="460" width="980" height="380" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="280" y="545" font-family="Arial" font-size="30" font-weight="700" fill="#ffffff">Incoming SPI stream</text>
   <text x="280" y="590" font-family="Arial" font-size="20" fill="#ffffff">Byte0: cmd [RW|ADDR|RSV]</text>
-  <text x="280" y="625" font-family="Arial" font-size="20" fill="#ffffff">Byte1: data or dummy</text>
+  <text x="280" y="625" font-family="Arial" font-size="20" fill="#ffffff">Byte1: data (write) or dummy (read) -- always consumed</text>
 
   <rect x="1420" y="420" width="1160" height="460" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
   <text x="1480" y="505" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Command checks</text>
   <text x="1480" y="550" font-family="Arial" font-size="20" fill="#212121">1) reserved bits [2:0] must be 0</text>
-  <text x="1480" y="585" font-family="Arial" font-size="20" fill="#212121">2) address must be in 0x0..0x7</text>
+  <text x="1480" y="585" font-family="Arial" font-size="20" fill="#212121">2) address must be in 0x0..0x9</text>
   <text x="1480" y="620" font-family="Arial" font-size="20" fill="#212121">3) write to RO regs rejected</text>
-  <text x="1480" y="655" font-family="Arial" font-size="20" fill="#212121">4) CTRL bit7 clears sticky errors</text>
+  <text x="1480" y="655" font-family="Arial" font-size="20" fill="#212121">4) CTRL bit7 clears sticky errors; a READ enters the drop state so its dummy byte is never decoded as a command</text>
 
   <rect x="2820" y="420" width="960" height="460" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
   <text x="2880" y="505" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Response byte mux</text>

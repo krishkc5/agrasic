@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
   <title id="t">agriasic_digital_top module block diagram</title>
-  <desc id="d">Detailed top-level digital module diagram with excitation control, SAR controller, and measurement FSM connectivity.</desc>
+  <desc id="d">Rev 4.3 top-level digital integration: a free-running excitation generator exports phase_index and period_tick to the measurement FSM, which strobes samples at four phase points and delegates eight SAR bit trials per sample to sar_controller over adc_dac and adc_comp. Results accumulate into separate I and Q channels.</desc>
   <defs>
     <marker id="a1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker>
     <marker id="a2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#64B5F6" stroke-width="1.5"/></marker>
@@ -9,68 +9,113 @@
   </defs>
   <rect width="5000" height="3000" fill="#fff"/>
   <text x="120" y="90" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Module: agriasic_digital_top</text>
+  <text x="120" y="136" font-family="Arial" font-size="22" fill="#616161">Rev 4.3 -- redrawn. Excitation is free-running and exports phase; SAR bit trials moved into digital; I and Q accumulated separately.</text>
 
   <rect x="80" y="180" width="4840" height="2740" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
-  <text x="120" y="235" font-family="Arial" font-size="22" font-weight="700" fill="#212121">Integration shell for measurement datapath and control handshakes</text>
+  <text x="120" y="235" font-family="Arial" font-size="22" font-weight="700" fill="#212121">Integration shell for the phase-locked measurement datapath</text>
 
-  <rect x="340" y="460" width="900" height="260" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
-  <text x="390" y="540" font-family="Arial" font-size="28" font-weight="700" fill="#fff">Top-level inputs</text>
-  <text x="390" y="585" font-family="Arial" font-size="19" fill="#fff">clk, rst_n, start, adc_code_i</text>
-  <text x="390" y="620" font-family="Arial" font-size="19" fill="#fff">cfg_pair_log2, cfg_settle, cfg_div, cfg_conv</text>
+  <rect x="340" y="440" width="980" height="360" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="390" y="510" font-family="Arial" font-size="28" font-weight="700" fill="#fff">Top-level inputs</text>
+  <text x="390" y="556" font-family="Arial" font-size="19" fill="#fff">clk, rst_n, start</text>
+  <text x="390" y="592" font-family="Arial" font-size="19" fill="#fff">cfg_pair_log2, cfg_settle_cycles</text>
+  <text x="390" y="628" font-family="Arial" font-size="19" fill="#fff">cfg_exc_divider [13:0]</text>
+  <text x="390" y="664" font-family="Arial" font-size="19" fill="#fff">cfg_conv_cycles</text>
+  <text x="390" y="700" font-family="Arial" font-size="19" fill="#fff">adc_comp_i   (from analog comparator)</text>
+  <text x="390" y="748" font-family="Arial" font-size="17" fill="#BDBDBD">cfg_settle counts excitation PERIODS, not core cycles</text>
 
-  <rect x="1480" y="470" width="980" height="340" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1530" y="555" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_measurement_fsm</text>
-  <text x="1530" y="600" font-family="Arial" font-size="20" fill="#212121">measurement_fsm.sv</text>
-  <text x="1530" y="635" font-family="Arial" font-size="18" fill="#212121">state sequencing, pair loop, accumulation</text>
-  <text x="1530" y="668" font-family="Arial" font-size="18" fill="#212121">exc_set_phase, sample_req, sample_phase</text>
+  <rect x="1560" y="420" width="1080" height="340" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1610" y="500" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_excitation_ctrl</text>
+  <text x="1610" y="544" font-family="Arial" font-size="20" fill="#212121">excitation_ctrl.sv</text>
+  <text x="1610" y="586" font-family="Arial" font-size="18" fill="#212121">free-running divider + 16-state phase counter</text>
+  <text x="1610" y="620" font-family="Arial" font-size="18" fill="#212121">f_exc = f_clk / (16 * N),  N is 14-bit</text>
+  <text x="1610" y="654" font-family="Arial" font-size="18" fill="#212121">drive_p_o / drive_n_o  (differential)</text>
+  <text x="1610" y="694" font-family="Arial" font-size="18" font-weight="700" fill="#4A148C">never commanded -- it only reports</text>
 
-  <rect x="1480" y="980" width="980" height="320" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1530" y="1065" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_excitation_ctrl</text>
-  <text x="1530" y="1110" font-family="Arial" font-size="20" fill="#212121">excitation_ctrl.sv</text>
-  <text x="1530" y="1145" font-family="Arial" font-size="18" fill="#212121">phase set, divider tick, settle_done</text>
+  <rect x="1560" y="920" width="1080" height="460" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1610" y="1000" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_measurement_fsm</text>
+  <text x="1610" y="1044" font-family="Arial" font-size="20" fill="#212121">measurement_fsm.sv</text>
+  <text x="1610" y="1086" font-family="Arial" font-size="18" fill="#212121">14 states, phase-index compare then strobe</text>
+  <text x="1610" y="1120" font-family="Arial" font-size="18" fill="#212121">samples at index 0, 4, 8, 12 = 0/90/180/270 deg</text>
+  <text x="1610" y="1154" font-family="Arial" font-size="18" fill="#212121">I = D(0) - D(180),   Q = D(90) - D(270)</text>
+  <text x="1610" y="1188" font-family="Arial" font-size="18" fill="#212121">i_acc_q / q_acc_q -- two signed 16-bit, raw diffs</text>
+  <text x="1610" y="1222" font-family="Arial" font-size="18" fill="#212121">i_shadow_q / q_shadow_q -- snapshot on done</text>
+  <text x="1610" y="1256" font-family="Arial" font-size="18" fill="#212121">M = 2^cfg_pair_log2 pairs, four samples per pair</text>
+  <text x="1610" y="1330" font-family="Arial" font-size="17" fill="#616161">owns all cycle-accurate timing</text>
 
-  <rect x="1480" y="1470" width="980" height="320" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
-  <text x="1530" y="1555" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_sar_controller</text>
-  <text x="1530" y="1600" font-family="Arial" font-size="20" fill="#212121">sar_controller.sv</text>
-  <text x="1530" y="1635" font-family="Arial" font-size="18" fill="#212121">conv_start pulse, conversion latency, D+/D- capture</text>
+  <rect x="1560" y="1540" width="1080" height="400" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <text x="1610" y="1620" font-family="Arial" font-size="30" font-weight="700" fill="#212121">u_sar_controller</text>
+  <text x="1610" y="1664" font-family="Arial" font-size="20" fill="#212121">sar_controller.sv</text>
+  <text x="1610" y="1706" font-family="Arial" font-size="18" fill="#212121">8 bit trials per sample, MSB first</text>
+  <text x="1610" y="1740" font-family="Arial" font-size="18" fill="#212121">S_IDLE / S_TRIAL_SET / S_TRIAL_WAIT</text>
+  <text x="1610" y="1774" font-family="Arial" font-size="18" fill="#212121">cfg_conv = regeneration wait PER TRIAL</text>
+  <text x="1610" y="1808" font-family="Arial" font-size="18" fill="#212121">captures the settled code into D+ or D-</text>
+  <text x="1610" y="1878" font-family="Arial" font-size="17" fill="#616161">the ADC holds no SAR logic of its own</text>
 
-  <rect x="2860" y="860" width="1460" height="540" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
-  <text x="2920" y="940" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Top-level outputs</text>
-  <text x="2920" y="990" font-family="Arial" font-size="20" fill="#212121">conv_start_o, exc_pol_o, busy_o, done_o, result_o</text>
-  <text x="2920" y="1030" font-family="Arial" font-size="20" fill="#212121">interfaces to analog boundary + host status path</text>
+  <rect x="3020" y="860" width="1500" height="700" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
+  <text x="3080" y="936" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Top-level outputs</text>
+  <text x="3080" y="990" font-family="Arial" font-size="20" fill="#212121">exc_drive_p_o, exc_drive_n_o</text>
+  <text x="3080" y="1030" font-family="Arial" font-size="20" fill="#212121">adc_enable_o, adc_sample_o</text>
+  <text x="3080" y="1070" font-family="Arial" font-size="20" fill="#212121">adc_dac_o [7:0], conv_start_o</text>
+  <text x="3080" y="1110" font-family="Arial" font-size="20" fill="#212121">busy_o, done_o</text>
+  <text x="3080" y="1150" font-family="Arial" font-size="20" fill="#212121">result_i_o [15:0] signed</text>
+  <text x="3080" y="1190" font-family="Arial" font-size="20" fill="#212121">result_q_o [15:0] signed</text>
+  <text x="3080" y="1258" font-family="Arial" font-size="18" fill="#616161">adc_* pins face the analog boundary;</text>
+  <text x="3080" y="1292" font-family="Arial" font-size="18" fill="#616161">result_* face the host and core paths.</text>
+  <text x="3080" y="1360" font-family="Arial" font-size="18" fill="#616161">Results are raw signed sums with no</text>
+  <text x="3080" y="1394" font-family="Arial" font-size="18" fill="#616161">on-die scaling -- the /2 of earlier</text>
+  <text x="3080" y="1428" font-family="Arial" font-size="18" fill="#616161">revisions is gone.</text>
 
-  <path d="M1240,560 L1480,560" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
-  <text x="1260" y="535" font-family="Arial" font-size="17" fill="#212121">cfg_pair_log2</text>
-  <path d="M1240,630 L2000,630 L2000,980" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
-  <text x="1260" y="606" font-family="Arial" font-size="17" fill="#212121">cfg_settle/cfg_div</text>
-  <path d="M1240,680 L2100,680 L2100,1470" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
-  <text x="1260" y="704" font-family="Arial" font-size="17" fill="#212121">cfg_conv</text>
+  <path d="M1320,520 L1556,520" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
+  <text x="1340" y="500" font-family="Arial" font-size="17" fill="#212121">cfg_exc_divider</text>
 
-  <path d="M2460,620 L2860,620 L2860,980" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#a2)"/>
-  <text x="2485" y="595" font-family="Arial" font-size="17" fill="#212121">exc_set_phase, sample_req</text>
-  <path d="M2460,1080 L1480,1080" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#a2)"/>
-  <text x="2050" y="1055" font-family="Arial" font-size="17" fill="#212121">settled_i</text>
+  <path d="M1320,596 L1450,596 L1450,1010 L1556,1010" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
+  <text x="1180" y="880" font-family="Arial" font-size="17" fill="#212121">cfg_pair_log2</text>
+  <text x="1180" y="908" font-family="Arial" font-size="17" fill="#212121">cfg_settle</text>
 
-  <path d="M2460,1630 L2860,1630 L2860,1120" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
-  <text x="2485" y="1605" font-family="Arial" font-size="17" fill="#212121">D+/D- and sample_done</text>
-  <path d="M2460,1560 L2860,1560 L2860,920" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
-  <text x="2485" y="1535" font-family="Arial" font-size="17" fill="#212121">conv_start_o</text>
+  <path d="M1320,656 L1396,656 L1396,1660 L1556,1660" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" fill="none" marker-end="url(#a3)"/>
+  <text x="1150" y="1560" font-family="Arial" font-size="17" fill="#212121">cfg_conv</text>
 
-  <path d="M2460,560 L2860,560 L2860,1060" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#a2)"/>
-  <text x="2485" y="535" font-family="Arial" font-size="17" fill="#212121">busy_o/done_o/result_o</text>
+  <path d="M1320,716 L1360,716 L1360,1790 L1556,1790" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text x="1130" y="1860" font-family="Arial" font-size="17" fill="#212121">adc_comp_i</text>
 
-  <rect x="340" y="2100" width="3980" height="640" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
-  <text x="390" y="2185" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior summary</text>
-  <text x="390" y="2235" font-family="Arial" font-size="20" fill="#212121">1) FSM commands phase changes and sample requests.</text>
-  <text x="390" y="2275" font-family="Arial" font-size="20" fill="#212121">2) Excitation block qualifies settle timing before each sample.</text>
-  <text x="390" y="2315" font-family="Arial" font-size="20" fill="#212121">3) SAR block captures ADC code into D+ or D- after programmable conversion delay.</text>
-  <text x="390" y="2355" font-family="Arial" font-size="20" fill="#212121">4) FSM accumulates (D+ - D-) / 2 for 2^cfg_pair_log2 pairs and raises done.</text>
-  <text x="390" y="2395" font-family="Arial" font-size="20" fill="#212121">5) Outputs provide host-observable progress and result handoff.</text>
+  <path d="M2100,760 L2100,916" stroke="#7B1FA2" stroke-width="4" fill="none" marker-end="url(#a3)"/>
+  <text x="2140" y="820" font-family="Arial" font-size="20" font-weight="700" fill="#4A148C">phase_index [3:0]</text>
+  <text x="2140" y="852" font-family="Arial" font-size="20" font-weight="700" fill="#4A148C">period_tick</text>
+  <text x="2140" y="890" font-family="Arial" font-size="17" fill="#4A148C">the sampler locks to excitation, not the reverse</text>
 
-  <line x1="390" y1="2490" x2="560" y2="2490" stroke="#1565C0" stroke-width="2" marker-end="url(#a1)"/>
-  <text x="600" y="2498" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
-  <line x1="1300" y1="2490" x2="1470" y2="2490" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#a2)"/>
-  <text x="1510" y="2498" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
-  <line x1="2100" y1="2490" x2="2270" y2="2490" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#a3)"/>
-  <text x="2310" y="2498" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <path d="M1900,1380 L1900,1536" stroke="#64B5F6" stroke-width="1.5" fill="none" marker-end="url(#a2)"/>
+  <text x="1500" y="1450" font-family="Arial" font-size="17" fill="#212121">sample_req,</text>
+  <text x="1500" y="1478" font-family="Arial" font-size="17" fill="#212121">sample_phase</text>
+
+  <path d="M2360,1536 L2360,1384" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text x="2400" y="1450" font-family="Arial" font-size="17" fill="#212121">sar_done,</text>
+  <text x="2400" y="1478" font-family="Arial" font-size="17" fill="#212121">d_plus / d_minus</text>
+
+  <path d="M2640,520 L2840,520 L2840,960 L3016,960" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text x="2670" y="500" font-family="Arial" font-size="17" fill="#212121">exc_drive_p/n</text>
+
+  <path d="M2640,1100 L3016,1100" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text x="2670" y="1080" font-family="Arial" font-size="17" fill="#212121">busy, done, result_i/q</text>
+
+  <path d="M2640,1700 L2900,1700 L2900,1400 L3016,1400" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+  <text x="2670" y="1740" font-family="Arial" font-size="17" fill="#212121">adc_dac, adc_enable,</text>
+  <text x="2670" y="1768" font-family="Arial" font-size="17" fill="#212121">adc_sample, conv_start</text>
+
+  <rect x="340" y="2100" width="4180" height="700" rx="10" fill="#fff" stroke="#2E7D32" stroke-width="2"/>
+  <text x="390" y="2180" font-family="Arial" font-size="28" font-weight="700" fill="#212121">Behavior summary</text>
+  <text x="390" y="2232" font-family="Arial" font-size="20" fill="#212121">1) The excitation generator free-runs from cfg_exc_divider and exports phase_index and period_tick. Nothing commands it.</text>
+  <text x="390" y="2272" font-family="Arial" font-size="20" fill="#212121">2) The FSM waits cfg_settle excitation periods, then compares phase_index against 0, 4, 8 and 12 to decide when to strobe.</text>
+  <text x="390" y="2312" font-family="Arial" font-size="20" fill="#212121">3) Each strobe issues sample_req; sar_controller walks 8 bit trials on adc_dac_o, reading one adc_comp_i decision per trial.</text>
+  <text x="390" y="2352" font-family="Arial" font-size="20" fill="#212121">4) The settled code lands in D+ or D- by sample_phase, and sar_done returns it to the FSM.</text>
+  <text x="390" y="2392" font-family="Arial" font-size="20" fill="#212121">5) The FSM adds the raw signed difference into i_acc_q (0 vs 180 deg) or q_acc_q (90 vs 270 deg), for 2^cfg_pair_log2 pairs.</text>
+  <text x="390" y="2432" font-family="Arial" font-size="20" fill="#212121">6) On completion both accumulators snapshot into shadow registers, which drive result_i_o and result_q_o while done is high.</text>
+
+  <line x1="390" y1="2560" x2="560" y2="2560" stroke="#1565C0" stroke-width="2" marker-end="url(#a1)"/>
+  <text x="600" y="2568" font-family="Arial" font-size="18" fill="#212121">WIRE.DATA</text>
+  <line x1="1300" y1="2560" x2="1470" y2="2560" stroke="#64B5F6" stroke-width="1.5" marker-end="url(#a2)"/>
+  <text x="1510" y="2568" font-family="Arial" font-size="18" fill="#212121">WIRE.CTRL</text>
+  <line x1="2100" y1="2560" x2="2270" y2="2560" stroke="#7B1FA2" stroke-width="1.5" stroke-dasharray="8 6" marker-end="url(#a3)"/>
+  <text x="2310" y="2568" font-family="Arial" font-size="18" fill="#212121">WIRE.CFG</text>
+  <line x1="2900" y1="2560" x2="3070" y2="2560" stroke="#7B1FA2" stroke-width="4" marker-end="url(#a3)"/>
+  <text x="3110" y="2568" font-family="Arial" font-size="18" fill="#212121">WIRE.PHASE -- the phase-lock reference</text>
 </svg>

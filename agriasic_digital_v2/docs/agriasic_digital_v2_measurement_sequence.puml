@@ -1,0 +1,97 @@
+@startuml agriasic_digital_v2_measurement_sequence
+title AgriASIC Digital v2 - Measurement Transaction Sequence (Rev 4.3 Phase 5)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 14
+skinparam BoxPadding 8
+skinparam defaultFontSize 14
+
+actor FW as "RV32I Firmware"
+participant MMIO as "agriasic_rv32i_mmio"
+participant SHELL as "agriasic_rv32i_control_shell"
+participant TOP as "agriasic_digital_top"
+participant FSM as "measurement_fsm"
+participant EXC as "excitation_ctrl"
+participant SAR as "sar_controller"
+participant AFE as "Analog Front End\n(comparator + excitation path)"
+
+== Configuration and launch ==
+FW -> MMIO : write REG_PAIR_LOG2
+FW -> MMIO : write REG_SETTLE
+FW -> MMIO : write REG_DIVIDER
+FW -> MMIO : write REG_CONV
+MMIO -> SHELL : cfg_* updates
+
+FW -> MMIO : write REG_CTRL.start = 1
+MMIO -> SHELL : start_pulse_o
+SHELL -> TOP : start = shell_start_pulse
+TOP -> FSM : start_i = 1
+FSM -> EXC : exc_enable_o = 1
+EXC --> FSM : phase_index_i, period_tick_i
+
+== Settling window ==
+FSM -> FSM : wait settle_cycles_i excitation periods
+FSM --> EXC : keep excitation enabled
+EXC --> FSM : phase_index_i advances through drive states
+
+== Per-pair conversion loop ==
+loop until pair_count_q == pair_target
+  FSM -> EXC : wait for phase 0°
+  EXC --> FSM : phase_index_i == 0
+  FSM -> SAR : sample_req_o = 1, sample_phase_o = 1
+  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
+  AFE --> SAR : adc_comp_i
+  SAR --> FSM : sar_done_i, d_plus_i = D(0°)
+
+  FSM -> EXC : wait for phase 180°
+  EXC --> FSM : phase_index_i == 8
+  FSM -> SAR : sample_req_o = 1, sample_phase_o = 0
+  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
+  AFE --> SAR : adc_comp_i
+  SAR --> FSM : sar_done_i, d_minus_i = D(180°)
+
+  FSM -> FSM : i_acc += (D(0°) - D(180°))
+
+  FSM -> EXC : wait for phase 90°
+  EXC --> FSM : phase_index_i == 4
+  FSM -> SAR : sample_req_o = 1, sample_phase_o = 1
+  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
+  AFE --> SAR : adc_comp_i
+  SAR --> FSM : sar_done_i, d_plus_i = D(90°)
+
+  FSM -> EXC : wait for phase 270°
+  EXC --> FSM : phase_index_i == 12
+  FSM -> SAR : sample_req_o = 1, sample_phase_o = 0
+  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
+  AFE --> SAR : adc_comp_i
+  SAR --> FSM : sar_done_i, d_minus_i = D(270°)
+
+  FSM -> FSM : q_acc += (D(90°) - D(270°))
+  FSM -> FSM : pair_count_q++
+end
+
+== Completion and result snapshot ==
+FSM --> TOP : done_o = 1
+TOP --> SHELL : measurement_done_i = 1
+SHELL --> MMIO : done_i / result_i_i + result_q_i captured
+FSM -> FSM : shadow result_i_o <= i_acc, result_q_o <= q_acc
+
+== Firmware resume ==
+SHELL -> SHELL : core_clk_en re-enabled after measurement_done_i
+FW -> MMIO : read REG_STATUS
+MMIO --> FW : busy/done status
+FW -> MMIO : read REG_RESULT_I
+FW -> MMIO : read REG_RESULT_Q
+MMIO --> FW : signed I/Q result values
+
+note right of SHELL
+This is the current Phase 5 behavior:
+- the measurement FSM owns the real-time sampling loop
+- excitation remains free-running while busy_o is high
+- result_i_o/result_q_o are shadow registers
+- the host sees the previous complete result until done_i
+end note
+
+@enduml

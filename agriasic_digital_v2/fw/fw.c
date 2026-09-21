@@ -38,17 +38,25 @@
  *
  * Harvard-split constraint (see link.ld): no .rodata, .data or .bss. All
  * constants are immediates; all state is on the stack.
+ *
+ * Ibex core (replaces the Penn CIS 5710 core): the wait for a measurement is
+ * now a wfi. start.S enables mie.fast0 and the shell feeds the DONE latch to
+ * irq_fast[0]; mstatus.MIE is never set, so wfi simply returns when DONE is
+ * pending and no interrupt is taken. The BUSY poll is kept after the wfi as
+ * a guard (it costs one load in the normal case) so the sequence is correct
+ * even if wfi is a no-op, e.g. under a debugger with single-step enabled.
+ * Completion is signalled by start.S writing CTRL.FW_DONE, not by ecall.
  */
 
 #define PERIPH_BASE   0x80000000u
 #define REG(off)      (*(volatile int *)(PERIPH_BASE + (off)))
 
-#define REG_CTRL      REG(0x00)   /* W  bit0 = start, bit7 = clear errors */
+#define REG_CTRL      REG(0x00)   /* W  bit0 = start, bit7 = clear errors, bit8 = fw_done, bit9 = trap_seen */
 #define REG_PAIR_LOG2 REG(0x04)   /* RW */
 #define REG_SETTLE    REG(0x08)   /* RW */
 #define REG_DIVIDER   REG(0x0C)   /* RW  raw N, unlike SPI's selector-based REG_FREQ_SEL */
 #define REG_CONV      REG(0x10)   /* RW */
-#define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done */
+#define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done, bit4 = overrange, bit5 = trap_seen, bit6 = fw_done */
 #define REG_RESULT_I  REG(0x18)   /* R   sign-extended 16-bit I-channel accumulator */
 #define REG_RESULT_Q  REG(0x1C)   /* R   sign-extended 16-bit Q-channel accumulator (Rev 4.3 Phase 5) */
 
@@ -57,22 +65,24 @@
 #define STATUS_BUSY     (1 << 0)
 #define STATUS_DONE     (1 << 1)
 
-/* Scratch RAM locations the testbench can inspect. Data address space.
+/* Scratch RAM locations the testbench (and a debugger over JTAG) can inspect.
  *
- * Deliberately NOT at address 0: the compiler treats address 0 as NULL and is
- * entitled to assume a null dereference is undefined, which lets it discard
- * these stores. 0x100 is a valid RAM address well below the stack at 0x800.
+ * Phase 2 flat map: RAM lives at DMEM_BASE = 0x0001_0000 (2 KiB), so the
+ * debugger's single address space has program memory at 0 and RAM at
+ * 0x10000 with no overlap. Results sit at DMEM_BASE + 0x100, well below the
+ * stack top at DMEM_BASE + 0x800.
  *
  * Rev 4.3 Phase 7 layout (supersedes the Phase 1-6 single-frequency-demo
  * layout: OUT_AVERAGE/OUT_AVERAGE_Q/OUT_SAMPLES/OUT_SAMPLES_Q are retired --
  * a real 3-point sweep replaces the placeholder one-frequency loop those
  * existed to demonstrate). One word of gap is left between arrays. */
-#define OUT_COUNT      (*(volatile int *)0x00000100)  /* measurements averaged, per point */
-#define OUT_NUM_POINTS (*(volatile int *)0x00000104)  /* frequency points swept (3) */
-#define OUT_DIV        ((volatile int *)0x00000110)   /* [3]: divider N used per point */
-#define OUT_I          ((volatile int *)0x00000120)   /* [3]: I average per point */
-#define OUT_Q          ((volatile int *)0x00000130)   /* [3]: Q average per point */
-#define OUT_TEMP       (*(volatile int *)0x00000140)  /* sentinel -1: not implemented, see header (GAP-11) */
+#define DMEM_BASE      0x00010000u
+#define OUT_COUNT      (*(volatile int *)(DMEM_BASE + 0x100))  /* measurements averaged, per point */
+#define OUT_NUM_POINTS (*(volatile int *)(DMEM_BASE + 0x104))  /* frequency points swept (3) */
+#define OUT_DIV        ((volatile int *)(DMEM_BASE + 0x110))   /* [3]: divider N used per point */
+#define OUT_I          ((volatile int *)(DMEM_BASE + 0x120))   /* [3]: I average per point */
+#define OUT_Q          ((volatile int *)(DMEM_BASE + 0x130))   /* [3]: Q average per point */
+#define OUT_TEMP       (*(volatile int *)(DMEM_BASE + 0x140))  /* sentinel -1: not implemented, see header (GAP-11) */
 
 #define NUM_FREQ_POINTS  3
 #define NUM_MEASUREMENTS 2   /* averaged per frequency point */
@@ -81,16 +91,23 @@
  * Run one measurement and return both accumulated results (I and Q,
  * Rev 4.3 Phase 5) via the output pointers.
  *
- * Polls BUSY rather than DONE. The FSM's raw done_o is a single-cycle pulse;
- * the shell latches both flags so either is safe to poll, but BUSY going low is
- * the more natural completion condition.
+ * Sleeps in wfi until the DONE latch wakes the core (see the header), then
+ * confirms BUSY is low. The FSM's raw done_o is a single-cycle pulse; the
+ * bridge latches both flags so either is safe to check.
  */
+static inline void wfi(void)
+{
+    __asm__ volatile ("wfi" ::: "memory");
+}
+
 static void run_one_measurement(int *out_i, int *out_q)
 {
     REG_CTRL = CTRL_START;
 
+    wfi();
+
     while (REG_STATUS & STATUS_BUSY) {
-        /* spin */
+        /* guard: only spins if wfi returned early */
     }
 
     *out_i = REG_RESULT_I;

@@ -1,0 +1,24 @@
+{
+  "elf": "agriasic_fw.elf",
+  "entry_address": 0,
+  "memory_origin": 0,
+  "sections": [
+    {
+      "name": ".text",
+      "size_bytes": 482,
+      "vma_start": 0,
+      "vma_highest_byte": 481,
+      "vma_end_exclusive": 482,
+      "lma_start": 0,
+      "lma_highest_byte": 481,
+      "alignment_bytes": 2,
+      "nobits": false
+    }
+  ],
+  "allocated_section_bytes_sum": 482,
+  "highest_occupied_vma_byte": 481,
+  "vma_end_exclusive": 482,
+  "address_span_from_origin_bytes": 482,
+  "highest_initialized_lma_byte": 481,
+  "note": "This linker describes IMEM only. Absolute result buffers, stack and heap are not allocated sections."
+}

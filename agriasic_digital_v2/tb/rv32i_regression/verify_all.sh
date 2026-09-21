@@ -52,7 +52,7 @@ bash "$R/settle_check.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_" | tail -8
 
 echo ""
 echo "=================================================="
-echo "9. END-TO-END FIRMWARE + MEASUREMENT (incl. core clock enable, Phase 2.2)"
+echo "9. END-TO-END FIRMWARE + MEASUREMENT (Ibex core, wfi sleep)"
 echo "=================================================="
 bash "$R/e2e.sh" 2>&1 | grep -E "^\[TB\]" | tail -13
 
@@ -74,3 +74,9 @@ echo "=================================================="
 echo "12. SETTLE x CONV GRID SWEEP (Rev 4.3 Phase 8, closes V-1)"
 echo "=================================================="
 bash "$R/settle_conv_sweep.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | tail -6
+
+echo ""
+echo "=================================================="
+echo "13. JTAG / RISC-V DEBUG MODULE (Phase 2: halt, abstract regs, SBA, resume, ndmreset)"
+echo "=================================================="
+bash "$R/jtag.sh" 2>&1 | grep -E "^\[TB\]|JTAG_DEBUG_" | tail -8

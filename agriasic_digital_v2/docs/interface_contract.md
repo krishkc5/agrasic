@@ -236,3 +236,33 @@ under consideration.
 
 Do not write host or firmware code against any of those yet — see the MAS for
 current phase status before starting that work.
+
+---
+
+## JTAG debug port (Phase 2, `agriasic_digital_rv32i_top` only)
+
+Five pins, IEEE 1149.1, into the RISC-V debug module (pulp `riscv-dbg`,
+Debug Spec 0.13) inside the control shell. Present only on the RV32I chip
+variant; `agriasic_digital_spi_top` is unchanged.
+
+| Pin | Dir | Notes |
+|---|---|---|
+| `jtag_tck_i` | in | Test clock. Keep well below the core clock (the DTM crosses TCK -> clk with a 2-phase handshake); 1 MHz is safe for any core clock above ~10 MHz. |
+| `jtag_tms_i` | in | Test mode select. Five cycles high resets the TAP without TRST. |
+| `jtag_trst_ni` | in | Asynchronous TAP reset, active low. Independent of `rst_n`, so a debugger can stay attached across a chip reset. Tie high if unused. |
+| `jtag_tdi_i` | in | Data in, sampled on rising TCK. |
+| `jtag_tdo_o` | out | Data out, launched on falling TCK. Not tri-stated (single device on the chain). |
+
+IDCODE `0x14341001` (version 1, part `0x4341`). IR length 5: `0x01` IDCODE,
+`0x10` DTMCS, `0x11` DMI (abits = 7). DM base `0x1A11_0000`; halt / resume /
+exception entries at `+0x800 / +0x808 / +0x810`.
+
+Debugger-visible address map: IMEM `0x0000_0000` (4 KiB, writable: `load`
+works), DMEM `0x0001_0000` (2 KiB), DM `0x1A11_0000`, MMIO `0x8000_0000`
+(register map in section 7.1 / `agriasic_rv32i_mmio.sv`). Any other address
+is a bus error. `dmcontrol.ndmreset` resets the core and the MMIO bridge
+(config registers, sticky flags) but not IMEM, the DM or the TAP.
+
+The hart is held in reset and reported `unavailable` to the debugger while
+`start_i` is low. `fw/openocd_agriasic.cfg` is the reference OpenOCD target
+file.

@@ -1,0 +1,47 @@
+{
+  "sweep_cycles_negedge_window": 3153181,
+  "existing_e2e_posedge_cycles": 3153174,
+  "active_cycles": 458,
+  "frozen_cycles": 3152723,
+  "frozen_percent": 99.98547498541949,
+  "sweep_time_ms_at_model_frequency": 19.70738125,
+  "sweep_samples": 96,
+  "imem_accesses_in_sweep": 155,
+  "dmem_accesses_in_sweep": 30,
+  "memory_capacity_bits": {
+    "imem": 32768,
+    "dmem": 16384
+  },
+  "reference_clock_example": {
+    "clock_slew_ns": 0.1027,
+    "clock_pin_capacitance_fF": 2.9139999999999997,
+    "internal_clock_energy_pJ_per_cycle": 0.061075,
+    "equivalent_clock_capacitance_fF_before_tree": 21.764308641975305
+  },
+  "sweep_results": {
+    "low": {
+      "scenario": "low",
+      "mode": "whole_sweep",
+      "clock_mW": 16.868736000000002,
+      "data_proxy_mW": 0.008007725002633049,
+      "logic_dynamic_mW": 16.876743725002633,
+      "energy_uJ": 332.59642284717205
+    },
+    "central": {
+      "scenario": "central",
+      "mode": "whole_sweep",
+      "clock_mW": 42.17184,
+      "data_proxy_mW": 0.04003862501316525,
+      "logic_dynamic_mW": 42.21187862501317,
+      "energy_uJ": 831.8855853418603
+    },
+    "high": {
+      "scenario": "high",
+      "mode": "whole_sweep",
+      "clock_mW": 84.34368,
+      "data_proxy_mW": 0.160154500052661,
+      "logic_dynamic_mW": 84.50383450005266,
+      "energy_uJ": 1665.349283579441
+    }
+  }
+}

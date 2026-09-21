@@ -1,0 +1,119 @@
+{
+  "instruction_image": {
+    "elf": "agriasic_fw.elf",
+    "entry_address": 0,
+    "memory_origin": 0,
+    "sections": [
+      {
+        "name": ".text",
+        "size_bytes": 482,
+        "vma_start": 0,
+        "vma_highest_byte": 481,
+        "vma_end_exclusive": 482,
+        "lma_start": 0,
+        "lma_highest_byte": 481,
+        "alignment_bytes": 2,
+        "nobits": false
+      }
+    ],
+    "allocated_section_bytes_sum": 482,
+    "highest_occupied_vma_byte": 481,
+    "vma_end_exclusive": 482,
+    "address_span_from_origin_bytes": 482,
+    "highest_initialized_lma_byte": 481,
+    "note": "This linker describes IMEM only. Absolute result buffers, stack and heap are not allocated sections."
+  },
+  "instruction_fetch": {
+    "lowest_byte": "0x00000080",
+    "highest_byte": "0x000001EB",
+    "distinct_bytes": 356,
+    "span_bytes": 364
+  },
+  "highest_fetch_word_address": "0x000001E8",
+  "highest_retired_instruction_address": "0x000001E0",
+  "fetch_word_addresses_beyond_linked_image": [
+    "0x000001E0",
+    "0x000001E4",
+    "0x000001E8"
+  ],
+  "retired_addresses_beyond_linked_image": [],
+  "data_memory": {
+    "lowest_byte": "0x00000100",
+    "highest_byte": "0x000007FF",
+    "distinct_bytes": 68,
+    "span_bytes": 1792
+  },
+  "result_buffers": {
+    "lowest_byte": "0x00000100",
+    "highest_byte": "0x00000143",
+    "distinct_bytes": 48,
+    "span_bytes": 68
+  },
+  "stack_accesses": {
+    "lowest_byte": "0x000007E8",
+    "highest_byte": "0x000007FF",
+    "distinct_bytes": 20,
+    "span_bytes": 24
+  },
+  "stack_pointer_values_in_order": [
+    "0x00011000",
+    "0x00010800",
+    "0x000107E0",
+    "0x00010800"
+  ],
+  "stack_frame_bytes_static": 32,
+  "dmem_base": "0x00010000",
+  "data_memory_address_span_from_dmem_base_bytes": 2048,
+  "mmio_accesses": [
+    {
+      "kind": "store",
+      "word_address": "0x80000000",
+      "count": 8
+    },
+    {
+      "kind": "store",
+      "word_address": "0x80000004",
+      "count": 1
+    },
+    {
+      "kind": "store",
+      "word_address": "0x80000008",
+      "count": 1
+    },
+    {
+      "kind": "store",
+      "word_address": "0x8000000C",
+      "count": 3
+    },
+    {
+      "kind": "store",
+      "word_address": "0x80000010",
+      "count": 1
+    },
+    {
+      "kind": "load",
+      "word_address": "0x80000014",
+      "count": 6
+    },
+    {
+      "kind": "load",
+      "word_address": "0x80000018",
+      "count": 6
+    },
+    {
+      "kind": "load",
+      "word_address": "0x8000001C",
+      "count": 6
+    }
+  ],
+  "invalid_accesses": [],
+  "data_loads_before_observed_store": [],
+  "event_counts": {
+    "fetch": 177,
+    "retire": 210,
+    "sp": 4,
+    "store": 35,
+    "load": 27
+  },
+  "hex_sha256": "efb4348ec1334fcdda446cdae5573c87d8cf17af73371d568310730910b67b4b"
+}

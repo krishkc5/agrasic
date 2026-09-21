@@ -1,0 +1,17 @@
+common_cells/cdc_reset_ctrlr_pkg.sv
+common_cells/sync.sv
+common_cells/cdc_reset_ctrlr.sv
+common_cells/cdc_2phase_clearable.sv
+common_cells/cdc_4phase.sv
+common_cells/fifo_v3.sv
+tech_cells_generic/tc_clk.sv
+src/dm_pkg.sv
+debug_rom/debug_rom.sv
+debug_rom/debug_rom_one_scratch.sv
+src/dm_csrs.sv
+src/dm_mem.sv
+src/dm_sba.sv
+src/dm_top.sv
+src/dmi_cdc.sv
+src/dmi_jtag_tap.sv
+src/dmi_jtag.sv

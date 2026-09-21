@@ -1,0 +1,89 @@
+=== compiling ===
+=== sections ===
+agriasic_fw.elf  :
+section   size   addr
+.text    384      0
+Total    384
+
+
+ELF allocated-memory report: agriasic_fw.elf
+.text: 384 bytes, VMA 0x00000000..0x0000017F, alignment 4
+Allocated section sum: 384 bytes
+Highest occupied byte: 0x0000017F
+Next address (exclusive end): 0x00000180
+Required address span from origin 0x00000000: 384 bytes (includes gaps)
+This linker describes IMEM only. Absolute result buffers, stack and heap are not allocated sections.
+=== generating hex image ===
+wrote agriasic_fw.hex: 96 words (384 bytes)
+=== verifying volatile stores to the scratch-RAM outputs survived ===
+  e8:	10902823          	sw	s1,272(zero) # 110 <main+0x70>
+  f8:	12f02023          	sw	a5,288(zero) # 120 <main+0x80>
+ 104:	12f02823          	sw	a5,304(zero) # 130 <main+0x90>
+ 110:	10f02a23          	sw	a5,276(zero) # 114 <main+0x74>
+ 120:	12f02223          	sw	a5,292(zero) # 124 <main+0x84>
+ 130:	12f02a23          	sw	a5,308(zero) # 134 <main+0x94>
+ 140:	10f02c23          	sw	a5,280(zero) # 118 <main+0x78>
+ 150:	12f02423          	sw	a5,296(zero) # 128 <main+0x88>
+ 15c:	12f02c23          	sw	a5,312(zero) # 138 <main+0x98>
+ 164:	14f02023          	sw	a5,320(zero) # 140 <main+0xa0>
+ 168:	10802023          	sw	s0,256(zero) # 100 <main+0x60>
+ 174:	10f02223          	sw	a5,260(zero) # 104 <main+0x64>
+total sw instructions: 0
+=== full disassembly of main ===
+000000a0 <main>:
+  a0:	fe010113          	addi	sp,sp,-32
+  a4:	00112e23          	sw	ra,28(sp)
+  a8:	00812c23          	sw	s0,24(sp)
+  ac:	00912a23          	sw	s1,20(sp)
+  b0:	08000713          	li	a4,128
+  b4:	800007b7          	lui	a5,0x80000
+  b8:	00e7a023          	sw	a4,0(a5) # 80000000 <main+0x7fffff60>
+  bc:	00200413          	li	s0,2
+  c0:	0087a223          	sw	s0,4(a5)
+  c4:	800007b7          	lui	a5,0x80000
+  c8:	0087a423          	sw	s0,8(a5) # 80000008 <main+0x7fffff68>
+  cc:	00100493          	li	s1,1
+  d0:	800007b7          	lui	a5,0x80000
+  d4:	0097a823          	sw	s1,16(a5) # 80000010 <main+0x7fffff70>
+  d8:	00c10613          	addi	a2,sp,12
+  dc:	00810593          	addi	a1,sp,8
+  e0:	00100513          	li	a0,1
+  e4:	f31ff0ef          	jal	14 <run_sweep_point>
+  e8:	10902823          	sw	s1,272(zero) # 110 <main+0x70>
+  ec:	00812783          	lw	a5,8(sp)
+  f0:	00c10613          	addi	a2,sp,12
+  f4:	00810593          	addi	a1,sp,8
+  f8:	12f02023          	sw	a5,288(zero) # 120 <main+0x80>
+  fc:	00c12783          	lw	a5,12(sp)
+ 100:	06400513          	li	a0,100
+ 104:	12f02823          	sw	a5,304(zero) # 130 <main+0x90>
+ 108:	f0dff0ef          	jal	14 <run_sweep_point>
+ 10c:	06400793          	li	a5,100
+ 110:	10f02a23          	sw	a5,276(zero) # 114 <main+0x74>
+ 114:	00812783          	lw	a5,8(sp)
+ 118:	00002537          	lui	a0,0x2
+ 11c:	00c10613          	addi	a2,sp,12
+ 120:	12f02223          	sw	a5,292(zero) # 124 <main+0x84>
+ 124:	00c12783          	lw	a5,12(sp)
+ 128:	00810593          	addi	a1,sp,8
+ 12c:	71050513          	addi	a0,a0,1808 # 2710 <main+0x2670>
+ 130:	12f02a23          	sw	a5,308(zero) # 134 <main+0x94>
+ 134:	ee1ff0ef          	jal	14 <run_sweep_point>
+ 138:	000027b7          	lui	a5,0x2
+ 13c:	71078793          	addi	a5,a5,1808 # 2710 <main+0x2670>
+ 140:	10f02c23          	sw	a5,280(zero) # 118 <main+0x78>
+ 144:	00812783          	lw	a5,8(sp)
+ 148:	01c12083          	lw	ra,28(sp)
+ 14c:	01412483          	lw	s1,20(sp)
+ 150:	12f02423          	sw	a5,296(zero) # 128 <main+0x88>
+ 154:	00c12783          	lw	a5,12(sp)
+ 158:	00000513          	li	a0,0
+ 15c:	12f02c23          	sw	a5,312(zero) # 138 <main+0x98>
+ 160:	fff00793          	li	a5,-1
+ 164:	14f02023          	sw	a5,320(zero) # 140 <main+0xa0>
+ 168:	10802023          	sw	s0,256(zero) # 100 <main+0x60>
+ 16c:	01812403          	lw	s0,24(sp)
+ 170:	00300793          	li	a5,3
+ 174:	10f02223          	sw	a5,260(zero) # 104 <main+0x64>
+ 178:	02010113          	addi	sp,sp,32
+ 17c:	00008067          	ret

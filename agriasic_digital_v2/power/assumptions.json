@@ -1,0 +1,14 @@
+{
+  "voltage_V": 1.8,
+  "frequency_MHz": 160,
+  "scenarios": {
+    "low": {"effective_clock_fF_per_register_bit": 10, "logic_load_fF_per_primitive": 2, "data_activity_multiplier": 1},
+    "central": {"effective_clock_fF_per_register_bit": 25, "logic_load_fF_per_primitive": 5, "data_activity_multiplier": 2},
+    "high": {"effective_clock_fF_per_register_bit": 50, "logic_load_fF_per_primitive": 10, "data_activity_multiplier": 4}
+  },
+  "interpretation": "Illustrative engineering sensitivity scenarios, not process corners, confidence intervals, or guaranteed bounds. Clock coefficient includes register internal clock energy, clock input charging and a clock distribution allowance. Data activity is a coarse proxy using measured register rising transitions, not gate-level power annotation.",
+  "excluded_from_logic_power": ["instruction and data memory macro power", "leakage", "I/O pads and loads", "external clock source", "analog circuitry"],
+  "reference_cell_url": "https://github.com/google/globalfoundries-pdk-libs-gf180mcu_fd_sc_mcu7t5v0/blob/main/cells/dffq/gf180mcu_fd_sc_mcu7t5v0__dffq_1__tt_025C_1v80.lib.json",
+  "reference_library_header_url": "https://github.com/google/globalfoundries-pdk-libs-gf180mcu_fd_sc_mcu7t5v0/blob/main/liberty/gf180mcu_fd_sc_mcu7t5v0__tt_025C_1v80.lib",
+  "reference_warning": "GF180MCU is a different foundry and cell family from TSMC 180 nm. One reference flip-flop informs only the order of magnitude; the DUT has not been mapped to this cell or library."
+}

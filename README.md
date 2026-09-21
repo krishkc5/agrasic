@@ -48,9 +48,10 @@ FSM. This matters for two reasons:
   if both phases are timed identically. The free-running phase generator gives
   that structurally: the two halves are 7 phase states each, exactly equal.
 
-The core is clock-enabled off (not reset, not clock-gated) whenever no
-measurement is in flight — see Phase 2 below — which is also the low-power
-state for a solar/battery node.
+The core sleeps in `wfi` whenever a measurement is in flight and is woken by
+the DONE interrupt — see "Ibex core swap" below — which is also the low-power
+state for a solar/battery node. (Phase 2's clock-enable scheme served the
+same purpose on the previous core.)
 
 ---
 
@@ -73,7 +74,8 @@ Then, by task:
   `rtl/agriasic_digital_spi_top.sv`
 - **Processor** — `rtl/rv32i/agriasic_imem.sv` and `agriasic_dmem.sv` **first**
   (they define the SRAM timing contract everything else depends on), then
-  `agriasic_rv32i_core.sv`
+  `agriasic_rv32i_control_shell.sv` (the Ibex instance and its tie-offs) and
+  `rtl/ibex/VENDOR.md`
 - **Verification** — `tb/rv32i_regression/verify_all.sh`, then
   `tb/tb_agriasic_rv32i_e2e.sv`
 - **Full spec** — `docs/agriasic_digital_MAS.md`
@@ -162,7 +164,8 @@ neither of which lives in this repo. See `tb/rv32i_regression/` for those script
 
 | Check | Result |
 | --- | --- |
-| Processor — rv32ui ISA suite + dhrystone | 77/77 as of the last run; **not re-run since Phase 2.2 touched the core** (needs the external cocotb harness, not present here) |
+| JTAG / debug module (`tb_agriasic_jtag`) | pass: IDCODE, DM activation, halt during `wfi`, `dpc`/`sp` abstract reads, SBA to RAM/IMEM/MMIO + `sberror` on unmapped, resume with correct sweep results read over the SBA, `ndmreset`/`havereset` handshake |
+| Processor — rv32ui ISA suite + dhrystone | **Superseded.** The Penn core was replaced by lowRISC Ibex (see "Ibex core swap"); the cocotb harness targeted the retired core. Ibex carries its own riscv-dv/Spike verification upstream |
 | Measurement smoke (`tb_agriasic_digital_top`) | pass, I=480 Q=320, every sample (16 of them) phase-matched exactly (0 errors) |
 | SPI smoke (`tb_agriasic_digital_spi_top`) | pass, I=480 Q=320 read back via the indexed `REG_RESULT_IDX`/`REG_RESULT_DATA` (Phase 6); auto-increment, reserved-zero, `REG_ID`, and overrange bit all checked |
 | SAR bit-trial unit test (`tb_sar_bit_trial`) | pass, exact convergence over 0–255 |
@@ -219,9 +222,24 @@ parameter, default 1 cycle) and the SAR comparator regeneration time
 (`REG_CONV`, now runtime-tunable so no respin is needed once known — see MAS
 GAP-2 and GAP-6).
 
+**Ibex core swap (after Rev 4.3 Phase 8).** The control core is now lowRISC
+Ibex (`agriasic_digital_v2/rtl/ibex/`, RV32IMC+Zicsr, 3-stage, no cache/PMP),
+chosen for its RISC-V Debug Spec support, real traps on bus errors, and
+upstream verification. The shell's port list is unchanged; the MMIO bridge
+speaks Ibex's OBI handshake with full address decode; firmware boots through a
+32-entry vector table at 0x0 with reset at 0x80, sleeps in `wfi` during each
+measurement, and signals completion with `CTRL.FW_DONE` instead of `ecall`.
+Phase 2 then added the **RISC-V debug module**: pulp `riscv-dbg` (JTAG DTM +
+DM, Debug Spec 0.13) behind five new chip pins (`jtag_tck/tms/trst_n/tdi/tdo`),
+a small interconnect (`agriasic_rv32i_bus.sv`) giving the debugger one flat
+map — IMEM `0x0` (now loadable), **DMEM relocated to `0x0001_0000`**, DM
+`0x1A11_0000`, MMIO `0x8000_0000` — and an OpenOCD config in `fw/`. Full
+detail in `agriasic_digital_v2/README.md`, "Processor provenance" and
+"Debug (Phase 2)".
+
 **Phase 2 (clock and reset discipline) is also done.** A 2FF reset
 synchronizer (`rst_sync.sv`, async assert / sync deassert) sits in each
-chip-boundary top. The RV32I core (`DatapathPipelined`/`RegFile`) gained a
+chip-boundary top. The previous RV32I core (`DatapathPipelined`/`RegFile`) gained a
 `clk_en_i` input — the control shell drives it automatically off the real
 `start_pulse_o`/`measurement_done_i` handshake, no firmware changes needed.
 Verified against the actual trigger path, not synthetically: across one

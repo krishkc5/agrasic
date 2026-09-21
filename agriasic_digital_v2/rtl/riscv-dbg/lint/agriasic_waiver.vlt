@@ -1,0 +1,12 @@
+`verilator_config
+
+// Lint waivers (Verilator) for the vendored riscv-dbg / common_cells trees.
+// Upstream code; width warnings there are known and benign. Our own RTL is
+// still checked at full strictness.
+lint_off -rule WIDTHEXPAND -file "*riscv-dbg/*"
+lint_off -rule WIDTHTRUNC -file "*riscv-dbg/*"
+lint_off -rule UNUSEDPARAM -file "*riscv-dbg/*"
+lint_off -rule UNUSEDSIGNAL -file "*riscv-dbg/*"
+lint_off -rule DECLFILENAME -file "*riscv-dbg/*"
+lint_off -rule GENUNNAMED -file "*riscv-dbg/*"
+lint_off -rule PINCONNECTEMPTY -file "*riscv-dbg/*"

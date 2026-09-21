@@ -82,15 +82,23 @@ module tb_agriasic_rv32i_e2e;
     .cfg_pair_log2_o     (cfg_pair_log2_o),
     .cfg_settle_cycles_o (cfg_settle_cycles_o),
     .cfg_exc_divider_o   (cfg_exc_divider_o),
-    .cfg_conv_cycles_o   (cfg_conv_cycles_o)
+    .cfg_conv_cycles_o   (cfg_conv_cycles_o),
+    // JTAG idle: TAP held in reset, no debugger attached in this test.
+    .jtag_tck_i          (1'b0),
+    .jtag_tms_i          (1'b1),
+    .jtag_trst_ni        (rst_n),
+    .jtag_tdi_i          (1'b0),
+    .jtag_tdo_o          ()
   );
 
-  // The shell's done_o (firmware reached ecall) is NOT exposed at the top --
-  // those shell status outputs are currently dangling. Reach in for it here.
+  // The shell's done_o (firmware wrote CTRL.FW_DONE) is NOT exposed at the
+  // top -- those shell status outputs are currently dangling. Reach in here.
   wire fw_halted = dut.u_control_shell.done_o;
 
   // Scratch RAM: firmware writes its outputs here. Rev 4.3 Phase 7 layout
-  // (supersedes the Phase 1-6 single-frequency-demo layout -- see fw.c):
+  // (supersedes the Phase 1-6 single-frequency-demo layout -- see fw.c).
+  // Phase 2 flat map: RAM is at 0x0001_0000, so bus address 0x0001_0100 is
+  // RAM offset 0x100; the word indices below are offsets into ram_array.
   //   0x100 -> OUT_COUNT       (word 64)  measurements averaged per point
   //   0x104 -> OUT_NUM_POINTS  (word 65)  frequency points swept (3)
   //   0x110 -> OUT_DIV[0..2]   (words 68..70)  divider N used per point
@@ -142,31 +150,51 @@ module tb_agriasic_rv32i_e2e;
   end
 
   // --------------------------------------------------------------------------
-  // Rev 4.3 Phase 2.2: core clock enable must actually freeze the core.
+  // Ibex sleep: wfi must actually put the core to sleep during a measurement.
   //
-  // This reaches into the real trigger path (core_clk_en, driven by
-  // start_pulse_o/measurement_done_i) rather than forcing a synthetic freeze,
-  // so it verifies the mechanism this firmware run genuinely exercises four
-  // times (once per measurement), not an artificial scenario.
+  // The Penn-core version of this check watched core_clk_en and asserted the
+  // PC held. Ibex has no clock enable; firmware executes wfi after START and
+  // the shell feeds the DONE latch to irq_fast[0]. The equivalent property is
+  // that while core_sleep_o is high the core issues no instruction fetches,
+  // and that it does sleep at least once per measurement.
   // --------------------------------------------------------------------------
-  wire        core_clk_en_mon = dut.u_control_shell.core_clk_en;
-  wire [31:0] pc_mon          = dut.u_control_shell.u_core.f_pc_current;
+  wire core_sleep_mon = dut.u_control_shell.core_sleep;
+  wire instr_req_mon  = dut.u_control_shell.instr_req;
+  wire trap_seen_mon  = dut.u_control_shell.trap_seen;
 
   int unsigned frozen_cycles;
   always_ff @(posedge clk) begin
     if (!rst_n) frozen_cycles <= 0;
-    else if (!core_clk_en_mon) frozen_cycles <= frozen_cycles + 1;
+    else if (core_sleep_mon) frozen_cycles <= frozen_cycles + 1;
   end
 
-  property p_frozen_pc_holds;
+  property p_sleep_no_fetch;
     @(posedge clk) disable iff (!rst_n)
-      !core_clk_en_mon |=> $stable(pc_mon);
+      core_sleep_mon |-> !instr_req_mon;
   endproperty
-  assert property (p_frozen_pc_holds)
-    else $error("CLK_EN_FAIL: PC changed while core_clk_en was low");
+  assert property (p_sleep_no_fetch)
+    else $error("SLEEP_FAIL: instruction fetch issued while core_sleep_o was high");
+
+  // A trap anywhere in the run is a bug (or a bus error): fail loudly.
+  always_ff @(posedge clk) begin
+    if (rst_n && trap_seen_mon) begin
+      $error("TRAP_SEEN: firmware entered the trap handler at cycle %0d", cycles);
+      errors <= errors + 1;
+    end
+  end
 
   initial begin
     errors  = 0;
+    // Ibex gates its core clock while idle, so its async-reset flops only see
+    // reset through a real NEGEDGE on rst_ni. Under Verilator's 2-state
+    // initialisation a reset that starts asserted never produces one. The
+    // core's reset is rst_n_sync && start_i (shell: core_rst), so drive BOTH
+    // high for a few clocks, then assert reset -- the same 1->0->1 sequence
+    // lowRISC's VerilatorSimCtrl applies. Silicon is unaffected: reset is a
+    // level there, and the core runs from garbage for four cycles here only.
+    rst_n   = 1'b1;
+    start_i = 1'b1;
+    repeat (4) @(posedge clk);
     rst_n   = 1'b0;
     start_i = 1'b0;
     repeat (10) @(posedge clk);
@@ -176,7 +204,7 @@ module tb_agriasic_rv32i_e2e;
     $display("[TB] releasing start, firmware begins");
     start_i = 1'b1;
 
-    // Wait for firmware to reach ecall. Rev 4.3 Phase 7: the sweep includes
+    // Wait for firmware to raise FW_DONE. Rev 4.3 Phase 7: the sweep includes
     // the real N=10000 (1 kHz) point, whose settle alone is 2 periods x 16 x
     // 10000 = 320,000 cycles, so the budget has to be generous -- see the
     // MAS Phase 7 note for the actual measured cycle count.
@@ -226,9 +254,13 @@ module tb_agriasic_rv32i_e2e;
       errors++;
     end
 
-    $display("[TB] core_clk_en held low for %0d cycles across %0d measurements (%0s)",
+    $display("[TB] core_sleep_o high for %0d cycles across %0d measurements (%0s)",
              frozen_cycles, measurements_seen,
-             (frozen_cycles > 0) ? "freeze mechanism exercised" : "WARNING: never froze");
+             (frozen_cycles > 0) ? "wfi sleep mechanism exercised" : "WARNING: never slept");
+    if (frozen_cycles == 0) begin
+      $error("core never entered wfi sleep during the sweep");
+      errors++;
+    end
 
     if (errors == 0) $display("[TB] PASS -- all checks passed");
     else             $display("[TB] FAIL -- %0d error(s)", errors);

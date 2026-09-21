@@ -3,17 +3,20 @@ set -e
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CC=riscv64-unknown-elf-gcc
+# rv32imc_zicsr: Ibex always implements C (RV32Zca is the minimum) and start.S
+# needs csrw for mie; GCC 13 requires zicsr to be spelled out explicitly.
 # -Wno-array-bounds: GCC cannot reason about absolute addresses and reports a
 # false positive for every memory-mapped access built from an integer cast. The
 # accesses are volatile, so they are preserved regardless; the disassembly check
 # below confirms the stores actually survive.
-FLAGS="-march=rv32im -mabi=ilp32 -Os -Wall -Wextra -Wno-array-bounds -ffreestanding -nostdlib -nodefaultlibs -fno-tree-loop-distribute-patterns"
+FLAGS="-march=rv32imc_zicsr -mabi=ilp32 -Os -Wall -Wextra -Wno-array-bounds -ffreestanding -nostdlib -nodefaultlibs -fno-tree-loop-distribute-patterns -fstack-usage"
 
 echo "=== compiling ==="
-$CC $FLAGS -T link.ld -o agriasic_fw.elf start.S fw.c
+$CC $FLAGS -T link.ld -Wl,-Map=agriasic_fw.map,--cref -o agriasic_fw.elf start.S fw.c
 
 echo "=== sections ==="
 riscv64-unknown-elf-size -A agriasic_fw.elf | head -12
+python3 report_elf_memory.py agriasic_fw.elf
 
 echo "=== generating hex image ==="
 riscv64-unknown-elf-objcopy -O binary agriasic_fw.elf agriasic_fw.bin
@@ -33,10 +36,14 @@ PY
 
 echo "=== verifying volatile stores to the scratch-RAM outputs survived ==="
 riscv64-unknown-elf-objdump -d agriasic_fw.elf > agriasic_fw.dis
-# Rev 4.3 Phase 7 layout (supersedes the Phase 1-6 single-frequency-demo
-# offsets): 256/260=OUT_COUNT/OUT_NUM_POINTS, 272-280=OUT_DIV[0..2],
-# 288-296=OUT_I[0..2], 304-312=OUT_Q[0..2], 320=OUT_TEMP
-grep -E "sw\s+[a-z0-9]+,(256|260|272|276|280|288|292|296|304|308|312|320)\(" agriasic_fw.dis || echo "(checking by offset below)"
-grep -cE "sw" agriasic_fw.dis | xargs echo "total sw instructions:"
+# Rev 4.3 Phase 7 layout at DMEM_BASE = 0x10000 (Phase 2 flat map):
+# +0x100/+0x104 = OUT_COUNT/OUT_NUM_POINTS, +0x110..0x118 = OUT_DIV[0..2],
+# +0x120..0x128 = OUT_I[0..2], +0x130..0x138 = OUT_Q[0..2], +0x140 = OUT_TEMP.
+# With -Os the compiler materialises the base with `lui rX,0x10` and stores
+# through it, so check the base is formed and count the stores.
+echo "DMEM_BASE (lui 0x10) materialised $(grep -cE 'lui[[:space:]]+[a-z0-9]+,0x10$' agriasic_fw.dis) time(s)"
+echo "total sw instructions: $(grep -cE '\b(c\.)?sw\b' agriasic_fw.dis)"
+echo "=== Ibex boot layout check ==="
+grep -E "^00000000 <_vectors>:|^00000080 <_start>:" agriasic_fw.dis
 echo "=== full disassembly of main ==="
 sed -n "/<main>:/,/^$/p" agriasic_fw.dis

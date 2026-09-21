@@ -2,8 +2,9 @@
 // Module: agriasic_digital_rv32i_top
 // Purpose:
 //   Reference top-level RTL for the RV32I-programmable architecture.
-//   This integrates the RV32I control shell with the existing measurement
-//   engine so the RTL tree reflects the updated on-die controller partition.
+//   This integrates the RV32I control shell (Ibex core + RISC-V debug module)
+//   with the existing measurement engine so the RTL tree reflects the updated
+//   on-die controller partition. Phase 2 added the five JTAG pins.
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ns
 
@@ -29,7 +30,16 @@ module agriasic_digital_rv32i_top #(
   output logic [3:0]           cfg_pair_log2_o,
   output logic [7:0]           cfg_settle_cycles_o,
   output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
-  output logic [7:0]           cfg_conv_cycles_o
+  output logic [7:0]           cfg_conv_cycles_o,
+
+  // JTAG debug port (Phase 2): 5-wire IEEE 1149.1 into the RISC-V debug
+  // module inside the control shell. TRST_N is the TAP's own async reset;
+  // it is independent of rst_n so a debugger can attach across a chip reset.
+  input  logic                 jtag_tck_i,
+  input  logic                 jtag_tms_i,
+  input  logic                 jtag_trst_ni,
+  input  logic                 jtag_tdi_i,
+  output logic                 jtag_tdo_o
 );
 
   // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
@@ -66,7 +76,12 @@ module agriasic_digital_rv32i_top #(
     .cfg_exc_divider_o       (cfg_exc_divider_o),
     .cfg_conv_cycles_o       (cfg_conv_cycles_o),
     .result_i_o              (shell_result_i),
-    .result_q_o              (shell_result_q)
+    .result_q_o              (shell_result_q),
+    .jtag_tck_i              (jtag_tck_i),
+    .jtag_tms_i              (jtag_tms_i),
+    .jtag_trst_ni            (jtag_trst_ni),
+    .jtag_tdi_i              (jtag_tdi_i),
+    .jtag_tdo_o              (jtag_tdo_o)
   );
 
   agriasic_digital_top #(

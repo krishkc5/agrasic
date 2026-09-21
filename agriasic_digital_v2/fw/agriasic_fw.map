@@ -1,0 +1,71 @@
+
+Discarded input sections
+
+ .riscv.attributes
+                0x00000000       0x3a /tmp/ccTCDncn.o
+ .comment       0x00000000       0x23 /tmp/ccVsH6Nv.o
+ .riscv.attributes
+                0x00000000       0x3c /tmp/ccVsH6Nv.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+ROM              0x00000000         0x00001000
+RAM              0x00010000         0x00000800
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD /tmp/ccTCDncn.o
+LOAD /tmp/ccVsH6Nv.o
+
+.text           0x00000000      0x1e2
+ *(.vectors)
+ .vectors       0x00000000       0x80 /tmp/ccTCDncn.o
+                0x00000000                _vectors
+                0x00000080                        . = 0x80
+ *(.start*)
+ .start         0x00000080       0x34 /tmp/ccTCDncn.o
+                0x00000080                _start
+                0x000000a2                trap_handler
+ *(.text*)
+ .text          0x000000b4        0x0 /tmp/ccTCDncn.o
+ .text          0x000000b4       0x66 /tmp/ccVsH6Nv.o
+ .text.startup  0x0000011a       0xc8 /tmp/ccVsH6Nv.o
+                0x0000011a                main
+
+.rodata
+ *(.rodata*)
+ *(.srodata*)
+
+.data           0x000001e2        0x0
+ *(.data*)
+ .data          0x000001e2        0x0 /tmp/ccTCDncn.o
+ .data          0x000001e2        0x0 /tmp/ccVsH6Nv.o
+ *(.sdata*)
+
+.bss            0x000001e2        0x0
+ *(.bss*)
+ .bss           0x000001e2        0x0 /tmp/ccTCDncn.o
+ .bss           0x000001e2        0x0 /tmp/ccVsH6Nv.o
+ *(.sbss*)
+
+/DISCARD/
+ *(.comment)
+ *(.eh_frame)
+ *(.riscv.attributes)
+                0x00000001                        ASSERT ((_vectors == 0x0), Ibex boot: vector table must sit at boot_addr_i (0x0))
+                0x00000001                        ASSERT ((_start == 0x80), Ibex boot: _start must sit at boot_addr_i + 0x80)
+                0x00000001                        ASSERT ((SIZEOF (.rodata) == 0x0), Harvard split: .rodata is non-empty and would be unreachable from the data port)
+                0x00000001                        ASSERT ((SIZEOF (.data) == 0x0), Harvard split: .data is non-empty and would be unreachable from the data port)
+                0x00000001                        ASSERT ((SIZEOF (.bss) == 0x0), Harvard split: .bss is non-empty; it lives in RAM and needs runtime zeroing)
+OUTPUT(agriasic_fw.elf elf32-littleriscv)
+
+Cross Reference Table
+
+Symbol                                            File
+_start                                            /tmp/ccTCDncn.o
+_vectors                                          /tmp/ccTCDncn.o
+main                                              /tmp/ccVsH6Nv.o
+                                                  /tmp/ccTCDncn.o
+trap_handler                                      /tmp/ccTCDncn.o

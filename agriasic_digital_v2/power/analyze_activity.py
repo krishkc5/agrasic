@@ -25,6 +25,8 @@ def group(name):
         return "measurement_engine"
     if ".u_dm." in name or ".u_dtm." in name:
         return "debug_module"         # riscv-dbg dm_top + JTAG DTM (Phase 2)
+    if ".u_boot." in name:
+        return "boot_loader"          # SPI-flash boot master (Phase 3)
     return "shell_mmio_reset"
 
 def priority(name):

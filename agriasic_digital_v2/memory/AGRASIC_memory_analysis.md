@@ -394,3 +394,14 @@ The debug integration changed the **address map**, not the memory sizes:
 - Generic synthesis: 25,043 combinational + 3,254 register bits, of which the
   debug module is 1,076 register bits (abstract data, program buffer, SBA,
   DTM) — the price of a standard debug port, independent of memory choices.
+
+### Phase 3 (SPI-flash boot) update
+
+Option C is now implemented (`agriasic_spi_boot.sv`), which settles the
+IMEM technology question from §7: **program memory is writable SRAM**, loaded
+at reset from external flash (or over JTAG), so the synthesized-ROM option is
+retired. Sizing is unchanged — the 484 B image boots in 65.7k cycles at
+SCK = clk/16 — but the loader enforces `length <= 4096` (the 4 KiB IMEM); if
+IMEM is shrunk to 2 KiB the `IMEM_BYTES` parameter must follow. The loader
+adds 342 register bits (header, CRC, byte/word staging, SPI engine) and no
+memory of its own. DMEM is untouched.

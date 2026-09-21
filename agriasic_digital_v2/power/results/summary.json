@@ -1,12 +1,12 @@
 {
-  "sweep_cycles_negedge_window": 3153181,
+  "sweep_cycles_negedge_window": 3153189,
   "existing_e2e_posedge_cycles": 3153174,
-  "active_cycles": 458,
-  "frozen_cycles": 3152723,
-  "frozen_percent": 99.98547498541949,
-  "sweep_time_ms_at_model_frequency": 19.70738125,
+  "active_cycles": 464,
+  "frozen_cycles": 3152725,
+  "frozen_percent": 99.98528473872007,
+  "sweep_time_ms_at_model_frequency": 19.70743125,
   "sweep_samples": 96,
-  "imem_accesses_in_sweep": 155,
+  "imem_accesses_in_sweep": 160,
   "dmem_accesses_in_sweep": 30,
   "memory_capacity_bits": {
     "imem": 32768,
@@ -22,26 +22,26 @@
     "low": {
       "scenario": "low",
       "mode": "whole_sweep",
-      "clock_mW": 16.868736000000002,
-      "data_proxy_mW": 0.008007725002633049,
-      "logic_dynamic_mW": 16.876743725002633,
-      "energy_uJ": 332.59642284717205
+      "clock_mW": 18.740160000000003,
+      "data_proxy_mW": 0.0077986181349359324,
+      "logic_dynamic_mW": 18.747958618134938,
+      "energy_uJ": 369.47410554473925
     },
     "central": {
       "scenario": "central",
       "mode": "whole_sweep",
-      "clock_mW": 42.17184,
-      "data_proxy_mW": 0.04003862501316525,
-      "logic_dynamic_mW": 42.21187862501317,
-      "energy_uJ": 831.8855853418603
+      "clock_mW": 46.85040000000001,
+      "data_proxy_mW": 0.03899309067467967,
+      "logic_dynamic_mW": 46.88939309067469,
+      "energy_uJ": 924.0694906886965
     },
     "high": {
       "scenario": "high",
       "mode": "whole_sweep",
-      "clock_mW": 84.34368,
-      "data_proxy_mW": 0.160154500052661,
-      "logic_dynamic_mW": 84.50383450005266,
-      "energy_uJ": 1665.349283579441
+      "clock_mW": 93.70080000000002,
+      "data_proxy_mW": 0.15597236269871867,
+      "logic_dynamic_mW": 93.85677236269873,
+      "energy_uJ": 1849.6758886847854
     }
   }
 }

@@ -100,10 +100,10 @@ def plot(assumptions, structure, summary, lookup):
     fig.suptitle("AgriASIC digital power budget | 1.8 V", fontsize=19, fontweight="bold", x=.075, ha="left")
     ax = axes[0]
     groups = structure["register_bits_by_block"]
-    names = ["CPU pipeline", "Register file", "Mul/div", "Measurement", "Shell / MMIO / bus", "Debug module"]
-    keys = ["core_pipeline", "core_register_file", "core_divider", "measurement_engine", "shell_mmio_reset", "debug_module"]
+    names = ["CPU pipeline", "Register file", "Mul/div", "Measurement", "Shell / MMIO / bus", "Debug module", "Boot loader"]
+    keys = ["core_pipeline", "core_register_file", "core_divider", "measurement_engine", "shell_mmio_reset", "debug_module", "boot_loader"]
     values = [groups[k] * 25e-15 * 1.8**2 * 160e6 * 1e3 for k in keys]
-    ax.barh(names, values, color=["#235a80", "#347da5", "#56a0b6", "#ce8e3d", "#90a4ae", "#6c5b7b"])
+    ax.barh(names, values, color=["#235a80", "#347da5", "#56a0b6", "#ce8e3d", "#90a4ae", "#6c5b7b", "#8d6e63"])
     ax.invert_yaxis()
     for i, v in enumerate(values): ax.text(v+.2, i, f"{v:.2f}", va="center", fontsize=10)
     ax.set_xlim(0, max(values)*1.28)

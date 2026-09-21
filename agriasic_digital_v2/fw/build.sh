@@ -34,6 +34,30 @@ if len(words) > 1024:
     raise SystemExit("ERROR: image exceeds the 1024-word instruction ROM")
 PY
 
+echo "=== generating SPI-flash boot image (Phase 3, agriasic_spi_boot) ==="
+# Header (little-endian words): magic "AGRA", payload length, version, CRC-32
+# (zlib / IEEE 802.3) of the payload. The boot FSM checks all three before it
+# releases the core. .bin is what goes into the flash at address 0; .hex is
+# one byte per line for the simulation flash model.
+python3 - <<'PYIMG'
+import struct, zlib, subprocess
+payload = open('agriasic_fw.bin','rb').read()
+if len(payload) % 4:
+    payload += b'\x00' * (4 - len(payload) % 4)
+try:
+    version = int(subprocess.check_output(['git','rev-parse','--short=4','HEAD'], stderr=subprocess.DEVNULL).decode().strip(), 16)
+except Exception:
+    version = 1
+crc = zlib.crc32(payload) & 0xFFFFFFFF
+hdr = struct.pack('<IIII', 0x41475241, len(payload), version & 0xFFFF, crc)
+image = hdr + payload
+open('agriasic_fw_flash.bin','wb').write(image)
+with open('agriasic_fw_flash.hex','w') as f:
+    for b in image:
+        f.write('%02x\n' % b)
+print(f"wrote agriasic_fw_flash.bin/.hex: {len(image)} bytes (16-byte header + {len(payload)} payload, crc32=0x{crc:08x}, version=0x{version&0xffff:04x})")
+PYIMG
+
 echo "=== verifying volatile stores to the scratch-RAM outputs survived ==="
 riscv64-unknown-elf-objdump -d agriasic_fw.elf > agriasic_fw.dis
 # Rev 4.3 Phase 7 layout at DMEM_BASE = 0x10000 (Phase 2 flat map):

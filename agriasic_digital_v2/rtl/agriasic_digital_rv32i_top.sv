@@ -4,12 +4,16 @@
 //   Reference top-level RTL for the RV32I-programmable architecture.
 //   This integrates the RV32I control shell (Ibex core + RISC-V debug module)
 //   with the existing measurement engine so the RTL tree reflects the updated
-//   on-die controller partition. Phase 2 added the five JTAG pins.
+//   on-die controller partition. Phase 2 added the five JTAG pins; Phase 3
+//   added the boot strap, the four flash SPI pins and boot_fail_o.
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ns
 
 module agriasic_digital_rv32i_top #(
-  parameter int unsigned ADC_WIDTH = 8
+  parameter int unsigned ADC_WIDTH         = 8,
+  parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait, shortened in simulation
+  parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation only: skip-boot releases the core
+  parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation only ("" = start empty)
 ) (
   input  logic                 clk,
   input  logic                 rst_n,
@@ -39,7 +43,16 @@ module agriasic_digital_rv32i_top #(
   input  logic                 jtag_tms_i,
   input  logic                 jtag_trst_ni,
   input  logic                 jtag_tdi_i,
-  output logic                 jtag_tdo_o
+  output logic                 jtag_tdo_o,
+
+  // SPI-flash boot (Phase 3): boot strap, 4-wire SPI master to the external
+  // NOR flash, and a boot-failure flag (also readable in BOOT_STATUS).
+  input  logic                 boot_sel_i,
+  output logic                 flash_sck_o,
+  output logic                 flash_cs_n_o,
+  output logic                 flash_mosi_o,
+  input  logic                 flash_miso_i,
+  output logic                 boot_fail_o
 );
 
   // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
@@ -59,7 +72,10 @@ module agriasic_digital_rv32i_top #(
   logic signed [15:0] shell_result_q;
 
   agriasic_rv32i_control_shell #(
-    .ADC_WIDTH(ADC_WIDTH)
+    .ADC_WIDTH         (ADC_WIDTH),
+    .BOOT_DELAY_CYCLES (BOOT_DELAY_CYCLES),
+    .IMEM_PRELOADED    (IMEM_PRELOADED),
+    .IMEM_INIT_FILE    (IMEM_INIT_FILE)
   ) u_control_shell (
     .clk                     (clk),
     .rst_n                   (rst_n_sync),
@@ -81,7 +97,13 @@ module agriasic_digital_rv32i_top #(
     .jtag_tms_i              (jtag_tms_i),
     .jtag_trst_ni            (jtag_trst_ni),
     .jtag_tdi_i              (jtag_tdi_i),
-    .jtag_tdo_o              (jtag_tdo_o)
+    .jtag_tdo_o              (jtag_tdo_o),
+    .boot_sel_i              (boot_sel_i),
+    .flash_sck_o             (flash_sck_o),
+    .flash_cs_n_o            (flash_cs_n_o),
+    .flash_mosi_o            (flash_mosi_o),
+    .flash_miso_i            (flash_miso_i),
+    .boot_fail_o             (boot_fail_o)
   );
 
   agriasic_digital_top #(

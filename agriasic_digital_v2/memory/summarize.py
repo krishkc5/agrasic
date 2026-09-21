@@ -41,7 +41,7 @@ def main():
             if max(accessed) >= image["vma_end_exclusive"]: fetch_beyond_image.add(addr)
         elif addr & 0x80000000:
             mmio[kind, addr] += 1
-            if max(accessed) >= 0x80000020 or addr % 4: invalid.append(event)
+            if max(accessed) >= 0x80000040 or addr % 4: invalid.append(event)
         else:
             # Phase 2 flat map: DMEM is at DMEM_BASE; report RAM bytes as offsets
             # within the RAM so the extent-from-origin numbers stay comparable.

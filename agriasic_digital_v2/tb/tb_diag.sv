@@ -36,7 +36,7 @@ module tb_diag;
   end
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
-  agriasic_digital_rv32i_top dut (
+  agriasic_digital_rv32i_top #(.BOOT_DELAY_CYCLES(64), .IMEM_PRELOADED(1'b1)) dut (
     .clk(clk), .rst_n(rst_n), .start_i(start_i),
     .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
     .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o),
@@ -44,7 +44,8 @@ module tb_diag;
     .busy_o(busy_o), .done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o),
     .cfg_pair_log2_o(cfg_pair_log2_o), .cfg_settle_cycles_o(cfg_settle_cycles_o),
     .cfg_exc_divider_o(cfg_exc_divider_o), .cfg_conv_cycles_o(cfg_conv_cycles_o),
-    .jtag_tck_i(1'b0), .jtag_tms_i(1'b1), .jtag_trst_ni(rst_n), .jtag_tdi_i(1'b0), .jtag_tdo_o());
+    .jtag_tck_i(1'b0), .jtag_tms_i(1'b1), .jtag_trst_ni(rst_n), .jtag_tdi_i(1'b0), .jtag_tdo_o(),
+    .boot_sel_i(1'b0), .flash_sck_o(), .flash_cs_n_o(), .flash_mosi_o(), .flash_miso_i(1'b0), .boot_fail_o());
 
   wire [31:0] pc = dut.u_control_shell.instr_addr;
   wire halted = dut.u_control_shell.done_o;
@@ -59,7 +60,7 @@ module tb_diag;
 
   initial begin
     halt_seen = 0; maxpc = 0;
-    rst_n = 1; start_i = 1; repeat (4) @(posedge clk); rst_n = 0; start_i = 0;  // 1->0->1 on the core reset: Ibex async resets need a negedge under Verilator
+    rst_n = 1; start_i = 1; repeat (12) @(posedge clk); rst_n = 0; start_i = 0;  // 1->0->1 on the core reset: Ibex async resets need a negedge under Verilator
     repeat (10) @(posedge clk);
     rst_n = 1; repeat (3) @(posedge clk);
     start_i = 1;

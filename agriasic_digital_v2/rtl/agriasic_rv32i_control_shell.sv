@@ -42,10 +42,20 @@
 //   to 0x0001_0000 so a debugger's single address space has no overlap
 //   between the two memories (firmware SP / result addresses moved with it).
 //
+// Boot (Phase 3, Option C):
+//   agriasic_spi_boot is a fourth bus master. With boot_sel_i = 1 it reads a
+//   header + CRC-32 firmware image from the external SPI flash into IMEM
+//   after reset and then asserts fw_valid; the core is held in reset until
+//   fw_valid AND start_i are both high. With boot_sel_i = 0 the flash is
+//   left alone and fw_valid waits for BOOT_CTRL.release (debugger over the
+//   SBA, or a host), unless IMEM_PRELOADED (simulation) is set. boot_fail_o
+//   is raised on a bad magic/length/CRC/bus error. After boot the same SPI
+//   engine is a firmware peripheral (SPI_CTRL/SPI_DATA) for reflashing.
+//
 // Run control:
-//   The core is held in reset while start_i is low (reported to the DM as
-//   `unavailable`, so a debugger must raise start_i before it can halt the
-//   hart) and boots from
+//   The core is held in reset while start_i is low or fw_valid is low
+//   (reported to the DM as `unavailable`, so a debugger must raise start_i
+//   and release the boot before it can halt the hart) and boots from
 //   boot_addr_i + 0x80 = 0x80 when start_i is asserted (Ibex convention: the
 //   32-entry trap vector table occupies 0x00-0x7F, mtvec = boot_addr_i).
 //   Holding the core in reset between runs is also the power-saving state.
@@ -81,7 +91,10 @@
 `timescale 1ns / 1ns
 
 module agriasic_rv32i_control_shell #(
-  parameter int unsigned ADC_WIDTH = 8
+  parameter int unsigned ADC_WIDTH         = 8,
+  parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait (~5 ms at 160 MHz)
+  parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation: IMEM filled by $readmemh
+  parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation preload ("" = none)
 ) (
   input  logic                 clk,
   input  logic                 rst_n,
@@ -107,7 +120,15 @@ module agriasic_rv32i_control_shell #(
   input  logic                 jtag_tms_i,
   input  logic                 jtag_trst_ni,
   input  logic                 jtag_tdi_i,
-  output logic                 jtag_tdo_o
+  output logic                 jtag_tdo_o,
+
+  // Boot from SPI flash (Phase 3)
+  input  logic                 boot_sel_i,      // 1: boot from flash, 0: wait for release
+  output logic                 flash_sck_o,
+  output logic                 flash_cs_n_o,
+  output logic                 flash_mosi_o,
+  input  logic                 flash_miso_i,
+  output logic                 boot_fail_o
 );
 
   // ADC_WIDTH is retained for interface compatibility; the control core does
@@ -146,11 +167,20 @@ module agriasic_rv32i_control_shell #(
   // --------------------------------------------------------------------------
   logic core_rst;
 
+  logic fw_valid;
+
+`ifndef SYNTHESIS
+  // Simulation only: together with rst_sync's initial values this gives the
+  // core's reset (core_rst_n below) a real falling edge at time zero, which
+  // Ibex's gated-clock async-reset flops need under Verilator's 2-state init.
+  initial core_rst = 1'b0;
+`endif
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       core_rst <= 1'b1;
     end else begin
-      core_rst <= !start_i;
+      core_rst <= !(start_i && fw_valid);
     end
   end
 
@@ -210,6 +240,17 @@ module agriasic_rv32i_control_shell #(
   logic        sba_req, sba_gnt, sba_rvalid, sba_we, sba_err;
   logic [3:0]  sba_be;
   logic [31:0] sba_addr, sba_wdata, sba_rdata;
+
+  // Boot loader bus master
+  logic        boot_req, boot_gnt, boot_rvalid, boot_we, boot_err;
+  logic [3:0]  boot_be;
+  logic [31:0] boot_addr, boot_wdata, boot_rdata;
+
+  // Boot / SPI-master register plumbing
+  logic        boot_release, boot_retry, spi_ctrl_we, spi_data_we;
+  logic [15:0] spi_ctrl_wdata;
+  logic [7:0]  spi_data_wdata, spi_rx;
+  logic [31:0] boot_status, spi_ctrl_rd, spi_status;
 
   // DMI between the JTAG DTM and the DM
   logic          dmi_rst_n, dmi_req_valid, dmi_req_ready, dmi_resp_valid, dmi_resp_ready;
@@ -336,7 +377,7 @@ module agriasic_rv32i_control_shell #(
     .DMEM_BASE    (DMEM_BASE),
     .DMEM_BYTES   (DMEM_BYTES),
     .PERIPH_BASE  (PERIPH_BASE),
-    .PERIPH_BYTES (32'h20),
+    .PERIPH_BYTES (32'h40),
     .DM_BASE      (DM_BASE_ADDR),
     .DM_BYTES     (DM_ADDR_MASK + 1)
   ) u_bus (
@@ -366,6 +407,15 @@ module agriasic_rv32i_control_shell #(
     .sba_rvalid_o   (sba_rvalid),
     .sba_rdata_o    (sba_rdata),
     .sba_err_o      (sba_err),
+    .boot_req_i     (boot_req),
+    .boot_we_i      (boot_we),
+    .boot_be_i      (boot_be),
+    .boot_addr_i    (boot_addr),
+    .boot_wdata_i   (boot_wdata),
+    .boot_gnt_o     (boot_gnt),
+    .boot_rvalid_o  (boot_rvalid),
+    .boot_rdata_o   (boot_rdata),
+    .boot_err_o     (boot_err),
     .imem_ce_o      (imem_ce),
     .imem_we_o      (imem_we),
     .imem_addr_o    (imem_addr),
@@ -398,7 +448,7 @@ module agriasic_rv32i_control_shell #(
   // --------------------------------------------------------------------------
   agriasic_imem #(
     .NUM_WORDS(IMEM_WORDS),
-    .INIT_FILE("agriasic_fw.hex")
+    .INIT_FILE(IMEM_INIT_FILE)
   ) u_imem (
     .clk    (clk),
     .rst_n  (rst_n),
@@ -439,7 +489,57 @@ module agriasic_rv32i_control_shell #(
     .meas_done_irq_o     (meas_done_irq),
     .done_i              (measurement_done_i),
     .result_i_i          (measurement_result_i_i),
-    .result_q_i          (measurement_result_q_i)
+    .result_q_i          (measurement_result_q_i),
+    .boot_release_o      (boot_release),
+    .boot_retry_o        (boot_retry),
+    .spi_ctrl_we_o       (spi_ctrl_we),
+    .spi_ctrl_wdata_o    (spi_ctrl_wdata),
+    .spi_data_we_o       (spi_data_we),
+    .spi_data_wdata_o    (spi_data_wdata),
+    .boot_status_i       (boot_status),
+    .spi_ctrl_i          (spi_ctrl_rd),
+    .spi_rx_i            (spi_rx),
+    .spi_status_i        (spi_status)
+  );
+
+  // --------------------------------------------------------------------------
+  // SPI-flash boot loader (Phase 3). Resets with the chip, never with
+  // ndmreset: the debugger's reset must not restart a flash boot underneath
+  // an image it just loaded.
+  // --------------------------------------------------------------------------
+  agriasic_spi_boot #(
+    .IMEM_BYTES        (IMEM_BYTES),
+    .BOOT_DELAY_CYCLES (BOOT_DELAY_CYCLES),
+    .IMEM_PRELOADED    (IMEM_PRELOADED)
+  ) u_boot (
+    .clk              (clk),
+    .rst_n            (rst_n),
+    .boot_sel_i       (boot_sel_i),
+    .spi_sck_o        (flash_sck_o),
+    .spi_cs_n_o       (flash_cs_n_o),
+    .spi_mosi_o       (flash_mosi_o),
+    .spi_miso_i       (flash_miso_i),
+    .bus_req_o        (boot_req),
+    .bus_we_o         (boot_we),
+    .bus_be_o         (boot_be),
+    .bus_addr_o       (boot_addr),
+    .bus_wdata_o      (boot_wdata),
+    .bus_gnt_i        (boot_gnt),
+    .bus_rvalid_i     (boot_rvalid),
+    .bus_rdata_i      (boot_rdata),
+    .bus_err_i        (boot_err),
+    .fw_valid_o       (fw_valid),
+    .boot_fail_o      (boot_fail_o),
+    .ctrl_release_i   (boot_release),
+    .ctrl_retry_i     (boot_retry),
+    .spi_ctrl_we_i    (spi_ctrl_we),
+    .spi_ctrl_wdata_i (spi_ctrl_wdata),
+    .spi_data_we_i    (spi_data_we),
+    .spi_data_wdata_i (spi_data_wdata),
+    .boot_status_o    (boot_status),
+    .spi_ctrl_o       (spi_ctrl_rd),
+    .spi_rx_o         (spi_rx),
+    .spi_status_o     (spi_status)
   );
 
   // --------------------------------------------------------------------------

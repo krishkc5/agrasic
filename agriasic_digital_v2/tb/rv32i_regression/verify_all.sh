@@ -80,3 +80,9 @@ echo "=================================================="
 echo "13. JTAG / RISC-V DEBUG MODULE (Phase 2: halt, abstract regs, SBA, resume, ndmreset)"
 echo "=================================================="
 bash "$R/jtag.sh" 2>&1 | grep -E "^\[TB\]|JTAG_DEBUG_" | tail -8
+
+echo ""
+echo "=================================================="
+echo "14. SPI-FLASH BOOT (Phase 3: header/CRC load into IMEM, fail-hold, retry)"
+echo "=================================================="
+bash "$R/flash_boot.sh" 2>&1 | grep -E "^\[TB\] [A-D]:|FLASH_BOOT_" | tail -6

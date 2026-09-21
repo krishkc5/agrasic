@@ -23,12 +23,15 @@
 // Masters (priority for a contended slave, highest first):
 //   M1  core data port     may target IMEM, DMEM/MMIO, DM
 //   M2  debug SBA master   may target IMEM, DMEM/MMIO       (DM -> error)
+//   M3  boot loader        may target IMEM only             (else -> error)
 //   M0  core instr port    may target IMEM, DM              (else -> error)
 //
 //   Data before fetch keeps a load/store from being starved by the prefetcher;
 //   the debugger's SBA sits between them because it is only active while the
-//   user is poking memory. A master that loses arbitration simply sees gnt=0
-//   and holds its request (OBI semantics); Ibex and dm_sba both do this.
+//   user is poking memory; the boot loader (Phase 3, agriasic_spi_boot) only
+//   runs while the core is held in reset, so its slot rarely matters. A
+//   master that loses arbitration simply sees gnt=0 and holds its request
+//   (OBI semantics); Ibex, dm_sba and the boot FSM all do this.
 //
 // Slaves:
 //   All three complete every accepted access in exactly one cycle (address
@@ -82,6 +85,17 @@ module agriasic_rv32i_bus #(
   output logic [31:0] sba_rdata_o,
   output logic        sba_err_o,
 
+  // M3: boot loader (SPI flash -> IMEM)
+  input  logic        boot_req_i,
+  input  logic        boot_we_i,
+  input  logic [3:0]  boot_be_i,
+  input  logic [31:0] boot_addr_i,
+  input  logic [31:0] boot_wdata_i,
+  output logic        boot_gnt_o,
+  output logic        boot_rvalid_o,
+  output logic [31:0] boot_rdata_o,
+  output logic        boot_err_o,
+
   // S0: instruction memory (single port, always ready, 1-cycle)
   output logic        imem_ce_o,
   output logic [3:0]  imem_we_o,
@@ -127,7 +141,7 @@ module agriasic_rv32i_bus #(
   // --------------------------------------------------------------------------
   // Decode, with per-master permission
   // --------------------------------------------------------------------------
-  target_e m0_tgt, m1_tgt, m2_tgt;
+  target_e m0_tgt, m1_tgt, m2_tgt, m3_tgt;
 
   always_comb begin
     m0_tgt = decode(instr_addr_i);
@@ -135,10 +149,12 @@ module agriasic_rv32i_bus #(
     m1_tgt = decode(data_addr_i);
     m2_tgt = decode(sba_addr_i);
     if (m2_tgt == TGT_DM)   m2_tgt = TGT_ERR;   // SBA never targets the DM itself
+    m3_tgt = decode(boot_addr_i);
+    if (m3_tgt != TGT_IMEM) m3_tgt = TGT_ERR;   // loader only ever fills IMEM
   end
 
   // --------------------------------------------------------------------------
-  // Arbitration: M1 > M2 > M0 on every contended slave
+  // Arbitration: M1 > M2 > M3 > M0 on every contended slave
   // --------------------------------------------------------------------------
   wire m0_req_imem = instr_req_i && (m0_tgt == TGT_IMEM);
   wire m0_req_dm   = instr_req_i && (m0_tgt == TGT_DM);
@@ -147,10 +163,12 @@ module agriasic_rv32i_bus #(
   wire m1_req_dm   = data_req_i  && (m1_tgt == TGT_DM);
   wire m2_req_imem = sba_req_i   && (m2_tgt == TGT_IMEM);
   wire m2_req_mmio = sba_req_i   && (m2_tgt == TGT_MMIO);
+  wire m3_req_imem = boot_req_i  && (m3_tgt == TGT_IMEM);
 
   wire imem_sel_m1 = m1_req_imem;
   wire imem_sel_m2 = m2_req_imem && !imem_sel_m1;
-  wire imem_sel_m0 = m0_req_imem && !imem_sel_m1 && !imem_sel_m2;
+  wire imem_sel_m3 = m3_req_imem && !imem_sel_m1 && !imem_sel_m2;
+  wire imem_sel_m0 = m0_req_imem && !imem_sel_m1 && !imem_sel_m2 && !imem_sel_m3;
 
   wire mmio_sel_m1 = m1_req_mmio;
   wire mmio_sel_m2 = m2_req_mmio && !mmio_sel_m1;
@@ -164,15 +182,18 @@ module agriasic_rv32i_bus #(
                                        (mmio_sel_m1 && mmio_gnt_i));
   assign sba_gnt_o   = sba_req_i   && ((m2_tgt == TGT_ERR) || imem_sel_m2 ||
                                        (mmio_sel_m2 && mmio_gnt_i));
+  assign boot_gnt_o  = boot_req_i  && ((m3_tgt == TGT_ERR) || imem_sel_m3);
 
   // --------------------------------------------------------------------------
   // Slave request muxes
   // --------------------------------------------------------------------------
-  assign imem_ce_o    = imem_sel_m1 || imem_sel_m2 || imem_sel_m0;
+  assign imem_ce_o    = imem_sel_m1 || imem_sel_m2 || imem_sel_m3 || imem_sel_m0;
   assign imem_we_o    = imem_sel_m1 ? (data_we_i ? data_be_i : 4'b0000) :
-                        imem_sel_m2 ? (sba_we_i  ? sba_be_i  : 4'b0000) : 4'b0000;
-  assign imem_addr_o  = imem_sel_m1 ? data_addr_i  : imem_sel_m2 ? sba_addr_i  : instr_addr_i;
-  assign imem_wdata_o = imem_sel_m1 ? data_wdata_i : sba_wdata_i;
+                        imem_sel_m2 ? (sba_we_i  ? sba_be_i  : 4'b0000) :
+                        imem_sel_m3 ? (boot_we_i ? boot_be_i : 4'b0000) : 4'b0000;
+  assign imem_addr_o  = imem_sel_m1 ? data_addr_i  : imem_sel_m2 ? sba_addr_i  :
+                        imem_sel_m3 ? boot_addr_i  : instr_addr_i;
+  assign imem_wdata_o = imem_sel_m1 ? data_wdata_i : imem_sel_m2 ? sba_wdata_i : boot_wdata_i;
 
   assign mmio_req_o   = mmio_sel_m1 || mmio_sel_m2;
   assign mmio_we_o    = mmio_sel_m1 ? data_we_i    : sba_we_i;
@@ -189,18 +210,20 @@ module agriasic_rv32i_bus #(
   // --------------------------------------------------------------------------
   // Responses: one cycle after grant, muxed by the target that was granted
   // --------------------------------------------------------------------------
-  logic    m0_rvalid_q, m1_rvalid_q, m2_rvalid_q;
-  target_e m0_sel_q,    m1_sel_q,    m2_sel_q;
+  logic    m0_rvalid_q, m1_rvalid_q, m2_rvalid_q, m3_rvalid_q;
+  target_e m0_sel_q,    m1_sel_q,    m2_sel_q,    m3_sel_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       m0_rvalid_q <= 1'b0; m0_sel_q <= TGT_ERR;
       m1_rvalid_q <= 1'b0; m1_sel_q <= TGT_ERR;
       m2_rvalid_q <= 1'b0; m2_sel_q <= TGT_ERR;
+      m3_rvalid_q <= 1'b0; m3_sel_q <= TGT_ERR;
     end else begin
       m0_rvalid_q <= instr_gnt_o; m0_sel_q <= m0_tgt;
       m1_rvalid_q <= data_gnt_o;  m1_sel_q <= m1_tgt;
       m2_rvalid_q <= sba_gnt_o;   m2_sel_q <= m2_tgt;
+      m3_rvalid_q <= boot_gnt_o;  m3_sel_q <= m3_tgt;
     end
   end
 
@@ -229,6 +252,10 @@ module agriasic_rv32i_bus #(
   assign sba_rdata_o    = rdata_mux(m2_sel_q, imem_rdata_i, mmio_rdata_i, dm_rdata_i);
   assign sba_err_o      = m2_rvalid_q && ((m2_sel_q == TGT_ERR) ||
                                           ((m2_sel_q == TGT_MMIO) && mmio_err_i));
+
+  assign boot_rvalid_o  = m3_rvalid_q;
+  assign boot_rdata_o   = rdata_mux(m3_sel_q, imem_rdata_i, mmio_rdata_i, dm_rdata_i);
+  assign boot_err_o     = m3_rvalid_q && (m3_sel_q == TGT_ERR);
 
 `ifndef SYNTHESIS
   // The bridge is expected to answer exactly one cycle after each accepted

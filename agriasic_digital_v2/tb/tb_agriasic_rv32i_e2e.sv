@@ -63,7 +63,9 @@ module tb_agriasic_rv32i_e2e;
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   agriasic_digital_rv32i_top #(
-    .ADC_WIDTH(ADC_WIDTH)
+    .ADC_WIDTH         (ADC_WIDTH),
+    .BOOT_DELAY_CYCLES (64),
+    .IMEM_PRELOADED    (1'b1)      // IMEM comes from $readmemh in this test
   ) dut (
     .clk                 (clk),
     .rst_n               (rst_n),
@@ -88,7 +90,14 @@ module tb_agriasic_rv32i_e2e;
     .jtag_tms_i          (1'b1),
     .jtag_trst_ni        (rst_n),
     .jtag_tdi_i          (1'b0),
-    .jtag_tdo_o          ()
+    .jtag_tdo_o          (),
+    // No flash: boot strap low, IMEM preloaded (see parameter above).
+    .boot_sel_i          (1'b0),
+    .flash_sck_o         (),
+    .flash_cs_n_o        (),
+    .flash_mosi_o        (),
+    .flash_miso_i        (1'b0),
+    .boot_fail_o         ()
   );
 
   // The shell's done_o (firmware wrote CTRL.FW_DONE) is NOT exposed at the
@@ -189,12 +198,12 @@ module tb_agriasic_rv32i_e2e;
     // reset through a real NEGEDGE on rst_ni. Under Verilator's 2-state
     // initialisation a reset that starts asserted never produces one. The
     // core's reset is rst_n_sync && start_i (shell: core_rst), so drive BOTH
-    // high for a few clocks, then assert reset -- the same 1->0->1 sequence
+    // high for a dozen clocks (reset sync + boot-skip release), then assert reset -- the same 1->0->1 sequence
     // lowRISC's VerilatorSimCtrl applies. Silicon is unaffected: reset is a
     // level there, and the core runs from garbage for four cycles here only.
     rst_n   = 1'b1;
     start_i = 1'b1;
-    repeat (4) @(posedge clk);
+    repeat (12) @(posedge clk);
     rst_n   = 1'b0;
     start_i = 1'b0;
     repeat (10) @(posedge clk);

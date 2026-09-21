@@ -24,6 +24,10 @@
 //      through the debugger's system bus.
 //   7. ndmreset: core + peripheral bridge reset, DM survives, havereset
 //      handshake acknowledged.
+//   8. Boot control over the SBA (Phase 3): BOOT_CTRL.retry with no flash
+//      attached -> boot FAIL (bad magic), boot_fail_o, core held and reported
+//      unavailable; BOOT_CTRL.release -> core runs again. This is the bench
+//      flow: load IMEM over JTAG, then release.
 //
 // TCK is a quarter of the core clock; each DMI transaction is followed by
 // idle TCK cycles so the DTM's clock-domain crossing completes before the
@@ -103,7 +107,13 @@ module tb_agriasic_jtag;
   end
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
-  agriasic_digital_rv32i_top #(.ADC_WIDTH(ADC_WIDTH)) dut (
+  logic boot_fail;
+
+  agriasic_digital_rv32i_top #(
+    .ADC_WIDTH         (ADC_WIDTH),
+    .BOOT_DELAY_CYCLES (64),
+    .IMEM_PRELOADED    (1'b1)       // IMEM from $readmemh; boot strap low
+  ) dut (
     .clk(clk), .rst_n(rst_n), .start_i(start_i),
     .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
     .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o), .adc_dac_o(adc_dac_o),
@@ -112,7 +122,10 @@ module tb_agriasic_jtag;
     .cfg_pair_log2_o(cfg_pair_log2_o), .cfg_settle_cycles_o(cfg_settle_cycles_o),
     .cfg_exc_divider_o(cfg_exc_divider_o), .cfg_conv_cycles_o(cfg_conv_cycles_o),
     .jtag_tck_i(jtag_tck), .jtag_tms_i(jtag_tms), .jtag_trst_ni(jtag_trst_n),
-    .jtag_tdi_i(jtag_tdi), .jtag_tdo_o(jtag_tdo)
+    .jtag_tdi_i(jtag_tdi), .jtag_tdo_o(jtag_tdo),
+    .boot_sel_i(1'b0),
+    .flash_sck_o(), .flash_cs_n_o(), .flash_mosi_o(), .flash_miso_i(1'b0),   // no flash on this bench
+    .boot_fail_o(boot_fail)
   );
 
   wire fw_halted  = dut.u_control_shell.done_o;
@@ -296,7 +309,7 @@ module tb_agriasic_jtag;
     // Same 1->0->1 reset preamble as the e2e TB (Ibex's gated-clock async
     // resets need a real negedge under Verilator).
     rst_n = 1'b1; start_i = 1'b1;
-    repeat (4) @(posedge clk);
+    repeat (12) @(posedge clk);
     rst_n = 1'b0; start_i = 1'b0;
     repeat (10) @(posedge clk);
     rst_n = 1'b1;
@@ -415,6 +428,32 @@ module tb_agriasic_jtag;
     cycles = 0;
     while (!core_sleep && cycles < 5000) begin @(posedge clk); cycles++; end
     expect_eq("core back asleep after ndmreset restart", {31'd0, core_sleep}, 32'd1);
+
+    // ---- 8. Boot control over the SBA (Phase 3) ---------------------------
+    // retry with nothing on the flash pins: header reads as 0 -> bad magic.
+    sba_write32(32'h8000_0024, 32'h0000_0002);           // BOOT_CTRL.retry
+    for (int i = 0; i < 400; i++) begin                  // ~2.7k core cycles
+      sba_read32(32'h8000_0020, v, sberr);               // BOOT_STATUS
+      if (v[3:0] == 4'd8) break;
+    end
+    expect_eq("BOOT_STATUS.state = FAIL", {28'd0, v[3:0]}, 32'd8);
+    expect_eq("BOOT_STATUS.error = 1 (magic)", {29'd0, v[6:4]}, 32'd1);
+    expect_eq("BOOT_STATUS.fw_valid", {31'd0, v[8]}, 32'd0);
+    expect_eq("boot_fail_o pin", {31'd0, boot_fail}, 32'd1);
+    dmi_read(DM_DMSTATUS, v);
+    expect_eq("dmstatus.allunavail (core held)", (v >> 13) & 32'h1, 32'h1);
+    // bench flow: IMEM is already loaded (SBA writes tested above); release.
+    sba_write32(32'h8000_0024, 32'h0000_0001);           // BOOT_CTRL.release
+    sba_read32(32'h8000_0020, v, sberr);
+    expect_eq("BOOT_STATUS.fw_valid after release", {31'd0, v[8]}, 32'd1);
+    dmi_read(DM_DMSTATUS, v);
+    expect_eq("dmstatus.allrunning after release", (v >> 11) & 32'h1, 32'h1);
+    cycles = 0;
+    while (!core_sleep && cycles < 20000) begin @(posedge clk); cycles++; end
+    expect_eq("core reached wfi after release", {31'd0, core_sleep}, 32'd1);
+    // SPI peripheral ownership handed to firmware once the boot FSM is idle.
+    sba_read32(32'h8000_0030, v, sberr);                 // SPI_STATUS
+    expect_eq("SPI_STATUS.fw_owned", {31'd0, v[1]}, 32'd1);
 
     if (errors == 0) $display("[TB] JTAG_DEBUG_PASS -- all checks passed");
     else             $display("[TB] JTAG_DEBUG_FAIL -- %0d error(s)", errors);

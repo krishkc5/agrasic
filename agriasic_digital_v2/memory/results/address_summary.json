@@ -58,6 +58,9 @@
   "stack_pointer_values_in_order": [
     "0x00011000",
     "0x00010800",
+    "0x00000000",
+    "0x00011000",
+    "0x00010800",
     "0x000107E0",
     "0x00010800"
   ],
@@ -109,9 +112,9 @@
   "invalid_accesses": [],
   "data_loads_before_observed_store": [],
   "event_counts": {
-    "fetch": 177,
-    "retire": 210,
-    "sp": 4,
+    "fetch": 183,
+    "retire": 213,
+    "sp": 7,
     "store": 35,
     "load": 27
   },

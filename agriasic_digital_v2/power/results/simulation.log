@@ -16,4 +16,4 @@
 [TB] OUT_Q[2] = 280  OK
 [TB] core_sleep_o high for 3152721 cycles across 6 measurements (wfi sleep mechanism exercised)
 [TB] PASS -- all checks passed
-- tb_power_generated.sv:355: Verilog $finish
+- tb_power_generated.sv:364: Verilog $finish

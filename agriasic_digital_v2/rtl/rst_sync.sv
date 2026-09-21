@@ -29,6 +29,18 @@ module rst_sync (
 
   logic meta_q;
 
+`ifndef SYNTHESIS
+  // Simulation only. Verilator initialises every flop to 0, so a reset that
+  // STARTS asserted never produces a falling edge on rst_n_o -- and Ibex's
+  // async-reset flops (behind its own gated clock) need one to reset at all.
+  // Starting the synchroniser released makes the first clock with rst_n_i
+  // low a genuine assertion edge. Silicon is unaffected: reset is a level.
+  initial begin
+    meta_q  = 1'b1;
+    rst_n_o = 1'b1;
+  end
+`endif
+
   always_ff @(posedge clk or negedge rst_n_i) begin
     if (!rst_n_i) begin
       meta_q  <= 1'b0;

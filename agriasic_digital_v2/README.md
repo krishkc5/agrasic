@@ -35,7 +35,8 @@ rtl/
     riscv_dbg.f                        flat compile list
     src/, debug_rom/, common_cells/    dm_top, dmi_jtag, their pulp dependencies
   rv32i/
-    agriasic_rv32i_bus.sv              interconnect: core instr/data + debug SBA -> IMEM / RAM+MMIO / DM
+    agriasic_rv32i_bus.sv              interconnect: core instr/data + debug SBA + boot -> IMEM / RAM+MMIO / DM
+    agriasic_spi_boot.sv               SPI-flash boot master (header + CRC-32 -> IMEM) and post-boot SPI peripheral
     agriasic_imem.sv                   program memory (loadable), synchronous-SRAM contract
     agriasic_dmem.sv                   scratch RAM, synchronous-SRAM contract
     agriasic_rv32i_mmio.sv             RAM + peripheral registers behind the bus (Ibex/OBI)
@@ -43,11 +44,12 @@ rtl/
     agriasic_rv32i_core.sv             RETIRED: Penn CIS 5710 5-stage RV32IM datapath
     agriasic_rv32i_cla.sv              RETIRED: carry-lookahead adder (Penn core)
     agriasic_rv32i_divider.sv          RETIRED: pipelined divider (Penn core)
-fw/                                    firmware: fw.c, start.S, link.ld, build.sh, openocd_agriasic.cfg
+fw/                                    firmware: fw.c, start.S, link.ld, build.sh (also emits the flash image), openocd_agriasic.cfg
 tb/
   smoke/                               measurement and SPI smoke tests
   tb_agriasic_rv32i_e2e.sv             end-to-end: firmware drives the FSM
-  tb_agriasic_jtag.sv                  JTAG master -> DTM -> DM: halt/regs/SBA/resume/ndmreset
+  tb_agriasic_jtag.sv                  JTAG master -> DTM -> DM: halt/regs/SBA/resume/ndmreset/boot control
+  tb_agriasic_flash_boot.sv            boot from a behavioural SPI NOR (tb_spi_flash_model.sv): good/CRC-bad/blank/restored
   rv32i_regression/                    lint, smoke, e2e and ISA regression scripts
 docs/                                  MAS, interface contract, plans, diagrams
 ```
@@ -122,6 +124,36 @@ address, resume with the sweep then finishing correctly (results read back
 through the SBA), and the `ndmreset`/`havereset` handshake. It is stage 13 of
 `verify_all.sh`.
 
+## Boot from SPI flash (Phase 3, Option C)
+
+`agriasic_spi_boot.sv` is the fourth bus master. With the `boot_sel_i` strap
+high it waits `BOOT_DELAY_CYCLES` after reset (flash power-up), issues
+`READ 0x03` from flash address 0, checks a 16-byte header — `magic "AGRA"`,
+payload length, version, CRC-32 (zlib) of the payload — streams the payload
+into program memory as 32-bit words, and on a matching CRC raises `fw_valid`,
+which (together with `start_i`) releases the core. A bad magic, length, CRC or
+bus error leaves the core in reset with `boot_fail_o` high and an error code
+in `BOOT_STATUS`. With the strap low nothing touches the flash and the core
+waits for `BOOT_CTRL.release` — the bench flow: OpenOCD loads IMEM over the
+SBA, then `mww 0x80000024 1`. `BOOT_CTRL.retry` re-runs the flash boot (used
+by firmware after it has rewritten the flash). Once the boot FSM is idle the
+same SPI engine is a firmware peripheral (`SPI_CTRL`, `SPI_DATA`,
+`SPI_STATUS` at `0x8000_0028..30`), so the chip can reflash itself when a
+host hands it a new image.
+
+`fw/build.sh` produces the image (`agriasic_fw_flash.bin` for the flash,
+`.hex` for simulation). Boot takes ~65.7k core cycles for the 484 B image at
+SCK = clk/16 (0.41 ms at 160 MHz). New chip pins: `boot_sel_i`,
+`flash_sck_o / cs_n_o / mosi_o / miso_i`, `boot_fail_o`. The boot loader resets
+only with the chip, never with `ndmreset`, so a debugger reset cannot restart
+a flash boot underneath an image it just loaded.
+
+Simulation note: `IMEM_PRELOADED=1` (testbenches that rely on `$readmemh`)
+makes the skip path release the core immediately; `IMEM_INIT_FILE=""` starts
+with an empty program memory (the flash-boot test). `rst_sync` and the shell's
+`core_rst` carry `ifndef SYNTHESIS` initial values so Ibex's async-reset flops
+see a genuine reset edge under Verilator regardless of when `fw_valid` comes.
+
 The Ibex `DmExceptionAddr` is `DmBaseAddr + 0x810` — riscv-dbg's debug ROM
 puts the exception entry 16 bytes past the halt entry, not 8 as Ibex's
 default parameter assumes; both come from `dm_pkg` in the shell so they cannot
@@ -132,14 +164,17 @@ blackboxed, FF register file for hierarchy parity with the power testbench,
 `-nofsm` so enum state encodings match the simulation): 33,535 combinational
 primitives + 2,800 flops with the Penn core; 16,919 + 2,138 with Ibex;
 **25,043 + 3,254 with Ibex + bus + debug module** (the DM alone is 1,076
-register bits: abstract data, 8-word program buffer, SBA, DTM CDC). Add
+register bits: abstract data, 8-word program buffer, SBA, DTM CDC);
+**27,094 + 3,615 with the SPI-flash boot loader** (342 register bits). Add
 `-D AGRIASIC_LATCH_REGFILE` for the ASIC run to use Ibex's latch register
 file.
 
 Verilator note: Ibex gates its own core clock while idle, so its async-reset
-flops are only reset by a real `negedge`. Testbenches therefore drive
-`rst_n`/`start_i` high for a few clocks before asserting reset (a 1->0->1
-sequence, as lowRISC's own harness does). Silicon is unaffected.
+flops are only reset by a real `negedge`. The reset synchroniser and the
+shell's `core_rst` therefore start *released* in simulation (`ifndef
+SYNTHESIS` initial values) so the first clock with reset asserted is a real
+edge; the testbenches' 1->0->1 preamble is belt and braces. Silicon is
+unaffected.
 
 ## Bring-up order
 

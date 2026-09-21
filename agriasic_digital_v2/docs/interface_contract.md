@@ -266,3 +266,33 @@ is a bus error. `dmcontrol.ndmreset` resets the core and the MMIO bridge
 The hart is held in reset and reported `unavailable` to the debugger while
 `start_i` is low. `fw/openocd_agriasic.cfg` is the reference OpenOCD target
 file.
+
+---
+
+## SPI-flash boot port (Phase 3, `agriasic_digital_rv32i_top` only)
+
+| Pin | Dir | Notes |
+|---|---|---|
+| `boot_sel_i` | in | Strap. 1: boot from flash at reset. 0: leave the flash alone; the core waits for `BOOT_CTRL.release` (debugger/host). |
+| `flash_sck_o` | out | SPI mode 0 clock, clk/16 during boot (10 MHz at 160 MHz); firmware-selectable afterwards. |
+| `flash_cs_n_o` | out | Active-low chip select. |
+| `flash_mosi_o` | out | Master out. |
+| `flash_miso_i` | in | Master in. |
+| `boot_fail_o` | out | High when the boot FSM ended in FAIL (also `BOOT_STATUS[10]`). |
+
+Flash image at address 0, little-endian words: `0x41475241` ("AGRA"),
+payload length (bytes, multiple of 4, <= 4096), version, CRC-32 (zlib) of the
+payload; then the payload. Produced by `fw/build.sh` as
+`agriasic_fw_flash.bin`. Only `READ 0x03` is used; any 3-byte-address SPI NOR
+works. The loader waits `BOOT_DELAY_CYCLES` (default 800k = 5 ms) after reset
+for the flash's power-up time.
+
+Registers (data-port / SBA window `0x8000_0020..0x8000_003F`):
+
+| Address | Name | Access | Bits |
+|---|---|---|---|
+| `0x8000_0020` | `BOOT_STATUS` | R | [3:0] state (7 DONE, 8 FAIL, 9 SKIP), [6:4] error (1 magic, 2 length, 3 CRC, 4 bus), [8] fw_valid, [9] boot_sel, [10] boot_fail, [11] busy, [31:16] image version |
+| `0x8000_0024` | `BOOT_CTRL` | W | [0] release core, [1] retry flash boot (drops fw_valid: core reset, reboot) |
+| `0x8000_0028` | `SPI_CTRL` | RW | [0] cs_n, [15:8] clock divider (SCK = clk / 2(div+1)) |
+| `0x8000_002C` | `SPI_DATA` | RW | W: byte to send (starts a transfer); R: last byte received |
+| `0x8000_0030` | `SPI_STATUS` | R | [0] busy, [1] firmware owns the SPI pins (boot FSM idle) |

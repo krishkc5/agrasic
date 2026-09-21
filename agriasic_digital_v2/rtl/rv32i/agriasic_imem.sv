@@ -60,7 +60,8 @@ module agriasic_imem #(
   wire [AddrMsb-AddrLsb:0] word_addr = addr_i[AddrMsb:AddrLsb];
 
   initial begin
-    $readmemh(INIT_FILE, mem_array);
+    if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
+    else for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP: empty part
   end
 
   always_ff @(posedge clk or negedge rst_n) begin

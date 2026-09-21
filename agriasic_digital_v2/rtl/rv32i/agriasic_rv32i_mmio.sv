@@ -20,7 +20,7 @@
 // Memory map (data side; Phase 2 flat map, see agriasic_rv32i_bus.sv):
 //   RAM_BASE .. RAM_BASE+RAM_BYTES-1 : scratch RAM (stack / working data),
 //                                      RAM_BASE = 0x0001_0000 in the shell
-//   0x8000_0000 - 0x8000_001F        : peripheral window
+//   0x8000_0000 - 0x8000_003F        : peripheral window (two 32-byte halves)
 //   everything else                  : bus error (data_err_o)
 //
 //   The bridge sits behind agriasic_rv32i_bus, which arbitrates the core's
@@ -42,6 +42,14 @@
 //                                bit5 = trap_seen, bit6 = fw_done
 //   0x8000_0018  RESULT_I   R   [15:0] signed I-channel accumulator
 //   0x8000_001C  RESULT_Q   R   [15:0] signed Q-channel accumulator
+//
+// Boot / SPI-master registers (Phase 3, implemented in agriasic_spi_boot;
+// this bridge only decodes them and forwards the strobes):
+//   0x8000_0020  BOOT_STATUS R   state, error, fw_valid, boot_sel, boot_fail, version
+//   0x8000_0024  BOOT_CTRL   W   bit0 = release core, bit1 = retry flash boot
+//   0x8000_0028  SPI_CTRL    RW  bit0 = cs_n, [15:8] = clock divider
+//   0x8000_002C  SPI_DATA    RW  W: byte to send (starts transfer); R: last byte received
+//   0x8000_0030  SPI_STATUS  R   bit0 = busy, bit1 = firmware owns the SPI pins
 //
 // Sleep / wake:
 //   meas_done_irq_o is the sticky DONE latch, exported so the shell can feed
@@ -98,22 +106,39 @@ module agriasic_rv32i_mmio #(
   //   done_i is the FSM's RAW single-cycle done pulse.
   input  logic        done_i,
   input  logic signed [15:0] result_i_i,
-  input  logic signed [15:0] result_q_i
+  input  logic signed [15:0] result_q_i,
+
+  // Boot / SPI-master register plumbing to agriasic_spi_boot.
+  output logic        boot_release_o,     // pulse
+  output logic        boot_retry_o,       // pulse
+  output logic        spi_ctrl_we_o,      // pulse
+  output logic [15:0] spi_ctrl_wdata_o,
+  output logic        spi_data_we_o,      // pulse
+  output logic [7:0]  spi_data_wdata_o,
+  input  logic [31:0] boot_status_i,
+  input  logic [31:0] spi_ctrl_i,
+  input  logic [7:0]  spi_rx_i,
+  input  logic [31:0] spi_status_i
 );
 
   localparam int unsigned RAM_BYTES  = RAM_WORDS * 4;
 
-  localparam logic [2:0] REG_CTRL      = 3'd0;
-  localparam logic [2:0] REG_PAIR_LOG2 = 3'd1;
-  localparam logic [2:0] REG_SETTLE    = 3'd2;
-  localparam logic [2:0] REG_DIVIDER   = 3'd3;
-  localparam logic [2:0] REG_CONV      = 3'd4;
-  localparam logic [2:0] REG_STATUS    = 3'd5;
-  localparam logic [2:0] REG_RESULT_I  = 3'd6;
-  localparam logic [2:0] REG_RESULT_Q  = 3'd7;
+  localparam logic [3:0] REG_CTRL        = 4'd0;
+  localparam logic [3:0] REG_PAIR_LOG2   = 4'd1;
+  localparam logic [3:0] REG_SETTLE      = 4'd2;
+  localparam logic [3:0] REG_DIVIDER     = 4'd3;
+  localparam logic [3:0] REG_CONV        = 4'd4;
+  localparam logic [3:0] REG_STATUS      = 4'd5;
+  localparam logic [3:0] REG_RESULT_I    = 4'd6;
+  localparam logic [3:0] REG_RESULT_Q    = 4'd7;
+  localparam logic [3:0] REG_BOOT_STATUS = 4'd8;
+  localparam logic [3:0] REG_BOOT_CTRL   = 4'd9;
+  localparam logic [3:0] REG_SPI_CTRL    = 4'd10;
+  localparam logic [3:0] REG_SPI_DATA    = 4'd11;
+  localparam logic [3:0] REG_SPI_STATUS  = 4'd12;
 
   localparam logic [31:0] PERIPH_BASE  = 32'h8000_0000;
-  localparam logic [31:0] PERIPH_MASK  = 32'hFFFF_FFE0;   // 32-byte window
+  localparam logic [31:0] PERIPH_MASK  = 32'hFFFF_FFC0;   // 64-byte window
 
   // --------------------------------------------------------------------------
   // Address decode (full)
@@ -124,7 +149,7 @@ module agriasic_rv32i_mmio #(
   wire [31:0] ram_addr   = data_addr_i - RAM_BASE;
   wire        periph_sel = ((data_addr_i & PERIPH_MASK) == PERIPH_BASE);
   wire        unmapped   = !ram_sel && !periph_sel;
-  wire [2:0]  periph_reg = data_addr_i[4:2];
+  wire [3:0]  periph_reg = data_addr_i[5:2];
 
   wire        periph_wr  = data_req_i && periph_sel &&  data_we_i && data_be_i[0];
   wire        periph_rd  = data_req_i && periph_sel && !data_we_i;
@@ -205,10 +230,32 @@ module agriasic_rv32i_mmio #(
           REG_SETTLE:    cfg_settle_q    <= data_wdata_i[7:0];
           REG_DIVIDER:   cfg_divider_q   <= data_wdata_i[13:0];
           REG_CONV:      cfg_conv_q      <= data_wdata_i[7:0];
-          // STATUS and RESULT are read-only; writes are ignored.
+          // STATUS / RESULT / BOOT_STATUS / SPI_STATUS are read-only; the
+          // boot and SPI registers live in agriasic_spi_boot (strobes below).
           default: begin
           end
         endcase
+      end
+    end
+  end
+
+  // Boot / SPI-master write strobes: one-cycle pulses, data forwarded as-is.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      boot_release_o   <= 1'b0;
+      boot_retry_o     <= 1'b0;
+      spi_ctrl_we_o    <= 1'b0;
+      spi_ctrl_wdata_o <= 16'd0;
+      spi_data_we_o    <= 1'b0;
+      spi_data_wdata_o <= 8'd0;
+    end else begin
+      boot_release_o <= periph_wr && (periph_reg == REG_BOOT_CTRL) && data_wdata_i[0];
+      boot_retry_o   <= periph_wr && (periph_reg == REG_BOOT_CTRL) && data_wdata_i[1];
+      spi_ctrl_we_o  <= periph_wr && (periph_reg == REG_SPI_CTRL);
+      spi_data_we_o  <= periph_wr && (periph_reg == REG_SPI_DATA);
+      if (periph_wr) begin
+        spi_ctrl_wdata_o <= data_wdata_i[15:0];
+        spi_data_wdata_o <= data_wdata_i[7:0];
       end
     end
   end
@@ -257,6 +304,10 @@ module agriasic_rv32i_mmio #(
                                      2'b00, meas_done_q, meas_busy_q};
       REG_RESULT_I:  periph_rdata = {{16{result_i_i[15]}}, result_i_i};
       REG_RESULT_Q:  periph_rdata = {{16{result_q_i[15]}}, result_q_i};
+      REG_BOOT_STATUS: periph_rdata = boot_status_i;
+      REG_SPI_CTRL:    periph_rdata = spi_ctrl_i;
+      REG_SPI_DATA:    periph_rdata = {24'd0, spi_rx_i};
+      REG_SPI_STATUS:  periph_rdata = spi_status_i;
       default:       periph_rdata = 32'd0;
     endcase
   end

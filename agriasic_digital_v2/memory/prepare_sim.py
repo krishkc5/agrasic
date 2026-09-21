@@ -41,8 +41,8 @@ monitor = r'''
           dut.u_control_shell.data_addr,
           dut.u_control_shell.data_we ? dut.u_control_shell.data_be : 4'hf);
         if (dut.u_control_shell.data_addr[31]) begin
-          if (dut.u_control_shell.data_addr > 32'h8000001c)
-            $fatal(1, "MMIO request outside intended 32-byte window");
+          if (dut.u_control_shell.data_addr > 32'h8000003c)
+            $fatal(1, "MMIO request outside intended 64-byte window");
         end else if (dut.u_control_shell.data_addr < 32'h00010000 ||
                      dut.u_control_shell.data_addr > 32'h000107fc)
           $fatal(1, "data request outside implemented 2 KiB DMEM at 0x00010000");

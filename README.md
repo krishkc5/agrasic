@@ -164,6 +164,7 @@ neither of which lives in this repo. See `tb/rv32i_regression/` for those script
 
 | Check | Result |
 | --- | --- |
+| SPI-flash boot (`tb_agriasic_flash_boot`) | pass: empty IMEM loaded from a behavioural NOR in 65.7k cycles, image matches word-for-word, sweep runs; corrupted CRC -> error 3 / core held; blank flash -> error 1; restored image boots again |
 | JTAG / debug module (`tb_agriasic_jtag`) | pass: IDCODE, DM activation, halt during `wfi`, `dpc`/`sp` abstract reads, SBA to RAM/IMEM/MMIO + `sberror` on unmapped, resume with correct sweep results read over the SBA, `ndmreset`/`havereset` handshake |
 | Processor — rv32ui ISA suite + dhrystone | **Superseded.** The Penn core was replaced by lowRISC Ibex (see "Ibex core swap"); the cocotb harness targeted the retired core. Ibex carries its own riscv-dv/Spike verification upstream |
 | Measurement smoke (`tb_agriasic_digital_top`) | pass, I=480 Q=320, every sample (16 of them) phase-matched exactly (0 errors) |
@@ -236,6 +237,14 @@ map — IMEM `0x0` (now loadable), **DMEM relocated to `0x0001_0000`**, DM
 `0x1A11_0000`, MMIO `0x8000_0000` — and an OpenOCD config in `fw/`. Full
 detail in `agriasic_digital_v2/README.md`, "Processor provenance" and
 "Debug (Phase 2)".
+
+Phase 3 added **autonomous boot from external SPI flash** (Option C):
+`agriasic_spi_boot.sv` reads a header + CRC-32 image into program memory at
+reset and releases the core only on a good image; a bad image holds the core
+and raises `boot_fail_o`, and the debugger (or a host) can load IMEM and
+release it instead. After boot the SPI master is a firmware peripheral so the
+chip can rewrite its own flash. Six more pins: `boot_sel_i`, four flash SPI
+pins, `boot_fail_o`.
 
 **Phase 2 (clock and reset discipline) is also done.** A 2FF reset
 synchronizer (`rst_sync.sv`, async assert / sync deassert) sits in each

@@ -30,17 +30,37 @@
 //
 // Functionality:
 //   - Accepts one sample request at a time.
-//   - Asserts conv_start_o for one cycle when a request is accepted, together
-//     with a one-cycle adc_sample_o track-and-hold strobe.
+//   - Asserts conv_start_o for one cycle when a request is accepted.
 //   - Asserts adc_enable_o for the full conversion (accept through done).
+//   - Drives mux_sel_o from channel_i and waits mux_settle_cycles_i before the
+//     first bit trial, so the analog mux and the selected sample-and-hold have
+//     settled onto the ADC input.
 //   - Runs 8 bit trials MSB first, each gated by conv_cycles_i regeneration
 //     cycles, to build the digitized code entirely from adc_comp_i decisions.
-//   - Stores the converged code in D+ or D- register based on sample_phase_i.
-//   - Pulses sample_done_o when a capture completes.
+//   - Presents the converged code on code_o with sample_done_o.
 //
-// sample_phase_i encoding:
-//   1'b1: positive phase sample (D+)
-//   1'b0: negative phase sample (D-)
+// Rev 5 change -- two channels, one converter:
+//   The tetrapolar front end has two signal chains (differential voltage from
+//   the PGA on E2/E3, current from the TIA on E4) sharing one differential SAR
+//   ADC through an analog mux. Two things follow.
+//
+//   1. take_sample_i separates ACQUISITION from CONVERSION. Both channels'
+//      sample-and-holds are strobed together by a single adc_sample_o pulse
+//      (take_sample_i = 1) at the phase instant the measurement FSM chooses;
+//      the second conversion of the pair then runs with take_sample_i = 0 and
+//      digitises the value already held. That is what preserves the voltage /
+//      current phase relationship: both channels are frozen at the same
+//      instant, and only the digitising is sequential.
+//
+//   2. The converged codes are no longer stored here. With two channels and a
+//      +/- chop there are four codes per accumulation pair, and which one is
+//      which is the FSM's sequencing knowledge, not the converter's. This
+//      module now returns one code per conversion on code_o and the FSM owns
+//      the routing. (The old d_plus_o/d_minus_o pair is gone.)
+//
+// mux_settle_cycles_i, like conv_cycles_i, is a runtime register rather than a
+// parameter: the mux + S/H settling time depends on process corner and load
+// and is not characterized yet.
 // -----------------------------------------------------------------------------
 module sar_controller #(
   parameter int unsigned ADC_WIDTH = 8
@@ -48,13 +68,15 @@ module sar_controller #(
   input  logic                 clk,
   input  logic                 rst_n,
   input  logic                 sample_req_i,
-  input  logic                 sample_phase_i,
+  input  logic                 take_sample_i,   // 1: strobe the S/H, 0: convert the held value
+  input  logic [1:0]           channel_i,       // analog mux select for this conversion
   input  logic [7:0]           conv_cycles_i,
+  input  logic [7:0]           mux_settle_cycles_i,
   output logic                 conv_start_o,
   output logic                 sample_done_o,
   output logic                 busy_o,
-  output logic [ADC_WIDTH-1:0] d_plus_o,
-  output logic [ADC_WIDTH-1:0] d_minus_o,
+  output logic [ADC_WIDTH-1:0] code_o,          // converged code for this conversion
+  output logic [1:0]           mux_sel_o,
 
   // Rev 4.3 SAR bit-trial interface. adc_comp_i is a timed, unsynchronized
   // path -- see the header note on the regeneration-time contract.
@@ -66,8 +88,9 @@ module sar_controller #(
 
   localparam int unsigned BIT_IDX_W = (ADC_WIDTH <= 1) ? 1 : $clog2(ADC_WIDTH);
 
-  typedef enum logic [1:0] {
+  typedef enum logic [2:0] {
     S_IDLE,
+    S_MUX_WAIT,    // analog mux + S/H settling before the first trial
     S_TRIAL_SET,   // present the trial code, load the regeneration counter
     S_TRIAL_WAIT,  // wait out comparator regeneration time
     S_TRIAL_EVAL   // sample adc_comp_i, decide the bit, advance or finish
@@ -77,12 +100,11 @@ module sar_controller #(
   logic [BIT_IDX_W-1:0]       bit_idx_q;
   logic [ADC_WIDTH-1:0]       dac_reg_q;   // decided bits only (0 below/at bit_idx_q until resolved)
   logic [7:0]                 regen_cnt_q;
-  logic                       phase_q;
 
   // Trial mask for the bit currently under test, and the code that would
   // result from EITHER decision -- computed combinationally so the last bit's
   // decision can be captured the same cycle it is made, with no one-cycle lag
-  // between the register update and the value stored into d_plus_o/d_minus_o.
+  // between the register update and the value presented on code_o.
   logic [ADC_WIDTH-1:0] trial_mask;
   logic [ADC_WIDTH-1:0] eval_code;
   assign trial_mask = ({{(ADC_WIDTH-1){1'b0}}, 1'b1} << bit_idx_q);
@@ -101,12 +123,11 @@ module sar_controller #(
       adc_enable_o  <= 1'b0;
       sample_done_o <= 1'b0;
       busy_o        <= 1'b0;
-      phase_q       <= 1'b0;
       bit_idx_q     <= '1;
       dac_reg_q     <= '0;
       regen_cnt_q   <= 8'd0;
-      d_plus_o      <= '0;
-      d_minus_o     <= '0;
+      code_o        <= '0;
+      mux_sel_o     <= 2'd0;
     end else begin
       conv_start_o  <= 1'b0;
       adc_sample_o  <= 1'b0;
@@ -123,12 +144,26 @@ module sar_controller #(
           if (sample_req_i && !sample_done_o) begin
             busy_o       <= 1'b1;
             adc_enable_o <= 1'b1;
-            adc_sample_o <= 1'b1;   // track-and-hold: capture the input now
-            phase_q      <= sample_phase_i;
+            // Track-and-hold strobe only on the first conversion of a pair:
+            // it freezes BOTH channels at this instant. The second conversion
+            // digitises the already-held value (take_sample_i = 0).
+            adc_sample_o <= take_sample_i;
+            mux_sel_o    <= channel_i;
             conv_start_o <= 1'b1;
             bit_idx_q    <= BIT_IDX_W'(ADC_WIDTH - 1);
             dac_reg_q    <= '0;
-            state_q      <= S_TRIAL_SET;
+            regen_cnt_q  <= mux_settle_cycles_i;
+            state_q      <= S_MUX_WAIT;
+          end
+        end
+
+        S_MUX_WAIT: begin
+          // mux_sel_o is already driven; give the mux and the selected S/H
+          // time to settle onto the comparator input before the first trial.
+          if (regen_cnt_q == 8'd0) begin
+            state_q <= S_TRIAL_SET;
+          end else begin
+            regen_cnt_q <= regen_cnt_q - 8'd1;
           end
         end
 
@@ -151,11 +186,7 @@ module sar_controller #(
           dac_reg_q <= eval_code;
           if (bit_idx_q == '0) begin
             // Last bit decided: eval_code is the converged result.
-            if (phase_q) begin
-              d_plus_o <= eval_code;
-            end else begin
-              d_minus_o <= eval_code;
-            end
+            code_o        <= eval_code;
             busy_o        <= 1'b0;
             adc_enable_o  <= 1'b0;
             sample_done_o <= 1'b1;

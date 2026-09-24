@@ -17,7 +17,9 @@
   - interface_contract.md
 - **Post-v0.14 note — Ibex core swap.** The Penn CIS 5710 RV32IM core described in sections 8.1/DR-023 (`core_clk_en`) and the Phase 2.2 rows below has been replaced by lowRISC Ibex (RV32IMC+Zicsr, 3-stage). `core_clk_en` no longer exists: the core sleeps in `wfi` during a measurement and is woken by the DONE latch on `irq_fast[0]` with no trap taken; `core_sleep_o` is exported and the clock is still not gated, so DR-023's intent (no gated clock) holds. `ecall` is replaced by `CTRL.FW_DONE` (bit 8); `CTRL.TRAP_SEEN` (bit 9) and STATUS bits 5/6 (`trap_seen`, `fw_done`) are new; the MMIO bridge now fully decodes addresses and returns a bus error (trap) outside RAM/MMIO. Reset vector is `0x80` with a 32-entry vector table at `0x0`. The debug-module window `0x1A11_0000` is reserved. See `agriasic_digital_v2/README.md`, "Processor provenance", and `rtl/ibex/VENDOR.md`. Sections referring to `DatapathPipelined`, `core_clk_en` or the 77-test cocotb ISA regression describe the retired core.
 - **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (4 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (firmware `SP = 0x0001_0800`, results at `0x0001_0100..0x0001_0143` — section 7.1's scratch-RAM offsets are unchanged relative to the RAM base), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets core + peripheral bridge only. GAP-11 (host-visible results) now has a bench-level answer: results are readable over JTAG (`fw/openocd_agriasic.cfg`); the deployed SPI path remains open. Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
-- **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
+- **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && gpio_start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
+- **Post-v0.14 note — golden boot ROM (default boot source).** The IMEM SRAM is shadow-loaded at reset from one of two sources selected by the `BOOT_SEL` strap (latched on the first cycle out of reset): **0 = on-die synthesized golden ROM** (`agriasic_boot_rom.sv`, generated from `fw/golden/agriasic_fw_golden.hex`, ~150 cycles), 1 = external SPI flash (~80k cycles, header + CRC-32). The core always fetches from the SRAM, never from the ROM: nothing is added to the fetch path's timing, firmware is linked once for both sources, and **IMEM stays writable after a ROM boot** so a debugger can patch constants over JTAG without a rebuild or reflash — the reason this is a shadow-load rather than a fetch-path mux. `BOOT_CTRL[2]` re-boots from ROM, `[1]` from flash; `BOOT_STATUS[13:12]` reports the source actually used. ROM cost: +1,027 combinational primitives, +6 flops (a writable array of the same depth would be 4,736 storage bits). The golden image is promoted explicitly (`gen_boot_rom.py --promote`), never by `build.sh`, and its provenance is recorded in `fw/golden/GOLDEN.md`. Option A of the memory recommendation (fixed firmware in ROM) and Option C (flash boot) therefore both exist, strap-selectable.
+- **Post-v0.14 note — Rev 5 tetrapolar analog interface.** The measurement engine was adapted to the four-electrode front end. Excitation: `excitation_ctrl` emits `sine_code_o[7:0]` from a 16-point COSINE table to the sine DAC on E1, replacing `exc_drive_p_o`/`exc_drive_n_o`; peaks land on the I sample points (phase 0/8) and mid-code on the Q points (4/12), and `code[k]+code[k+8]=256` preserves the +/- chop. There is no dead time any more, so **GAP-6 (break-before-make sizing) is retired**. Sensing: two channels (diff PGA on E2/E3, TIA on E4) share one SAR ADC through `mux_sel_o`; one `adc_sample_o` strobe freezes both S/H at each phase point and two conversions follow, so V/I phase is preserved by construction. Four accumulators (`dv_i/dv_q/cur_i/cur_q`, same +/-16320 bound each) replace the single I/Q pair; `RESULT_I`/`RESULT_Q` now carry dV and `RESULT_CUR_I`/`RESULT_CUR_Q` (`0x34`/`0x38`) the current, with `AFE_CTRL` (`0x3C`) carrying pga_gain/tia_rf/amplitude/mux_settle. Section 3.1's I/Q definition applies per channel; impedance Z(f)=dV/I stays host-side. Verified by the rewritten `tb_excitation_drive.sv` and by two-channel ADC models in every measurement testbench (distinct per-channel targets, so a swapped mux fails). Open: simultaneous vs alternating S/H (RTL assumes simultaneous).
 - MAS version: v0.14 (Rev 4.3 Phases 7-8 complete, with two items honestly left open: firmware now sweeps the real 3 frequency points and stores per-point I/Q in scratch RAM (Phase 7.1/7.2), but temperature sensing has no digital or analog RTL to read yet (Phase 7.3, blocked) and there is no host-facing path for these swept results on any chip variant that exists in this tree (new **GAP-11**, found while implementing this). Verification plan items V-1, V-2, V-4, V-5 closed with real regression coverage (a practical, documented, non-exhaustive settle x conv grid; edge-case accumulator checks including the true M=64 saturating case; formal `assert property` for the shadow-register and phase-match contracts); V-3 confirmed superseded. Sections 7.1, 10, 11, 12, 13, 14 updated)
 - Date: 2026-09-06
 - Trial GDS: 2026-11-18
@@ -36,6 +38,19 @@ Every architectural statement in this revision therefore carries a status tag:
 | **[IMPL]** | Implemented in RTL and covered by a passing regression |
 | **[SPEC]** | Specified for Rev 4.3, **not yet in RTL** |
 | **[GAP]** | Known conflict or unresolved question — read before designing against it |
+
+**Read section 4.7 first** for the module hierarchy as instantiated, and
+sections 6.13-6.23 for the per-module detail. The paragraph immediately below
+describes the state at the end of Rev 4.3 Phase 8 and is kept because the
+sections it cross-references still read that way; four later changes supersede
+parts of it, each documented in its own section:
+
+| Change | Supersedes | Where |
+|---|---|---|
+| **Ibex core** replaces the Penn CIS 5710 datapath | "core clock enable idle 93%" — there is no `clk_en`; the core sleeps in `wfi` and is woken by the DONE interrupt | 6.13, 6.14 |
+| **RISC-V debug module** over JTAG, with a 4-master interconnect and a flat address map | the Harvard split's private memories | 6.15, 6.20 |
+| **Boot**: golden ROM by default, SPI flash when strapped, both shadow-loaded into a writable IMEM | "no boot ROM needed" | 6.18, 6.19 |
+| **Rev 5 tetrapolar front end**: cosine sine-DAC drive, two channels, four accumulators | "break-before-make excitation drive (`exc_drive_p_o`/`exc_drive_n_o`)" and "two signed accumulators" | 6.21, 6.22, 6.23 |
 
 **Current RTL state in one line:** the design is Rev 4.2 plus the three Rev 4.3
 defect fixes (section 5), plus **Phases 1 through 8 of the Rev 4.3
@@ -481,6 +496,16 @@ it predates Phase 4 and does not show the phase reference:
 
 ![agriasic_digital_verilog_orchestration_flow](diagrams/agriasic_digital_verilog_orchestration_flow.svg)
 
+- **Current planned architecture** (Ibex core, interconnect, debug module,
+  boot sources, tetrapolar analog front end):
+  [diagrams/agriasic_planned_architecture.svg](diagrams/agriasic_planned_architecture.svg)
+  — also available as a standalone page,
+  [diagrams/agriasic_planned_architecture.html](diagrams/agriasic_planned_architecture.html).
+  The three diagrams above predate the Ibex core swap and describe the
+  measurement engine and the SPI-host variant only; this one is the whole die.
+
+![agriasic_planned_architecture](diagrams/agriasic_planned_architecture.svg)
+
 ### 4.6 Data flow through the top-level wrappers **[IMPL]**
 
 Four modules in the repository are named `*_top`. Only one of them contains the
@@ -498,11 +523,11 @@ today:
                   ┌─────────────────────────────────────────┐
       start   ──▶ │                                          │ ──▶ exc_drive_p_o
 cfg_pair_log2 ──▶ │                                          │ ──▶ exc_drive_n_o
- cfg_settle   ──▶ │                                          │ ──▶ conv_start_o
- cfg_divider  ──▶ │           agriasic_digital_top           │ ──▶ adc_enable_o
- cfg_conv     ──▶ │                                          │ ──▶ adc_sample_o
-                  │                                          │ ──▶ adc_dac_o[7:0]
-  adc_comp_i  ──▶ │                                          │ ──▶ busy_o
+ cfg_settle   ──▶ │                                          │ ──▶ afe_conv_start_o
+ cfg_divider  ──▶ │           agriasic_digital_top           │ ──▶ afe_adc_enable_o
+ cfg_conv     ──▶ │                                          │ ──▶ afe_sample_o
+                  │                                          │ ──▶ afe_adc_dac_o[7:0]
+  afe_adc_comp_i  ──▶ │                                          │ ──▶ busy_o
                   │                                          │ ──▶ done_o
                   │                                          │ ──▶ result_i_o[15:0]  (Phase 5)
                   │                                          │ ──▶ result_q_o[15:0]  (Phase 5)
@@ -548,6 +573,135 @@ four wires is a file substitution, not a top-level rewire.
 
 ---
 
+### 4.7 Module hierarchy **[IMPL]**
+
+The whole digital design, as instantiated. Indentation is instance
+containment; the name after the colon is the instance name in the RTL.
+
+```text
+agriasic_digital_rv32i_top                      chip top (RV32I variant)
+│
+├── rst_sync : u_rst_sync                       async assert / sync release
+│
+├── agriasic_rv32i_control_shell : u_control_shell        ── THE "MCU" ──
+│   │
+│   ├── ibex_top : u_core                       lowRISC Ibex RV32IMC+Zicsr
+│   │   └── ibex_core, register file, prim_* cells      (vendored, rtl/ibex/)
+│   │
+│   ├── agriasic_rv32i_bus : u_bus              4-master / 4-slave interconnect
+│   │
+│   ├── agriasic_imem : u_imem                  program memory, 1024 x 32, writable
+│   ├── agriasic_rv32i_mmio : u_mmio            peripheral bridge
+│   │   └── agriasic_dmem : u_dmem              scratch RAM, 512 x 32
+│   │
+│   ├── agriasic_spi_boot : u_boot              boot loader + post-boot SPI master
+│   ├── agriasic_boot_rom : u_boot_rom          golden image, constant table
+│   │
+│   ├── dmi_jtag : u_dtm                        JTAG TAP + Debug Transport Module
+│   └── dm_top  : u_dm                          RISC-V Debug Module (riscv-dbg)
+│
+└── agriasic_digital_top : u_measurement_top    ── THE MEASUREMENT ENGINE ──
+    ├── excitation_ctrl  : u_excitation_ctrl    divider, phase counter, sine table
+    ├── sar_controller   : u_sar_controller     SAR bit trials, channel mux
+    └── measurement_fsm  : u_measurement_fsm    phase-locked sequencer, accumulators
+```
+
+The SPI-host variant is a **separate** top with the same measurement engine
+and no processor:
+
+```text
+agriasic_digital_spi_top
+├── rst_sync : u_rst_sync
+├── spi_slave : u_spi_slave                     mode-0 byte serializer + CDC
+├── regfile   : u_regfile                       SPI-side register file
+└── agriasic_digital_top : u_core               same measurement engine
+```
+
+Composing these two — giving the RV32I variant a host-facing SPI port — is
+**GAP-11**, still open. Section 6.13 says what that costs.
+
+#### Port naming convention
+
+Every port on a **boundary module** — the four tops and
+`agriasic_rv32i_control_shell` — is prefixed by where the signal goes:
+
+| Prefix | Meaning | Bond it? |
+|---|---|---|
+| `afe_` | crosses into the analog front end | die-internal (unless the AFE is off-chip for a test build) |
+| `gpio_` | leaves the die | **yes** |
+| `dbg_` | observability for testbenches, the power flow and the memory audit | **no** |
+| *(none)* | die-internal block-to-block wiring; also `clk` and `rst_n` | only `clk`/`rst_n`, and they are not general-purpose cells |
+
+The prefix says **where the signal ends up**, not which module declares it. A
+boundary module therefore still carries unprefixed ports wherever they only
+connect it to another on-die block: the control shell drives the measurement
+engine over `cfg_*_o`, `result_*_o`, `busy_o` and `done_o`, and
+`agriasic_digital_top` takes them back in on `cfg_*_i` and `start`. None of
+those reach a pad or the AFE. The same values become `dbg_*` at a chip top,
+where they exist only so a testbench can watch them.
+
+**Leaf modules keep unprefixed names on purpose.** `sar_controller`,
+`excitation_ctrl`, `measurement_fsm`, `spi_slave`, `regfile` and
+`agriasic_spi_boot` are three levels in from any pad, where a `gpio_` prefix
+would assert something untrue. So `sar_controller.mux_sel_o` connects up to
+`agriasic_digital_top.afe_mux_sel_o`, and both names are right for where they
+sit. Sections 6.1 through 6.12 describe leaf modules and use leaf names.
+
+#### Signal flow, one level down
+
+```text
+        ┌──────────── agriasic_rv32i_control_shell ─────────────┐
+        │                                                       │
+  JTAG ═╪═► dmi_jtag ──DMI──► dm_top ──debug_req──► ibex_top     │
+        │                        │  ▲                  │  │      │
+        │                    SBA │  │ slave      instr │  │ data │
+        │                        ▼  │                  ▼  ▼      │
+        │                  ┌─────────────────────────────────┐   │
+ flash ═╪═► spi_boot ─────►│    agriasic_rv32i_bus (M0..M3)  │   │
+        │       ▲          └───┬──────────┬───────────┬─────┘   │
+        │       │              │          │           │          │
+        │  boot_rom        u_imem      u_mmio      (dm_top)      │
+        │  (golden)        0x0         │  └─ u_dmem  0x10000     │
+        │                              │                          │
+        └──────────────────────────────┼──────────────────────────┘
+                                       │ cfg / start ▲ done, results
+                                       ▼             │
+                         agriasic_digital_top (measurement engine)
+                                       │             ▲
+                          afe_sine_code│ afe_mux_sel │ afe_adc_comp
+                                       ▼             │
+                                 ANALOG FRONT END (E1..E4)
+```
+
+Address map the bus decodes (section 6.15 for the full rules):
+
+| Region | Base | Size | Reached by |
+|---|---|---|---|
+| Program memory (IMEM) | `0x0000_0000` | 4 KiB | fetch, data, SBA, boot loader |
+| Data memory (DMEM) | `0x0001_0000` | 2 KiB | data, SBA |
+| Debug module | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data (data0/1) |
+| Peripheral registers | `0x8000_0000` | 64 B | data, SBA |
+| anything else | — | — | bus error → trap / `sberror` |
+
+#### Where the gates are
+
+Generic synthesis of `agriasic_digital_rv32i_top`, memories blackboxed, FF
+register file (`power/run_synthesis.py`). Register bits by block:
+
+| Block | Register bits | Note |
+|---|---:|---|
+| Debug module + DTM | 1,076 | abstract data, 8-word program buffer, SBA, DTM CDC |
+| Ibex register file | 992 | 31 × 32; `AGRIASIC_LATCH_REGFILE` halves this for ASIC |
+| Ibex pipeline | 898 | 3-stage + CSRs |
+| Boot loader | 347 | header, CRC, SPI engine, strap/override state |
+| Measurement engine | 235 | four accumulators + shadows, phase/pair counters |
+| Shell / MMIO / bus | 103 | config registers, response routing |
+| Ibex mul/div | 75 | iterative divider |
+| **Total** | **3,726** | plus 28,565 combinational primitives |
+
+The golden boot ROM contributes ~1,027 of those combinational primitives and
+almost no registers — it is a constant table, not storage (section 6.21).
+
 ## 5. Defect Register
 
 Three defects were reproduced in simulation and fixed before any restructuring.
@@ -592,6 +746,12 @@ covering that bug.**
 ## 6. Micro-Architecture by Module
 
 ### 6.1 measurement_fsm **[IMPL]** — I/Q accumulation added in Rev 4.3 Phase 5
+
+> **Partly superseded by section 6.21.** Rev 5 made the front end tetrapolar:
+> one accumulation pair is now eight conversions across two channels, and
+> there are four accumulators rather than two. The phase-lock architecture,
+> the settle semantics and the shadow-register contract below are unchanged.
+
 Responsibilities:
 - Accept start command in idle
 - Wait out the settle interval, then watch the free-running phase counter for
@@ -674,6 +834,13 @@ kept as a placeholder heading rather than renumbering everything after it;
 future FSM-specific target notes belong here.
 
 ### 6.3 excitation_ctrl **[IMPL]** — rewritten in Rev 4.3 Phase 4
+
+> **Partly superseded by section 6.22.** Rev 5 replaced the square-wave
+> `drive_p_o`/`drive_n_o` pair with a 16-point cosine `sine_code_o[7:0]` to
+> the sine DAC. The divider, the 16-state phase counter, `phase_index_o` and
+> `period_tick_o` below are unchanged; the dead-time/break-before-make
+> discussion no longer applies (GAP-6 retired).
+
 Responsibilities:
 - Run a **free-running 14-bit divider** and **4-bit phase counter**, both
   driven only by `enable_i` and `divider_i` — there is no command input from
@@ -735,6 +902,13 @@ half-cycle symmetry claim specifically was not measurable before Phase 4 (the
 FSM-commanded flip had no fixed period to measure it against) and now is.
 
 ### 6.5 sar_controller **[IMPL]**
+
+> **Extended by section 6.23.** Rev 5 added channel multiplexing
+> (`channel_i`/`mux_sel_o`, `mux_settle_cycles_i`) and separated acquisition
+> from conversion (`take_sample_i`); the converged code is now returned on
+> `code_o` rather than stored in `d_plus_o`/`d_minus_o`. The bit-trial search
+> and the `adc_comp_i` contract below are unchanged.
+
 Responsibilities:
 - Accept sample request when not busy (`S_IDLE`)
 - Generate single-cycle `conv_start_o` pulse and a one-cycle `adc_sample_o`
@@ -1041,6 +1215,677 @@ exception. **Phase 3 (section 6.7) then removed that exception entirely** —
 as of Phase 3, the same grep finds zero `always_ff` outside `posedge clk`
 anywhere in the synthesizable tree. No third domain, and no second one
 either.
+
+---
+
+### 6.13 agriasic_rv32i_control_shell **[IMPL]** — the control subsystem
+
+The container for everything that is not the measurement engine: the
+processor, its memories, the interconnect, the debug module and the boot
+loader. Its **port list is deliberately identical** to the microsequencer it
+replaced and to the Penn-core shell before it, apart from the JTAG and boot
+pins added later — so `agriasic_digital_rv32i_top` never had to change when
+the core did.
+
+```text
+         gpio_start_i ──┐                        ┌── busy_o / done_o
+                rst_n ──┤                        ├── start_pulse_o
+                  clk ──┤   control shell        ├── clear_errors_o
+       JTAG (5 wires) ══┤                        ├── cfg_* (to the engine)
+      flash (4 wires) ══┤                        ├── result_* (from engine)
+      gpio_boot_sel_i ──┘                        └── gpio_boot_fail_o
+```
+
+Responsibilities:
+
+- Instantiate and configure the Ibex core (6.14).
+- Own the **two reset domains** below.
+- Feed the measurement engine's configuration and collect its four results.
+- Latch the results so `result_*_o` stay stable after `done`.
+
+#### Reset domains
+
+Three distinct resets, and confusing them is the classic integration bug:
+
+```text
+rst_n (chip pin)
+  └─► rst_sync ─► rst_n_sync ──┬──────────────────────────────► dm_top, dmi_jtag
+                               │                                (debug survives everything)
+                               ├─ && !ndmreset ─► sys_rst_n ──► MMIO bridge, result latches
+                               │                                (debugger's "reset the system")
+                               └─ && !core_rst ─► core_rst_n ─► ibex_top
+                                     ▲
+                                     └── core_rst = !(gpio_start_i && fw_valid)
+```
+
+- **The debug module never resets with the system.** If `ndmreset` reset the
+  DM, the debugger would disconnect itself the moment it asked for a reset.
+- **The boot loader never resets with the system either** — otherwise
+  `ndmreset` would restart a flash boot underneath an image the debugger had
+  just loaded.
+- **The core waits for `fw_valid`**, so it cannot fetch from an IMEM that has
+  not been filled yet. This is the interlock that makes "bad image → chip does
+  nothing" rather than "chip runs garbage".
+
+#### Sleep, and why it is not a clock gate
+
+Firmware writes `CTRL.START` then executes `wfi`. The bridge's sticky DONE
+latch drives `irq_fast_i[0]`. Ibex leaves its SLEEP state when any interrupt
+enabled in `mie` becomes pending — independently of `mstatus.MIE` — so with
+`mie.fast0` set and MIE clear the core resumes *after* the `wfi` without ever
+taking an interrupt. While asleep it issues no fetches, and `core_sleep_o` is
+exported for a future integrated clock gate.
+
+`clk` itself is still never gated (section 8.1's policy). Measured: the core
+sleeps for **3,154,273 of 3,155,008 cycles** of a three-point sweep — 99.98 %.
+
+#### Firmware completion
+
+The Penn core's `ecall` drove `halt` → `done_o`. On Ibex `ecall` is a trap, so
+firmware instead writes `CTRL.FW_DONE` (sticky) and parks in `wfi`;
+`done_o = FW_DONE`, `busy_o = running && !done`. `CTRL.TRAP_SEEN`, written by
+the trap handler, makes a fault host-visible rather than silent.
+
+---
+
+### 6.14 Ibex core integration **[IMPL]**
+
+The core is lowRISC **Ibex**, vendored at the commit recorded in
+`rtl/ibex/VENDOR.md`. It replaced the Penn CIS 5710 RV32IM datapath because
+that core had no CSRs, no traps, no interrupts and no debug hooks — a JTAG
+debug port would have meant building the entire M-mode privileged subset onto
+a custom pipeline, unverified.
+
+Configuration, and why each value:
+
+| Parameter | Value | Reason |
+|---|---|---|
+| `RV32M` | `RV32MFast` | firmware uses `div`; 1-cycle multiply, ~37-cycle iterative divide. The Penn core's 665-bit pipelined divider is gone — irrelevant at this instruction rate |
+| `RV32ZC` | `RV32Zca` | Ibex cannot disable C; take the minimal subset. Toolchain is `-march=rv32imc_zicsr` |
+| `RegFile` | `RegFileFF` / `RegFileLatch` | latch file (≈half the area) for ASIC via `AGRIASIC_LATCH_REGFILE`; Verilator cannot simulate the latch file, and the power flow needs sim/netlist hierarchy parity, so it is **not** tied to `SYNTHESIS` |
+| `WritebackStage` | 1 | 3-stage: loads do not stall the pipe; better f_max in 180 nm |
+| `BranchTargetALU` | 1 | cheap timing win |
+| `ICache`, `PMPEnable`, `SecureIbex`, `BranchPredictor`, `MHPMCounterNum` | 0 | area |
+| `DmBaseAddr / DmHaltAddr / DmExceptionAddr` | `0x1A11_0000` / `+0x800` / `+0x810` | must match riscv-dbg's debug ROM — see the trap below |
+
+**The `DmExceptionAddr` trap.** Ibex's *default* puts the exception entry 8
+bytes past the halt entry. riscv-dbg's debug ROM puts it **16** bytes past
+(`0x810`, not `0x808`). Both constants are derived from `dm::` package
+parameters in the shell so they cannot drift apart. Getting this wrong gives a
+debugger that halts correctly and then misbehaves only on an exception inside
+debug mode — a genuinely nasty bring-up bug.
+
+**Boot convention.** Reset PC is `boot_addr_i + 0x80`, with a 32-entry trap
+vector table at `boot_addr_i`. `boot_addr_i = 0`, so:
+
+```text
+0x000 ┌────────────────────────┐
+      │ .vectors  32 × j trap  │  128 B, entry 0 = exceptions,
+0x080 ├────────────────────────┤        entry i = interrupt i, 31 = NMI
+      │ _start                 │  set SP, enable mie.fast0, call main
+      │ main, run_sweep_point  │
+0x250 └────────────────────────┘  (592 B image)
+```
+
+**Verilator note.** Ibex gates its own core clock while idle, so its
+async-reset flops only reset on a real falling edge of `rst_ni`. Under
+Verilator's 2-state initialisation a reset that *starts* asserted never
+produces one. `rst_sync` and the shell's `core_rst` therefore start **released**
+in simulation (`ifndef SYNTHESIS` initial values), so the first clock with
+reset asserted is a genuine edge. Silicon is unaffected — reset is a level.
+
+---
+
+### 6.15 agriasic_rv32i_bus **[IMPL]** — the interconnect
+
+Before the debug module the core's two ports went straight to two private
+memories. That stops working as soon as anything else needs memory access.
+This module is the switch: **4 masters, 4 targets, fixed priority, one-cycle
+slaves.**
+
+```text
+   masters (initiate)                              targets (respond)
+   ─────────────────                               ─────────────────
+   M1  core data port   ─┐                    ┌─►  IMEM        0x0000_0000
+   M2  debug SBA        ─┤   decode +         ├─►  DMEM+MMIO   0x0001_0000 / 0x8000_0000
+   M3  boot loader      ─┤   arbitrate        ├─►  Debug module 0x1A11_0000
+   M0  core fetch       ─┘                    └─►  error (no target)
+        priority: M1 > M2 > M3 > M0
+```
+
+**Per-master permissions**, enforced in the decode — not just documented:
+
+| Master | May reach | Rationale |
+|---|---|---|
+| M0 fetch | IMEM, DM | fetching from RAM or a peripheral is a bug, so it errors |
+| M1 data | IMEM, DMEM, MMIO, DM | IMEM is readable so `.rodata` can live beside code |
+| M2 SBA | IMEM, DMEM, MMIO | the DM must not address itself |
+| M3 boot | IMEM only | a loader that can write anywhere is a loader that can brick anything |
+
+**Priority rationale.** Data before fetch so a load/store is never starved by
+the prefetcher. The debugger's SBA sits between them because it is only active
+while a human is poking memory. The boot loader is nearly last because it only
+runs while the core is held in reset — its slot almost never matters.
+
+**Handshake.** OBI-style: `gnt` is combinational (a master that loses
+arbitration simply holds its request), `rvalid` is the registered grant. Every
+target answers in exactly one cycle, so the bus only needs to remember *which
+target each master was sent to* and mux that target's read data back:
+
+```text
+cycle 0:  req + addr ──► decode ──► gnt (if this master wins)
+                          │
+cycle 1:                  └──► rvalid + rdata (muxed by the registered target)
+                                └──► err, if the target was "none" or the bridge said so
+```
+
+Cost: three registered target-selects plus three rvalid flops. **No latency is
+added** versus the old point-to-point wiring, and a `ifndef SYNTHESIS`
+assertion checks the bridge really does answer exactly one cycle after grant —
+the assumption the response mux depends on.
+
+---
+
+### 6.16 agriasic_imem and agriasic_dmem **[IMPL]** — the memory wrappers
+
+Both present the timing contract of a **single-port synchronous SRAM macro**,
+so a compiler macro can be dropped in without touching anything else:
+
+```text
+        clk ─┐
+     ce_i ───┤   address captured on the rising edge when ce_i is high
+   addr_i ───┤
+    we_i  ───┤   write cycle (|we_i): byte lanes written, dout_o HOLDS
+    din_i ───┤   read cycle  (!we_i): dout_o valid the FOLLOWING cycle
+             └──► dout_o ── "no-change" output policy: holds while ce_i is low
+```
+
+| | IMEM | DMEM |
+|---|---|---|
+| Depth | 1024 × 32 (4 KiB) | 512 × 32 (2 KiB) |
+| Base | `0x0000_0000` | `0x0001_0000` |
+| Write port | **yes** — boot loader, debug SBA, core data port | yes — core data port, SBA |
+| Simulation init | `$readmemh(INIT_FILE)`; `INIT_FILE=""` fills with NOP | none (firmware writes before it reads — verified) |
+
+**Why IMEM is writable.** It is loaded at reset from either the golden ROM or
+external flash, and it stays writable afterwards so a debugger can patch a
+constant in place. This is the decision that retired the "synthesize the
+firmware as a ROM at address 0" option: the ROM still exists, but as a *source*
+(6.21), not as the fetch target.
+
+**The output register is the pipeline register.** IMEM's `dout_o` is Ibex's
+`instr_rdata_i`, with `rvalid` = registered `req`. The core must not
+re-register it. Same for DMEM into the load path.
+
+**Hard-coded assumptions**, all of which must move together if a depth
+changes: `AddrMsb = $clog2(NUM_WORDS)+1` (assumes power-of-two depth; upper
+address bits are simply ignored in silicon and only checked by simulation
+assertions), `IMEM_WORDS`/`DMEM_WORDS` in the shell, `LENGTH` in `link.ld`,
+`SP` in `start.S`, the loader's `length <= IMEM_BYTES` check, and the result
+addresses in `fw.c`.
+
+**Macro swap.** `AGRIASIC_USE_SRAM_MACRO` selects a vendor instance; the
+branch is currently an empty placeholder that leaves `dout_o` undriven, so
+elaboration fails loudly if the define is set before a macro exists. That is
+deliberate — a silently-undriven memory is worse than a build error.
+
+---
+
+### 6.17 agriasic_rv32i_mmio **[IMPL]** — peripheral bridge
+
+Decodes the bus's data-side port into scratch RAM and a 64-byte peripheral
+window, and holds every configuration register the measurement engine reads.
+
+Two things changed at this boundary when Ibex arrived:
+
+1. **The handshake** is OBI (`req/gnt/rvalid`) rather than a raw SRAM strobe.
+2. **The decode is FULL.** The Penn-era bridge looked only at `addr[31]` and
+   `addr[4:2]`, so *any* address outside the two windows silently aliased onto
+   something real. Now anything outside RAM or the peripheral window returns
+   `data_err`, which Ibex turns into a load/store access fault. An out-of-map
+   store is a visible trap in silicon, not a write to nowhere.
+
+Register map — the complete peripheral window (section 7.1 has the bit fields):
+
+```text
+0x8000_0000  CTRL        W   start, clear_err, FW_DONE, TRAP_SEEN
+0x8000_0004  PAIR_LOG2   RW  M = 2^n sample pairs, clamped to 64
+0x8000_0008  SETTLE      RW  excitation PERIODS to wait after start
+0x8000_000C  DIVIDER     RW  raw N, f_exc = f_clk/(16N)
+0x8000_0010  CONV        RW  SAR comparator regeneration, per bit trial
+0x8000_0014  STATUS      R   busy, done, overrange, trap_seen, fw_done
+0x8000_0018  RESULT_I    R   dV in-phase        ┐ tetrapolar: a host computes
+0x8000_001C  RESULT_Q    R   dV quadrature      │ Z(f) = dV(f) / I(f) from
+0x8000_0034  RESULT_CUR_I R  current in-phase   │ these four
+0x8000_0038  RESULT_CUR_Q R  current quadrature ┘
+0x8000_003C  AFE_CTRL    RW  pga_gain, tia_rf, amplitude, mux_settle
+0x8000_0020  BOOT_STATUS R   state, error, fw_valid, strap, source, version
+0x8000_0024  BOOT_CTRL   W   release / re-boot from flash / re-boot from ROM
+0x8000_0028  SPI_CTRL    RW  cs_n, clock divider   ┐ the boot SPI engine, handed
+0x8000_002C  SPI_DATA    RW  tx byte / rx byte     │ to firmware after boot
+0x8000_0030  SPI_STATUS  R   busy, fw_owned        ┘ (self-reflash)
+```
+
+**Pulse generation.** A store to `CTRL` asserts `we` for exactly one cycle —
+OBI is one request per transfer — so a registered decode of that write yields
+the single-cycle start pulse the measurement FSM needs. No edge detector, no
+pulse stretcher.
+
+**The busy/done latch timing rule.** `busy` must set in the *same* cycle the
+`CTRL` start write is registered, because the firmware's fallback path polls
+`STATUS` on the very next cycle. If `busy` lagged by one cycle, firmware would
+read "not busy", conclude the measurement had finished, and consume a stale
+result. `done` is latched sticky for the opposite reason: the FSM's `done_o` is
+a single-cycle pulse that polling firmware would never see — and it doubles as
+the level-sensitive `wfi` wake source.
+
+
+### 6.18 agriasic_spi_boot **[IMPL]** — boot loader and post-boot SPI master
+
+Fills the IMEM SRAM at reset from one of two sources, then hands its SPI engine
+to firmware. It is bus master **M3**, and it runs entirely while the core is
+held in reset.
+
+#### Source selection
+
+```text
+                 ┌──────────────────────────────────────────────┐
+  BOOT_SEL ──────┤ latched on the FIRST cycle out of reset       │
+  (strap)        │ (a strap, not a runtime control — a glitch    │
+                 │  after reset must not redirect a boot)        │
+                 └───────────────────┬──────────────────────────┘
+                                     │
+              strap = 0 (default)    │    strap = 1
+                     ▼               │           ▼
+        ┌──────────────────────┐     │   ┌──────────────────────┐
+        │ GOLDEN ROM shadow    │     │   │ SPI FLASH load       │
+        │ ~150 cycles (0.9 µs) │     │   │ ~80k cycles (0.5 ms) │
+        │ no CRC (it's gates)  │     │   │ header + CRC-32      │
+        └──────────┬───────────┘     │   └──────────┬───────────┘
+                   └─────────► IMEM SRAM ◄──────────┘
+                                     │
+                              fw_valid ──► shell releases the core
+```
+
+`BOOT_CTRL` overrides the strap in **both** directions (bit 1 → flash, bit 2 →
+ROM), so neither source is reachable only by re-strapping a board.
+`BOOT_STATUS[13:12]` reports which source the running image actually came from.
+
+#### State machine
+
+```text
+        ┌─────────┐  strap sampled
+        │ S_DELAY │──────┬─────────────────────────────┐
+        └─────────┘      │ strap=1: wait flash          │ strap=0
+             ▲           │ power-up (BOOT_DELAY_CYCLES) │
+             │           ▼                              ▼
+             │      ┌────────┐  READ 0x03 + addr   ┌─────────┐
+             │      │ S_CMD  │────────────────────►│  S_ROM  │ word ──► bus
+             │      └────────┘                     └────┬────┘   (repeat
+             │           ▼                              │      USED_WORDS)
+             │      ┌────────┐ 16 header bytes           │
+             │      │ S_HDR  │                           │
+             │      └────────┘                           │
+             │           ▼                               │
+             │      ┌─────────┐ magic? length?           │
+             │      │ S_CHECK │──bad──► S_FAIL (err 1/2) │
+             │      └─────────┘                          │
+             │           ▼                               │
+             │   ┌────────┐  byte ──► CRC, word staging  │
+             │   │ S_DATA │◄──┐                          │
+             │   └────────┘   │                          │
+             │        ▼       │ more                     │
+             │   ┌─────────┐  │                          │
+             │   │ S_WRITE │──┘  word ──► bus            │
+             │   └─────────┘                             │
+             │        ▼ last word                        │
+             │   ┌──────────┐                            │
+             │   │ S_VERIFY │◄───────────────────────────┘
+             │   └──────────┘ CRC match? bus error?
+             │        │
+             │   ┌────┴────┬──────────┐
+             │   ▼         ▼          ▼
+             │ S_DONE   S_FAIL     S_SKIP      (S_SKIP: IMEM_PRELOADED,
+             │   │         │          │         simulation, or "the debugger
+             └───┴─────────┴──────────┘         loaded IMEM itself")
+                 BOOT_CTRL.retry / .boot_rom
+```
+
+#### Flash image format (at flash address 0)
+
+```text
+offset  0   magic    0x41475241  "AGRA"   ── proves this is our firmware, and
+offset  4   length   payload bytes         catches a blank part (reads 0xFF..)
+offset  8   version  reported in BOOT_STATUS[31:16]
+offset 12   crc32    zlib / IEEE 802.3, over the PAYLOAD only
+offset 16   payload  the linker's output, word for word
+```
+
+`length` is checked against `IMEM_BYTES` and for 4-byte alignment **before**
+any write — a loader that trusts a length field is a loader that can be made to
+write past the end of memory.
+
+#### Integrity, and what it is not
+
+CRC-32 catches every single-bit error and every burst up to 32 bits, with a
+1-in-4-billion miss probability on random corruption. It detects **accidents,
+not tampering** — anyone can compute a matching CRC for altered data. Secure
+boot would need a signature and a key, which this design does not attempt.
+
+Error codes: `1` bad magic, `2` bad length, `3` CRC mismatch, `4` bus error. A
+ROM boot can only ever report `4`.
+
+**On failure the core is never released.** `boot_fail_o` goes high, the FSM
+parks, and the debugger can read `BOOT_STATUS` to find out why. "Do nothing
+visibly" beats "run a half-copied image".
+
+#### Post-boot: the SPI engine becomes a firmware peripheral
+
+Once the FSM reaches DONE/FAIL/SKIP, ownership of the SPI engine and the flash
+pins passes to `SPI_CTRL` / `SPI_DATA` / `SPI_STATUS`. Firmware can therefore
+run the flash's erase/program commands itself, write a new image, and hit
+`BOOT_CTRL.retry`. **That is the field-update path**: a host hands the chip an
+image over the host SPI, the chip rewrites its own flash, and reboots — no
+external programmer.
+
+---
+
+### 6.19 agriasic_boot_rom **[IMPL]** — the golden image
+
+A **generated** file (`fw/gen_boot_rom.py`) holding the known-good firmware as
+a constant table:
+
+```systemverilog
+always_comb unique case (word_addr)
+  8'd0: data_o = 32'h0A20006F;      // from fw/golden/agriasic_fw_golden.hex
+  ...
+  default: data_o = 32'h0000_0013;  // RV32 NOP — unused words are DEFINED
+endcase
+```
+
+Combinational, no clock, no reset: the copier registers the data on its way
+into the SRAM.
+
+| | |
+|---|---|
+| Depth | 256 words (1 KiB), independent of IMEM's 1024 |
+| Used | 148 words (592 B) — only these are copied |
+| Cost | **+1,027 combinational primitives, +6 flops** |
+| Alternative cost | 4,736 storage bits, had it been a writable array |
+
+**Why "golden" is a process, not a comment.** `build.sh` deliberately does
+**not** regenerate this file. Promotion is explicit:
+
+```bash
+python3 fw/gen_boot_rom.py --promote   # current build → golden/, regenerate RTL
+python3 fw/gen_boot_rom.py             # regenerate RTL from golden/ only
+```
+
+`fw/golden/GOLDEN.md` records the date, word count and SHA-256 of the promoted
+image, so what is frozen in silicon is reviewable in version control. Promote
+only an image that has passed the full regression.
+
+**Why shadow-load and not a fetch-path mux.** Muxing the ROM onto the fetch
+path at address 0 would have cost the same silicon (both memories still exist,
+because flash mode needs writable IMEM) and bought three problems: a mux in the
+fetch path's timing at 160 MHz, and — the one that matters — **no patchability
+in ROM mode**. With the shadow-load, IMEM is ordinary RAM after boot: halt over
+JTAG, poke a constant, resume. Changing a config parameter at the bench needs
+neither a rebuild nor the flash.
+
+---
+
+### 6.20 Debug module integration **[IMPL]** — riscv-dbg
+
+`dmi_jtag` (JTAG TAP + Debug Transport Module) and `dm_top` (Debug Module,
+RISC-V Debug Spec 0.13), vendored per `rtl/riscv-dbg/VENDOR.md`.
+
+```text
+  TCK TMS TRST_N TDI TDO          DM is a slave on BOTH core ports:
+        │                           instruction side → debug ROM + program buffer
+        ▼                           data side        → data0/1, halted/resume flags
+   ┌──────────┐   DMI    ┌────────┐
+   │ dmi_jtag │◄────────►│ dm_top │──debug_req──► ibex_top
+   │  TAP+DTM │  (CDC)   │        │──ndmreset───► sys_rst_n
+   └──────────┘          └───┬────┘
+                        SBA  │  (a bus master, like the core's data port)
+                             ▼
+                      agriasic_rv32i_bus
+```
+
+| Constant | Value |
+|---|---|
+| IDCODE | `0x1434_1001` (version 1, part `0x4341`; LSB must be 1) |
+| IR length | 5 — `0x01` IDCODE, `0x10` DTMCS, `0x11` DMI |
+| DMI address bits | 7 |
+| DM base / halt / resume / exception | `0x1A11_0000` / `+0x800` / `+0x808` / `+0x810` |
+| `hartinfo` | `nscratch=2` (Ibex has dscratch0/1), `dataaccess=1` |
+
+**How a halt actually works**, because it explains why the DM needs *both*
+ports: the debugger sets `haltreq`; `debug_req_o` redirects the hart to
+`DmHaltAddr`; the hart then **fetches from the debug ROM inside the DM** and
+executes small sequences the debugger writes into the program buffer,
+exchanging values through `data0`. Without the instruction-side path there is
+nothing to execute; without the data-side path there is nowhere to put the
+answer.
+
+**System Bus Access.** The DM's own bus master reads and writes memory without
+the hart's help — which is why the debugger can load IMEM while the core is
+held in reset, and why `boot_fail` is recoverable at the bench rather than
+fatal.
+
+**`ndmreset` resets the system, not the debugger.** Core and MMIO bridge reset;
+the DM, the TAP, IMEM contents and the boot loader do not. A `havereset`
+handshake tells the debugger the reset actually happened.
+
+**Availability.** While `start_i` is low or `fw_valid` is low the hart is in
+reset and reported `unavailable`, so a debugger must raise `start_i` — and the
+boot must have succeeded or been overridden — before `halt` can succeed.
+
+`fw/openocd_agriasic.cfg` is the reference target file: `progbuf` memory access
+first, `sysbus` as fallback (the latter works while the hart is unavailable,
+which is what a fresh chip needs).
+
+---
+
+### 6.21 measurement_fsm — Rev 5 two-channel sequencing **[IMPL]**
+
+*(Supersedes the single-channel behaviour described in 6.1. The phase-lock
+architecture, the settle semantics and the shadow-register contract are
+unchanged.)*
+
+The tetrapolar front end measures **two** quantities at once — the
+differential voltage across the inner electrodes and the current returning
+through the outer one — so one accumulation pair is now four phase points ×
+two channels = **eight conversions**, feeding four accumulators:
+
+```text
+   dv_i  = Σ( dV(0°)  − dV(180°) )        cur_i = Σ( I(0°)  − I(180°) )
+   dv_q  = Σ( dV(90°) − dV(270°) )        cur_q = Σ( I(90°) − I(270°) )
+
+   Z(f) = (dv_i + j·dv_q) / (cur_i + j·cur_q)     ← computed HOST-side
+```
+
+#### State machine
+
+```text
+  ┌────────┐ start_i  ┌──────────┐ settle_cycles_i periods
+  │ S_IDLE │─────────►│ S_SETTLE │────────────────────┐
+  └────────┘          └──────────┘                    │
+       ▲                                              ▼
+       │                                     ┌─────────────────┐
+       │                                     │     S_WAIT      │ watch phase_index
+       │                                     └────────┬────────┘
+       │                                   phase match│ + ONE S/H strobe
+       │                                              │   (freezes BOTH channels)
+       │                                              ▼
+       │                                     ┌─────────────────┐
+       │                                     │   S_CONV_DV     │ mux=0, 8 bit trials
+       │                                     └────────┬────────┘
+       │                                              ▼
+       │                                     ┌─────────────────┐
+       │                                     │   S_CONV_CUR    │ mux=1, 8 bit trials
+       │                                     └────────┬────────┘   (no new strobe)
+       │                                              ▼
+       │              ┌──────────┐            ┌─────────────────┐
+       │              │  S_LOOP  │◄───────────│    S_ACCUM      │
+       │              └────┬─────┘  PT_270    └────────┬────────┘
+       │      pairs done?  │                  PT_0/180/90 → next point
+       │         ┌─────────┴────────┐                  │
+       │         ▼                  └──────────────────┘
+       │   ┌──────────┐  snapshot all four accumulators
+       └───│  S_DONE  │  into their shadows (the one cycle busy_o drops)
+           └──────────┘
+```
+
+`point_q` walks `PT_0 → PT_180 → PT_90 → PT_270`; positive-term points stash
+their codes in `dv_hold`/`cur_hold`, negative-term points complete the
+difference and accumulate.
+
+#### The design decision: simultaneous sample-and-hold
+
+At each phase point the FSM issues **one** strobe (`take_sample_o = 1` on the
+first conversion), which freezes **both** channels' sample-and-holds; the
+second conversion runs with `take_sample_o = 0` and digitises the value already
+held.
+
+```text
+   phase point
+        │
+        ▼  ONE strobe
+   ┌─────────┐                      the voltage/current phase relationship is
+   │ S/H  ΔV │──┐                   set by THIS INSTANT, not by the order the
+   └─────────┘  ├──mux──► SAR ADC   two conversions happen to run in. A skew
+   ┌─────────┐  │                   between the conversions costs nothing.
+   │ S/H  I  │──┘
+   └─────────┘
+```
+
+The alternative considered — measure ΔV on one excitation period and I on the
+next, phase-locked to the same counter — needs one fewer S/H but assumes the
+soil and the drive are stationary across adjacent periods. That is a weak claim
+at the 1 kHz point, where one period is a millisecond. **Open item:** this is an
+analog-side decision; the RTL currently assumes simultaneous.
+
+#### Accumulator bound, unchanged per channel
+
+M is clamped to 64 pairs and each per-pair delta is bounded by the 8-bit ADC's
+±255 span, so **each** of the four accumulators spans ±16,320 — inside signed
+16-bit. Having four of them does not relax the bound; each obeys it
+independently. Asserted continuously by the smoke test.
+
+#### Shadow registers
+
+All four accumulators snapshot on the same `S_LOOP → S_DONE` edge — the one
+cycle `busy_o` drops. A host reading mid-run always sees the previous run's
+complete result, and critically **the ΔV and I values it divides always come
+from the same run**.
+
+---
+
+### 6.22 excitation_ctrl — Rev 5 sine DAC **[IMPL]**
+
+*(Supersedes the square-wave drive in 6.3. The divider, the 16-state phase
+counter, `phase_index_o` and `period_tick_o` are unchanged, so every phase-lock
+and timing argument carries over untouched.)*
+
+The analog front end drives E1 from a sine DAC plus reconstruction filter and a
+low-impedance buffer, not from a pair of break-before-make transistors. The
+module therefore emits `sine_code_o[7:0]` (offset binary, mid-code = VCM) in
+place of `drive_p_o`/`drive_n_o`.
+
+#### The table is a COSINE, and that is load-bearing
+
+```text
+  code                                          sample points the FSM uses:
+   255 ┤●                       ●                 k=0  peak      → I positive
+       │   ●                 ●                    k=4  mid-code  → Q positive
+   192 ┤      ●           ●                       k=8  trough    → I negative
+       │         ●     ●                          k=12 mid-code  → Q negative
+   128 ┼────────────●────────────●────────────
+       │              ●     ●
+    64 ┤                 ●  ●
+       │
+     1 ┤                    ●
+       └──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬
+          0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15   phase_index
+          ▲           ▲           ▲           ▲
+          I+          Q+          I−          Q−
+```
+
+A **sine** table would put a zero crossing at index 0 — and the I channel,
+which samples there, would measure nothing. Cosine is what makes synchronous
+demodulation separate in-phase from quadrature at the existing sample points.
+
+#### Half-period antisymmetry — the ± chop contract
+
+`code[k] + code[k+8] == 256` exactly, for every k, by construction of the
+table. The square wave got this from two equal 7-state drive halves; the table
+gets it from its own values. This is what makes `(D(0°) − D(180°))` cancel
+offset and drift: the two samples sit on equal and opposite excursions about
+VCM. A `ifndef SYNTHESIS` initial block asserts the table really is
+antisymmetric, and `tb_excitation_drive` re-derives it from an independent
+reference table.
+
+#### Consequences
+
+- **No dead time, no break-before-make.** There are no complementary drive
+  transistors to shoot through. **GAP-6 (dead-time sizing) is retired** by this
+  change; the drive buffer's slew and the reconstruction filter now set the
+  transition behaviour.
+- **Frequency contract unchanged:** `f_exc = f_clk / (16·N)`, so the
+  N = 1 / 100 / 10000 presets still give 10 MHz / 100 kHz / 1 kHz at 160 MHz.
+- **Harmonic content is the analog side's problem now.** 16 points per period
+  is coarse — the reconstruction filter sees images at (16±1)·f_exc.
+  `PHASE_STEPS` is a parameter so the table can be regenerated at 32 or 64
+  points, but changing it also changes the frequency contract and therefore the
+  firmware's divider presets: deliberately **not** a silent knob.
+- **Amplitude** is a binary attenuation of the excursion about mid-code
+  (full / ½ / ¼ / ⅛) for backing off drive at low frequency where the soil
+  impedance is highest. Mid-code never moves, so the drive buffer's DC
+  operating point is independent of amplitude.
+- **Idle parks at mid-code**, holding the electrode at the common mode rather
+  than at a rail.
+
+---
+
+### 6.23 sar_controller — Rev 5 channel multiplexing **[IMPL]**
+
+*(Extends 6.5/6.6. The bit-trial search, the `adc_comp_i` convention and the
+`conv_cycles_i` reinterpretation are unchanged.)*
+
+Two changes for the two-channel front end:
+
+**1. Acquisition is separated from conversion.** `take_sample_i` decides
+whether this conversion strobes the sample-and-holds (`1`, the first conversion
+at a phase point) or digitises a value already held (`0`, the second). That
+separation is what lets one strobe serve both channels.
+
+**2. Converged codes are no longer stored here.** With two channels and a ±
+chop there are four codes per accumulation pair, and *which one is which* is
+the FSM's sequencing knowledge, not the converter's. The module now returns one
+code per conversion on `code_o`; `d_plus_o`/`d_minus_o` are gone.
+
+```text
+  S_IDLE ──accept──► S_MUX_WAIT ──► S_TRIAL_SET ──► S_TRIAL_WAIT ──► S_TRIAL_EVAL
+             │        (new)             ▲                                  │
+     mux_sel_o = channel_i              └──────── 8 trials, MSB first ─────┘
+     adc_sample_o = take_sample_i                                          │
+             │                                                     code_o ─┘
+             └── mux_settle_cycles_i: let the mux and the selected
+                 S/H settle onto the comparator input before trial 1
+```
+
+`mux_settle_cycles_i` is a **runtime register** (`AFE_CTRL[15:8]`), not a
+parameter, for exactly the same reason `conv_cycles_i` is: the settling time
+depends on process corner and load and is not characterised yet, so it must be
+tunable at bring-up without a respin.
+
+A formal assertion checks `mux_sel_o` is **stable for the whole conversion** —
+a mux change between the settle wait and the last bit trial would digitise a
+mixture of the two channels, which is exactly the kind of bug a single-target
+ADC model would never catch.
+
 
 ---
 

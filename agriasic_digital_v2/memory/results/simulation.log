@@ -1,5 +1,5 @@
 [TB] releasing start, firmware begins
-[TB] firmware halted after 3153174 cycles
+[TB] firmware halted after 3155008 cycles
 [TB] measurements completed: 6
 [TB] config applied by firmware: pair_log2=2 settle=2 divider=10000 conv=1
 [TB] OUT_COUNT = 2  OK
@@ -8,12 +8,18 @@
 [TB] OUT_DIV[0] (10 MHz) = 1  OK
 [TB] OUT_DIV[1] (100 kHz) = 100  OK
 [TB] OUT_DIV[2] (1 kHz) = 10000  OK
-[TB] OUT_I[0] = 400  OK
-[TB] OUT_Q[0] = 280  OK
-[TB] OUT_I[1] = 400  OK
-[TB] OUT_Q[1] = 280  OK
-[TB] OUT_I[2] = 400  OK
-[TB] OUT_Q[2] = 280  OK
-[TB] core_sleep_o high for 3152721 cycles across 6 measurements (wfi sleep mechanism exercised)
+[TB] OUT_DV_I[0] = 400  OK
+[TB] OUT_DV_Q[0] = 280  OK
+[TB] OUT_CUR_I[0] = 240  OK
+[TB] OUT_CUR_Q[0] = 200  OK
+[TB] OUT_DV_I[1] = 400  OK
+[TB] OUT_DV_Q[1] = 280  OK
+[TB] OUT_CUR_I[1] = 240  OK
+[TB] OUT_CUR_Q[1] = 200  OK
+[TB] OUT_DV_I[2] = 400  OK
+[TB] OUT_DV_Q[2] = 280  OK
+[TB] OUT_CUR_I[2] = 240  OK
+[TB] OUT_CUR_Q[2] = 200  OK
+[TB] core_sleep_o high for 3154273 cycles across 6 measurements (wfi sleep mechanism exercised)
 [TB] PASS -- all checks passed
-- tb_memory_generated.sv:331: Verilog $finish
+- tb_memory_generated.sv:352: Verilog $finish

@@ -50,8 +50,11 @@
 // (MAS section 7.2). Only one frequency point's worth of real data exists
 // today (Phase 7's sweep and any temperature sensing are not built), so the
 // mapping is:
-//   idx 0: result_i_o[7:0]    idx 1: result_i_o[15:8]
-//   idx 2: result_q_o[7:0]    idx 3: result_q_o[15:8]
+//   idx 0: dV I[7:0]    idx 1: dV I[15:8]    (differential voltage, PGA)
+//   idx 2: dV Q[7:0]    idx 3: dV Q[15:8]
+//   idx 4: I  I[7:0]    idx 5: I  I[15:8]    (return current, TIA)
+//   idx 6: I  Q[7:0]    idx 7: I  Q[15:8]
+//   A host computes Z(f) = dV(f) / I(f) from the two complex pairs.
 //   idx 4-15: reserved, reads as 0 (frequency points 1/2 and temperature,
 //             once Phase 7 exists to populate them; 13-15 are unused padding
 //             beyond the 13-byte result set, a consequence of using a plain
@@ -78,22 +81,24 @@ module agriasic_digital_spi_top #(
 ) (
   input  logic                 clk,
   input  logic                 rst_n,
-  input  logic                 sclk_i,
-  input  logic                 cs_n_i,
-  input  logic                 mosi_i,
-  output logic                 miso_o,
-  output logic                 miso_oe_o,
-  output logic                 conv_start_o,
-  output logic                 exc_drive_p_o,
-  output logic                 exc_drive_n_o,
-  output logic                 adc_enable_o,
-  output logic                 adc_sample_o,
-  output logic [ADC_WIDTH-1:0] adc_dac_o,
-  input  logic                 adc_comp_i,
-  output logic                 busy_o,
-  output logic                 done_o,
-  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
-  output logic signed [15:0]   result_q_o   // Rev 4.3 Phase 5: Q channel
+  input  logic                 gpio_spi_sclk_i,
+  input  logic                 gpio_spi_cs_n_i,
+  input  logic                 gpio_spi_mosi_i,
+  output logic                 gpio_spi_miso_o,
+  output logic                 gpio_spi_miso_oe_o,
+  output logic                 afe_conv_start_o,
+  output logic [ADC_WIDTH-1:0] afe_sine_code_o,     // Rev 5: sine DAC code -> E1 drive buffer
+  output logic [1:0]           afe_mux_sel_o,       // Rev 5: 0 = dV (PGA), 1 = I (TIA)
+  output logic                 afe_adc_enable_o,
+  output logic                 afe_sample_o,
+  output logic [ADC_WIDTH-1:0] afe_adc_dac_o,
+  input  logic                 afe_adc_comp_i,
+  output logic                 dbg_busy_o,
+  output logic                 dbg_done_o,
+  output logic signed [15:0]   dbg_result_dv_i_o,   // Rev 5: dV in-phase
+  output logic signed [15:0]   dbg_result_dv_q_o,   // Rev 5: dV quadrature
+  output logic signed [15:0]   dbg_result_cur_i_o,  // Rev 5: current in-phase
+  output logic signed [15:0]   dbg_result_cur_q_o   // Rev 5: current quadrature
 );
 
   // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
@@ -213,10 +218,14 @@ module agriasic_digital_spi_top #(
   function automatic logic [7:0] result_byte_at(input logic [3:0] idx);
     begin
       unique case (idx)
-        4'd0:    result_byte_at = result_i_o[7:0];
-        4'd1:    result_byte_at = result_i_o[15:8];
-        4'd2:    result_byte_at = result_q_o[7:0];
-        4'd3:    result_byte_at = result_q_o[15:8];
+        4'd0:    result_byte_at = dbg_result_dv_i_o[7:0];
+        4'd1:    result_byte_at = dbg_result_dv_i_o[15:8];
+        4'd2:    result_byte_at = dbg_result_dv_q_o[7:0];
+        4'd3:    result_byte_at = dbg_result_dv_q_o[15:8];
+        4'd4:    result_byte_at = dbg_result_cur_i_o[7:0];
+        4'd5:    result_byte_at = dbg_result_cur_i_o[15:8];
+        4'd6:    result_byte_at = dbg_result_cur_q_o[7:0];
+        4'd7:    result_byte_at = dbg_result_cur_q_o[15:8];
         default: result_byte_at = 8'd0;  // reserved: future freq points + temperature
       endcase
     end
@@ -242,7 +251,7 @@ module agriasic_digital_spi_top #(
   // Sticky done.
   //
   // The measurement FSM's start is a single-cycle pulse, so the FSM leaves its
-  // DONE state immediately and done_o is asserted for exactly ONE core cycle.
+  // DONE state immediately and dbg_done_o is asserted for exactly ONE core cycle.
   // A SPI host polling STATUS needs many cycles per transaction and could never
   // observe that, so completion is latched here and held until the next start.
   always_ff @(posedge clk or negedge rst_n_sync) begin
@@ -255,7 +264,7 @@ module agriasic_digital_spi_top #(
     end
   end
 
-  assign done_o = status_done_q;
+  assign dbg_done_o = status_done_q;
 
   assign status_byte = {
     status_protocol_err_q,
@@ -264,7 +273,7 @@ module agriasic_digital_spi_top #(
     status_overrange_w,
     2'b00,
     status_done_q,
-    busy_o
+    dbg_busy_o
   };
 
   spi_slave #(
@@ -272,11 +281,11 @@ module agriasic_digital_spi_top #(
   ) u_spi_slave (
     .clk       (clk),
     .rst_n     (rst_n_sync),
-    .sclk_i    (sclk_i),
-    .cs_n_i    (cs_n_i),
-    .mosi_i    (mosi_i),
-    .miso_o    (miso_o),
-    .miso_oe_o (miso_oe_o),
+    .sclk_i    (gpio_spi_sclk_i),
+    .cs_n_i    (gpio_spi_cs_n_i),
+    .mosi_i    (gpio_spi_mosi_i),
+    .miso_o    (gpio_spi_miso_o),
+    .miso_oe_o (gpio_spi_miso_oe_o),
     .rx_data_o (spi_rx_data),
     .rx_valid_o(spi_rx_valid),
     .tx_data_i (spi_tx_data)
@@ -305,17 +314,22 @@ module agriasic_digital_spi_top #(
     .cfg_settle_cycles_i(cfg_settle_q),
     .cfg_exc_divider_i  (cfg_divider_w),
     .cfg_conv_cycles_i  (cfg_conv_q),
-    .conv_start_o       (conv_start_o),
-    .exc_drive_p_o      (exc_drive_p_o),
-    .exc_drive_n_o      (exc_drive_n_o),
-    .adc_enable_o       (adc_enable_o),
-    .adc_sample_o       (adc_sample_o),
-    .adc_dac_o          (adc_dac_o),
-    .adc_comp_i         (adc_comp_i),
-    .busy_o             (busy_o),
+    // Rev 5: not exposed on the SPI register map yet -- fixed defaults.
+    .cfg_mux_settle_i   (8'd2),
+    .cfg_amplitude_i    (2'd0),
+    .afe_conv_start_o       (afe_conv_start_o),
+    .afe_sine_code_o        (afe_sine_code_o),
+    .afe_mux_sel_o          (afe_mux_sel_o),
+    .afe_adc_enable_o       (afe_adc_enable_o),
+    .afe_sample_o       (afe_sample_o),
+    .afe_adc_dac_o          (afe_adc_dac_o),
+    .afe_adc_comp_i         (afe_adc_comp_i),
+    .busy_o             (dbg_busy_o),
     .done_o             (core_done),
-    .result_i_o         (result_i_o),
-    .result_q_o         (result_q_o)
+    .result_dv_i_o      (dbg_result_dv_i_o),
+    .result_dv_q_o      (dbg_result_dv_q_o),
+    .result_cur_i_o     (dbg_result_cur_i_o),
+    .result_cur_q_o     (dbg_result_cur_q_o)
   );
 
   // Continuous status mirror write into regfile for SPI visibility. This is

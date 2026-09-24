@@ -37,15 +37,15 @@ module tb_diag;
   assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
 
   agriasic_digital_rv32i_top #(.BOOT_DELAY_CYCLES(64), .IMEM_PRELOADED(1'b1)) dut (
-    .clk(clk), .rst_n(rst_n), .start_i(start_i),
-    .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
-    .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o),
-    .adc_dac_o(adc_dac_o), .adc_comp_i(adc_comp_i),
-    .busy_o(busy_o), .done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o),
-    .cfg_pair_log2_o(cfg_pair_log2_o), .cfg_settle_cycles_o(cfg_settle_cycles_o),
-    .cfg_exc_divider_o(cfg_exc_divider_o), .cfg_conv_cycles_o(cfg_conv_cycles_o),
-    .jtag_tck_i(1'b0), .jtag_tms_i(1'b1), .jtag_trst_ni(rst_n), .jtag_tdi_i(1'b0), .jtag_tdo_o(),
-    .boot_sel_i(1'b0), .flash_sck_o(), .flash_cs_n_o(), .flash_mosi_o(), .flash_miso_i(1'b0), .boot_fail_o());
+    .clk(clk), .rst_n(rst_n), .gpio_start_i(start_i),
+    .afe_conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
+    .afe_adc_enable_o(adc_enable_o), .afe_sample_o(adc_sample_o),
+    .afe_adc_dac_o(adc_dac_o), .afe_adc_comp_i(adc_comp_i),
+    .dbg_busy_o(busy_o), .dbg_done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o),
+    .dbg_cfg_pair_log2_o(cfg_pair_log2_o), .dbg_cfg_settle_cycles_o(cfg_settle_cycles_o),
+    .dbg_cfg_exc_divider_o(cfg_exc_divider_o), .dbg_cfg_conv_cycles_o(cfg_conv_cycles_o),
+    .gpio_jtag_tck_i(1'b0), .gpio_jtag_tms_i(1'b1), .gpio_jtag_trst_ni(rst_n), .gpio_jtag_tdi_i(1'b0), .gpio_jtag_tdo_o(),
+    .gpio_boot_sel_i(1'b0), .gpio_flash_sck_o(), .gpio_flash_cs_n_o(), .gpio_flash_mosi_o(), .gpio_flash_miso_i(1'b0), .gpio_boot_fail_o());
 
   wire [31:0] pc = dut.u_control_shell.instr_addr;
   wire halted = dut.u_control_shell.done_o;

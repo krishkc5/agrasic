@@ -8,6 +8,11 @@
  * software-induced jitter and the +/- chop stays time-symmetric.
  *
  * Rev 4.3 Phase 7 -- frequency sweep:
+ *   Rev 5: the front end is tetrapolar, so every measurement returns TWO
+ *   complex results -- the differential voltage across the inner electrodes
+ *   and the current returning through the outer one. This firmware stores
+ *   both per frequency point; the host divides them to get impedance.
+ *
  *   Sweeps the three real excitation points (10 MHz / 100 kHz / 1 kHz --
  *   f_exc = f_clk/(16*N) at f_clk=160 MHz gives N=1/100/10000 exactly, the
  *   same three presets REG_FREQ_SEL exposes as a selector on the SPI and
@@ -57,8 +62,14 @@
 #define REG_DIVIDER   REG(0x0C)   /* RW  raw N, unlike SPI's selector-based REG_FREQ_SEL */
 #define REG_CONV      REG(0x10)   /* RW */
 #define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done, bit4 = overrange, bit5 = trap_seen, bit6 = fw_done */
-#define REG_RESULT_I  REG(0x18)   /* R   sign-extended 16-bit I-channel accumulator */
-#define REG_RESULT_Q  REG(0x1C)   /* R   sign-extended 16-bit Q-channel accumulator (Rev 4.3 Phase 5) */
+#define REG_RESULT_I  REG(0x18)   /* R   sign-extended dV in-phase accumulator */
+#define REG_RESULT_Q  REG(0x1C)   /* R   sign-extended dV quadrature accumulator */
+/* Rev 5 tetrapolar front end: the return-current channel is a second complex
+   pair. Impedance is their ratio, Z(f) = dV(f) / I(f) -- computed host-side,
+   not here (no floating point, and the host already does magnitude/phase). */
+#define REG_RESULT_CUR_I REG(0x34) /* R   sign-extended current in-phase accumulator */
+#define REG_RESULT_CUR_Q REG(0x38) /* R   sign-extended current quadrature accumulator */
+#define REG_AFE_CTRL     REG(0x3C) /* RW  [1:0] pga_gain, [3:2] tia_rf, [5:4] amplitude, [15:8] mux_settle */
 
 #define CTRL_START      (1 << 0)
 #define CTRL_CLEAR_ERR  (1 << 7)
@@ -80,8 +91,10 @@
 #define OUT_COUNT      (*(volatile int *)(DMEM_BASE + 0x100))  /* measurements averaged, per point */
 #define OUT_NUM_POINTS (*(volatile int *)(DMEM_BASE + 0x104))  /* frequency points swept (3) */
 #define OUT_DIV        ((volatile int *)(DMEM_BASE + 0x110))   /* [3]: divider N used per point */
-#define OUT_I          ((volatile int *)(DMEM_BASE + 0x120))   /* [3]: I average per point */
-#define OUT_Q          ((volatile int *)(DMEM_BASE + 0x130))   /* [3]: Q average per point */
+#define OUT_DV_I       ((volatile int *)(DMEM_BASE + 0x120))   /* [3]: dV in-phase average per point */
+#define OUT_DV_Q       ((volatile int *)(DMEM_BASE + 0x130))   /* [3]: dV quadrature average per point */
+#define OUT_CUR_I      ((volatile int *)(DMEM_BASE + 0x150))   /* [3]: current in-phase average per point */
+#define OUT_CUR_Q      ((volatile int *)(DMEM_BASE + 0x160))   /* [3]: current quadrature average per point */
 #define OUT_TEMP       (*(volatile int *)(DMEM_BASE + 0x140))  /* sentinel -1: not implemented, see header (GAP-11) */
 
 #define NUM_FREQ_POINTS  3
@@ -100,7 +113,14 @@ static inline void wfi(void)
     __asm__ volatile ("wfi" ::: "memory");
 }
 
-static void run_one_measurement(int *out_i, int *out_q)
+struct iq_pair {
+    int dv_i;
+    int dv_q;
+    int cur_i;
+    int cur_q;
+};
+
+static void run_one_measurement(struct iq_pair *out)
 {
     REG_CTRL = CTRL_START;
 
@@ -110,8 +130,10 @@ static void run_one_measurement(int *out_i, int *out_q)
         /* guard: only spins if wfi returned early */
     }
 
-    *out_i = REG_RESULT_I;
-    *out_q = REG_RESULT_Q;
+    out->dv_i  = REG_RESULT_I;
+    out->dv_q  = REG_RESULT_Q;
+    out->cur_i = REG_RESULT_CUR_I;
+    out->cur_q = REG_RESULT_CUR_Q;
 }
 
 /*
@@ -120,28 +142,40 @@ static void run_one_measurement(int *out_i, int *out_q)
  * Averaging across runs is software's job: no cycle accuracy needed, and
  * it stays changeable without touching the FSM.
  */
-static void run_sweep_point(int divider_n, int *out_i, int *out_q)
+static void run_sweep_point(int divider_n, struct iq_pair *out)
 {
-    int acc_i = 0;
-    int acc_q = 0;
+    struct iq_pair acc = { 0, 0, 0, 0 };
     int i;
 
     REG_DIVIDER = divider_n;
 
     for (i = 0; i < NUM_MEASUREMENTS; i++) {
-        int sample_i, sample_q;
-        run_one_measurement(&sample_i, &sample_q);
-        acc_i += sample_i;
-        acc_q += sample_q;
+        struct iq_pair s;
+        run_one_measurement(&s);
+        acc.dv_i  += s.dv_i;
+        acc.dv_q  += s.dv_q;
+        acc.cur_i += s.cur_i;
+        acc.cur_q += s.cur_q;
     }
 
-    *out_i = acc_i / NUM_MEASUREMENTS;
-    *out_q = acc_q / NUM_MEASUREMENTS;
+    out->dv_i  = acc.dv_i  / NUM_MEASUREMENTS;
+    out->dv_q  = acc.dv_q  / NUM_MEASUREMENTS;
+    out->cur_i = acc.cur_i / NUM_MEASUREMENTS;
+    out->cur_q = acc.cur_q / NUM_MEASUREMENTS;
+}
+
+static void store_point(int point, int divider_n, const struct iq_pair *r)
+{
+    OUT_DIV[point]    = divider_n;
+    OUT_DV_I[point]   = r->dv_i;
+    OUT_DV_Q[point]   = r->dv_q;
+    OUT_CUR_I[point]  = r->cur_i;
+    OUT_CUR_Q[point]  = r->cur_q;
 }
 
 int main(void)
 {
-    int i, q;
+    struct iq_pair r;
 
     /* Clear any sticky protocol errors left over from the host interface. */
     REG_CTRL = CTRL_CLEAR_ERR;
@@ -154,25 +188,25 @@ int main(void)
     REG_SETTLE    = 2;   /* settle periods after start/freq change (Rev 4.3 Phase 4) */
     REG_CONV      = 1;   /* SAR conversion latency in cycles */
 
+    /* Rev 5 analog front end: lowest PGA gain and TIA transimpedance, full
+       sine amplitude, 2 cycles of mux/S-H settling. These are the bring-up
+       defaults the bridge already resets to; written explicitly so the
+       firmware's assumption is visible rather than inherited. */
+    REG_AFE_CTRL  = (2 << 8) | (0 << 4) | (0 << 2) | 0;
+
     /* Point 0: 10 MHz (N=1). */
-    run_sweep_point(1, &i, &q);
-    OUT_DIV[0] = 1;
-    OUT_I[0]   = i;
-    OUT_Q[0]   = q;
+    run_sweep_point(1, &r);
+    store_point(0, 1, &r);
 
     /* Point 1: 100 kHz (N=100). */
-    run_sweep_point(100, &i, &q);
-    OUT_DIV[1] = 100;
-    OUT_I[1]   = i;
-    OUT_Q[1]   = q;
+    run_sweep_point(100, &r);
+    store_point(1, 100, &r);
 
     /* Point 2: 1 kHz (N=10000) -- the point carrying most of the ionic
        (nutrient/salt) information, unreachable before Phase 4/6 widened the
        divider path end to end. */
-    run_sweep_point(10000, &i, &q);
-    OUT_DIV[2] = 10000;
-    OUT_I[2]   = i;
-    OUT_Q[2]   = q;
+    run_sweep_point(10000, &r);
+    store_point(2, 10000, &r);
 
     /* Phase 7.3, not implemented -- see header. */
     OUT_TEMP = -1;

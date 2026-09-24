@@ -40,13 +40,24 @@
 //   0x8000_0010  CONV       RW  [7:0]
 //   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done, bit4 = overrange,
 //                                bit5 = trap_seen, bit6 = fw_done
-//   0x8000_0018  RESULT_I   R   [15:0] signed I-channel accumulator
-//   0x8000_001C  RESULT_Q   R   [15:0] signed Q-channel accumulator
+//   0x8000_0018  RESULT_I   R   [15:0] signed dV in-phase accumulator
+//   0x8000_001C  RESULT_Q   R   [15:0] signed dV quadrature accumulator
+//
+// Rev 5 -- tetrapolar front end. RESULT_I/RESULT_Q now carry the DIFFERENTIAL
+// VOLTAGE channel (PGA on E2/E3); the return-current channel (TIA on E4) is a
+// second complex pair, and a host computes Z(f) = dV(f) / I(f):
+//   0x8000_0034  RESULT_CUR_I R  [15:0] signed current in-phase accumulator
+//   0x8000_0038  RESULT_CUR_Q R  [15:0] signed current quadrature accumulator
+//   0x8000_003C  AFE_CTRL    RW  [1:0]  pga_gain   (1 / 4 / 16)
+//                                [3:2]  tia_rf     (10k / 100k / 1M)
+//                                [5:4]  amplitude  (sine excursion: full/half/quarter/eighth)
+//                                [15:8] mux_settle_cycles (analog mux + S/H settling)
 //
 // Boot / SPI-master registers (Phase 3, implemented in agriasic_spi_boot;
 // this bridge only decodes them and forwards the strobes):
 //   0x8000_0020  BOOT_STATUS R   state, error, fw_valid, boot_sel, boot_fail, version
-//   0x8000_0024  BOOT_CTRL   W   bit0 = release core, bit1 = retry flash boot
+//   0x8000_0024  BOOT_CTRL   W   bit0 = release core, bit1 = re-boot from flash,
+//                                bit2 = re-boot from the golden ROM
 //   0x8000_0028  SPI_CTRL    RW  bit0 = cs_n, [15:8] = clock divider
 //   0x8000_002C  SPI_DATA    RW  W: byte to send (starts transfer); R: last byte received
 //   0x8000_0030  SPI_STATUS  R   bit0 = busy, bit1 = firmware owns the SPI pins
@@ -96,6 +107,11 @@ module agriasic_rv32i_mmio #(
   output logic [7:0]  cfg_settle_cycles_o,
   output logic [13:0] cfg_exc_divider_o,
   output logic [7:0]  cfg_conv_cycles_o,
+  // Rev 5 analog front-end configuration.
+  output logic [7:0]  cfg_mux_settle_o,
+  output logic [1:0]  cfg_amplitude_o,
+  output logic [1:0]  cfg_pga_gain_o,
+  output logic [1:0]  cfg_tia_rf_o,
 
   // Firmware-state outputs to the shell.
   output logic        fw_done_o,        // firmware wrote CTRL.FW_DONE
@@ -105,12 +121,15 @@ module agriasic_rv32i_mmio #(
   // Status inputs from the measurement engine.
   //   done_i is the FSM's RAW single-cycle done pulse.
   input  logic        done_i,
-  input  logic signed [15:0] result_i_i,
-  input  logic signed [15:0] result_q_i,
+  input  logic signed [15:0] result_dv_i_i,
+  input  logic signed [15:0] result_dv_q_i,
+  input  logic signed [15:0] result_cur_i_i,
+  input  logic signed [15:0] result_cur_q_i,
 
   // Boot / SPI-master register plumbing to agriasic_spi_boot.
   output logic        boot_release_o,     // pulse
-  output logic        boot_retry_o,       // pulse
+  output logic        boot_retry_o,       // pulse: re-boot from flash
+  output logic        boot_rom_o,         // pulse: re-boot from the golden ROM
   output logic        spi_ctrl_we_o,      // pulse
   output logic [15:0] spi_ctrl_wdata_o,
   output logic        spi_data_we_o,      // pulse
@@ -136,6 +155,9 @@ module agriasic_rv32i_mmio #(
   localparam logic [3:0] REG_SPI_CTRL    = 4'd10;
   localparam logic [3:0] REG_SPI_DATA    = 4'd11;
   localparam logic [3:0] REG_SPI_STATUS  = 4'd12;
+  localparam logic [3:0] REG_RESULT_CUR_I = 4'd13;
+  localparam logic [3:0] REG_RESULT_CUR_Q = 4'd14;
+  localparam logic [3:0] REG_AFE_CTRL     = 4'd15;
 
   localparam logic [31:0] PERIPH_BASE  = 32'h8000_0000;
   localparam logic [31:0] PERIPH_MASK  = 32'hFFFF_FFC0;   // 64-byte window
@@ -186,6 +208,10 @@ module agriasic_rv32i_mmio #(
   logic [7:0]  cfg_settle_q;
   logic [13:0] cfg_divider_q;
   logic [7:0]  cfg_conv_q;
+  logic [7:0]  cfg_mux_settle_q;
+  logic [1:0]  cfg_amplitude_q;
+  logic [1:0]  cfg_pga_gain_q;
+  logic [1:0]  cfg_tia_rf_q;
   logic        fw_done_q;
   logic        trap_seen_q;
 
@@ -193,6 +219,10 @@ module agriasic_rv32i_mmio #(
   assign cfg_settle_cycles_o = cfg_settle_q;
   assign cfg_exc_divider_o   = cfg_divider_q;
   assign cfg_conv_cycles_o   = cfg_conv_q;
+  assign cfg_mux_settle_o    = cfg_mux_settle_q;
+  assign cfg_amplitude_o     = cfg_amplitude_q;
+  assign cfg_pga_gain_o      = cfg_pga_gain_q;
+  assign cfg_tia_rf_o        = cfg_tia_rf_q;
   assign fw_done_o           = fw_done_q;
   assign trap_seen_o         = trap_seen_q;
 
@@ -202,6 +232,13 @@ module agriasic_rv32i_mmio #(
       cfg_settle_q    <= 8'd2;
       cfg_divider_q   <= 14'd0;
       cfg_conv_q      <= 8'd1;
+      // Rev 5 defaults: 2 cycles of mux/S-H settling, full sine amplitude,
+      // lowest PGA gain and lowest TIA transimpedance -- the safe corner for
+      // bring-up, raised by firmware once signal levels are known.
+      cfg_mux_settle_q <= 8'd2;
+      cfg_amplitude_q  <= 2'd0;
+      cfg_pga_gain_q   <= 2'd0;
+      cfg_tia_rf_q     <= 2'd0;
       start_pulse_o   <= 1'b0;
       clear_errors_o  <= 1'b0;
       fw_done_q       <= 1'b0;
@@ -230,6 +267,12 @@ module agriasic_rv32i_mmio #(
           REG_SETTLE:    cfg_settle_q    <= data_wdata_i[7:0];
           REG_DIVIDER:   cfg_divider_q   <= data_wdata_i[13:0];
           REG_CONV:      cfg_conv_q      <= data_wdata_i[7:0];
+          REG_AFE_CTRL: begin
+            cfg_pga_gain_q   <= data_wdata_i[1:0];
+            cfg_tia_rf_q     <= data_wdata_i[3:2];
+            cfg_amplitude_q  <= data_wdata_i[5:4];
+            if (data_be_i[1]) cfg_mux_settle_q <= data_wdata_i[15:8];
+          end
           // STATUS / RESULT / BOOT_STATUS / SPI_STATUS are read-only; the
           // boot and SPI registers live in agriasic_spi_boot (strobes below).
           default: begin
@@ -244,6 +287,7 @@ module agriasic_rv32i_mmio #(
     if (!rst_n) begin
       boot_release_o   <= 1'b0;
       boot_retry_o     <= 1'b0;
+      boot_rom_o       <= 1'b0;
       spi_ctrl_we_o    <= 1'b0;
       spi_ctrl_wdata_o <= 16'd0;
       spi_data_we_o    <= 1'b0;
@@ -251,6 +295,7 @@ module agriasic_rv32i_mmio #(
     end else begin
       boot_release_o <= periph_wr && (periph_reg == REG_BOOT_CTRL) && data_wdata_i[0];
       boot_retry_o   <= periph_wr && (periph_reg == REG_BOOT_CTRL) && data_wdata_i[1];
+      boot_rom_o     <= periph_wr && (periph_reg == REG_BOOT_CTRL) && data_wdata_i[2];
       spi_ctrl_we_o  <= periph_wr && (periph_reg == REG_SPI_CTRL);
       spi_data_we_o  <= periph_wr && (periph_reg == REG_SPI_DATA);
       if (periph_wr) begin
@@ -302,8 +347,12 @@ module agriasic_rv32i_mmio #(
       REG_CONV:      periph_rdata = {24'd0, cfg_conv_q};
       REG_STATUS:    periph_rdata = {25'd0, fw_done_q, trap_seen_q, status_overrange_w,
                                      2'b00, meas_done_q, meas_busy_q};
-      REG_RESULT_I:  periph_rdata = {{16{result_i_i[15]}}, result_i_i};
-      REG_RESULT_Q:  periph_rdata = {{16{result_q_i[15]}}, result_q_i};
+      REG_RESULT_I:  periph_rdata = {{16{result_dv_i_i[15]}}, result_dv_i_i};
+      REG_RESULT_Q:  periph_rdata = {{16{result_dv_q_i[15]}}, result_dv_q_i};
+      REG_RESULT_CUR_I: periph_rdata = {{16{result_cur_i_i[15]}}, result_cur_i_i};
+      REG_RESULT_CUR_Q: periph_rdata = {{16{result_cur_q_i[15]}}, result_cur_q_i};
+      REG_AFE_CTRL:  periph_rdata = {16'd0, cfg_mux_settle_q, 2'd0,
+                                     cfg_amplitude_q, cfg_tia_rf_q, cfg_pga_gain_q};
       REG_BOOT_STATUS: periph_rdata = boot_status_i;
       REG_SPI_CTRL:    periph_rdata = spi_ctrl_i;
       REG_SPI_DATA:    periph_rdata = {24'd0, spi_rx_i};

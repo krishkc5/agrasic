@@ -1,13 +1,13 @@
 {
-  "sweep_cycles_negedge_window": 3153189,
-  "existing_e2e_posedge_cycles": 3153174,
-  "active_cycles": 464,
-  "frozen_cycles": 3152725,
-  "frozen_percent": 99.98528473872007,
-  "sweep_time_ms_at_model_frequency": 19.70743125,
+  "sweep_cycles_negedge_window": 3155023,
+  "existing_e2e_posedge_cycles": 3155008,
+  "active_cycles": 745,
+  "frozen_cycles": 3154278,
+  "frozen_percent": 99.9763868599373,
+  "sweep_time_ms_at_model_frequency": 19.71889375,
   "sweep_samples": 96,
-  "imem_accesses_in_sweep": 160,
-  "dmem_accesses_in_sweep": 30,
+  "imem_accesses_in_sweep": 207,
+  "dmem_accesses_in_sweep": 48,
   "memory_capacity_bits": {
     "imem": 32768,
     "dmem": 16384
@@ -22,26 +22,26 @@
     "low": {
       "scenario": "low",
       "mode": "whole_sweep",
-      "clock_mW": 18.740160000000003,
-      "data_proxy_mW": 0.0077986181349359324,
-      "logic_dynamic_mW": 18.747958618134938,
-      "energy_uJ": 369.47410554473925
+      "clock_mW": 19.315584000000005,
+      "data_proxy_mW": 0.00800109245038371,
+      "logic_dynamic_mW": 19.32358509245039,
+      "energy_uJ": 381.03972130711315
     },
     "central": {
       "scenario": "central",
       "mode": "whole_sweep",
-      "clock_mW": 46.85040000000001,
-      "data_proxy_mW": 0.03899309067467967,
-      "logic_dynamic_mW": 46.88939309067469,
-      "energy_uJ": 924.0694906886965
+      "clock_mW": 48.28896,
+      "data_proxy_mW": 0.04000546225191855,
+      "logic_dynamic_mW": 48.32896546225192,
+      "energy_uJ": 952.9937349975653
     },
     "high": {
       "scenario": "high",
       "mode": "whole_sweep",
-      "clock_mW": 93.70080000000002,
-      "data_proxy_mW": 0.15597236269871867,
-      "logic_dynamic_mW": 93.85677236269873,
-      "energy_uJ": 1849.6758886847854
+      "clock_mW": 96.57792,
+      "data_proxy_mW": 0.1600218490076742,
+      "logic_dynamic_mW": 96.7379418490077,
+      "energy_uJ": 1907.5651969142614
     }
   }
 }

@@ -26,5 +26,5 @@ stage_ibex() {
 # Sources for the RV32I chip build that are NOT vendored IP. Kept here so
 # every script agrees on the list (the Penn core files under rtl/rv32i are no
 # longer part of the chip build).
-AGRIASIC_RV32I_SOURCES="agriasic_digital_rv32i_top.sv agriasic_rv32i_control_shell.sv agriasic_digital_top.sv rst_sync.sv measurement_fsm.sv excitation_ctrl.sv sar_controller.sv agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv"
+AGRIASIC_RV32I_SOURCES="agriasic_digital_rv32i_top.sv agriasic_rv32i_control_shell.sv agriasic_digital_top.sv rst_sync.sv measurement_fsm.sv excitation_ctrl.sv sar_controller.sv agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv agriasic_boot_rom.sv"
 export AGRIASIC_RV32I_SOURCES

@@ -20,12 +20,12 @@ module tb_spi_diag;
   logic signed [15:0] result_q_o;
 
   agriasic_digital_spi_top #(.ADC_WIDTH(ADC_WIDTH)) dut (
-    .clk(clk), .rst_n(rst_n), .sclk_i(sclk_i), .cs_n_i(cs_n_i),
-    .mosi_i(mosi_i), .miso_o(miso_o), .miso_oe_o(miso_oe_o),
-    .conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
-    .adc_enable_o(adc_enable_o), .adc_sample_o(adc_sample_o),
-    .adc_dac_o(adc_dac_o), .adc_comp_i(adc_comp_i),
-    .busy_o(busy_o), .done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o));
+    .clk(clk), .rst_n(rst_n), .gpio_spi_sclk_i(sclk_i), .gpio_spi_cs_n_i(cs_n_i),
+    .gpio_spi_mosi_i(mosi_i), .gpio_spi_miso_o(miso_o), .gpio_spi_miso_oe_o(miso_oe_o),
+    .afe_conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
+    .afe_adc_enable_o(adc_enable_o), .afe_sample_o(adc_sample_o),
+    .afe_adc_dac_o(adc_dac_o), .afe_adc_comp_i(adc_comp_i),
+    .dbg_busy_o(busy_o), .dbg_done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o));
 
   always #5 clk = ~clk;
 

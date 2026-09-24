@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriASIC Die Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --bg:#161a16; --panel:#1c211c; --line:#2f362f; --text:#e6e9e4; --muted:#9aa39a;
+    --amber:#e0b84a; --cyan:#6fc9e8; --indigo:#6b6fe0; --red:#e06b6b; --green:#9fd8a4;
+    --sans:"IBM Plex Sans",system-ui,"Segoe UI",Arial,sans-serif;
+    --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+    --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  }
+  html{color-scheme:dark}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0;padding-block:28px 48px;padding-inline:clamp(16px,3vw,40px)}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 24px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  h1{font-family:var(--cond);font-weight:600;font-size:clamp(24px,3vw,32px);letter-spacing:.2px;margin:0;text-wrap:balance}
+  .sub{color:var(--muted);font-family:var(--mono);font-size:12.5px;letter-spacing:.4px}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow-x:auto;padding:6px}
+  .sheet svg{display:block;width:100%;min-width:1100px;height:auto}
+  .band{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:22px;margin-top:26px}
+  @media (max-width:900px){.band{grid-template-columns:1fr}}
+  h2{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+  ul.chg{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+  ul.chg li{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
+  .tag{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.6px;padding:2px 6px;border-radius:3px;color:var(--text);background:#2c3346;border:1px solid #454d66;text-align:center;margin-top:3px}
+  .tag.chg{background:#c9a13c} .tag.del{background:var(--red)} .tag.same{background:#5a605a;color:var(--text)}
+  li b{font-weight:500;color:var(--text)} li span{color:var(--muted)}
+  code{font-family:var(--mono);font-size:12.5px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-family:var(--cond);font-weight:500;letter-spacing:.6px;text-transform:uppercase;font-size:11.5px}
+  td.a{font-family:var(--mono);color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.m{color:var(--muted)}
+  .pads{margin:14px 0 0;color:var(--muted);font-size:13.5px}
+  ol.boot{margin:0;padding:0;list-style:none;display:grid;counter-reset:s}
+  ol.boot li{position:relative;padding:6px 0 10px 26px;border-left:1px solid var(--line);margin-left:9px}
+  ol.boot li::before{counter-increment:s;content:counter(s);position:absolute;left:-10px;top:8px;width:19px;height:19px;border-radius:50%;background:var(--panel);border:1px solid var(--amber);color:var(--amber);font-family:var(--mono);font-size:10.5px;display:grid;place-items:center}
+  ol.boot li.fail::before{border-color:var(--red);color:var(--red)}
+  ol.boot code{color:var(--cyan)}
+  .note{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;max-width:70ch}
+  .note code{color:var(--text)}
+</style>
+</head>
+<body>
+
+
+<header>
+  <h1>AgriASIC digital die</h1>
+  <div class="sub">planned architecture · tetrapolar analog front end</div>
+</header>
+
+<div class="sheet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 790" role="img" aria-labelledby="t d">
+  <title id="t">AgriASIC planned die architecture</title>
+  <desc id="d">Block diagram of the planned AgriASIC single-die impedance sensing node: Ibex RV32IMC control core, bus interconnect with a flat address map, loadable program memory, RISC-V debug module over JTAG, SPI boot master reading firmware from external flash, memory-mapped registers driving the phase-locked measurement engine, and a tetrapolar analog front end: sine DAC and drive buffer on E1, high-impedance differential PGA on E2/E3, transimpedance amplifier on E4, two phase-locked sample-and-holds, an analog mux and a shared 8-bit differential SAR ADC, all referenced to a 0.9 V common mode.</desc>
+  <defs>
+    <style>
+      .hdr    { font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; font-weight: 700; fill: #d8dcd8; letter-spacing: 1.5px; }
+      .grp    { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; fill: #8e948e; letter-spacing: 1.5px; }
+      .blk    { font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .blk2   { font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #ffffff; }
+      .blks   { font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 11px; fill: #b9bdd8; }
+      .sig    { font-family: "JetBrains Mono", Consolas, monospace; font-size: 10.5px; fill: #b4b8b4; }
+      .sigc   { font-family: "JetBrains Mono", Consolas, monospace; font-size: 10.5px; fill: #6fc9e8; }
+      .sign   { font-family: "JetBrains Mono", Consolas, monospace; font-size: 10.5px; fill: #e0b84a; }
+      .addr   { font-family: "JetBrains Mono", Consolas, monospace; font-size: 10px; fill: #9fd8a4; }
+      .tag    { font-family: "JetBrains Mono", Consolas, monospace; font-size: 9.5px; font-weight: 700; fill: #161a16; }
+      .legend { font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 11px; fill: #b4b8b4; }
+      .dig    { fill: #22245a; stroke: #6b6fe0; stroke-width: 1.6; }
+      .ana    { fill: #3a2416; stroke: #d0823c; stroke-width: 1.6; }
+      .ext    { fill: #1e221e; stroke: #8a8f8a; stroke-width: 1.4; }
+      .bus    { fill: #1b2a3a; stroke: #4fa3d6; stroke-width: 1.8; }
+      .die    { fill: none; stroke: #8a8f8a; stroke-width: 1.4; }
+      .off    { fill: none; stroke: #8a8f8a; stroke-width: 1.2; }
+      .grpbox { fill: none; stroke: #5a605a; stroke-width: 1.2; stroke-dasharray: 6 5; }
+      .fl     { stroke: #d0d4d0; stroke-width: 1.4; fill: none; marker-end: url(#a); }
+      .fl2    { stroke: #d0d4d0; stroke-width: 1.4; fill: none; marker-end: url(#a); marker-start: url(#as); }
+      .flc    { stroke: #6fc9e8; stroke-width: 1.6; fill: none; marker-end: url(#ac); }
+      .fln    { stroke: #e0b84a; stroke-width: 1.6; fill: none; marker-end: url(#an); }
+      .fln2   { stroke: #e0b84a; stroke-width: 1.6; fill: none; marker-end: url(#an); marker-start: url(#ans); }
+      .fld    { stroke: #8e948e; stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; marker-end: url(#ag); }
+      .newtag { fill: #e0b84a; }
+      .deltag { fill: #e06b6b; }
+    </style>
+    <marker id="a"   markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#d0d4d0"/></marker>
+    <marker id="as"  markerWidth="9" markerHeight="7" refX="1" refY="3.5" orient="auto"><path d="M8,0 L0,3.5 L8,7 z" fill="#d0d4d0"/></marker>
+    <marker id="ac"  markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#6fc9e8"/></marker>
+    <marker id="an"  markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#e0b84a"/></marker>
+    <marker id="ans" markerWidth="9" markerHeight="7" refX="1" refY="3.5" orient="auto"><path d="M8,0 L0,3.5 L8,7 z" fill="#e0b84a"/></marker>
+    <marker id="ag"  markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#8e948e"/></marker>
+  </defs>
+
+  <rect width="1600" height="790" fill="#161a16"/>
+
+  <!-- ASIC DIE -->
+  <rect x="22" y="30" width="1558" height="586" rx="10" class="die"/>
+  <text x="38" y="52" class="hdr">ASIC DIE</text>
+
+  <!-- memories row -->
+  <rect x="44" y="76" width="196" height="54" rx="4" class="dig"/>
+  <text x="142" y="107" class="blk" text-anchor="middle">Program memory</text>
+
+  <rect x="262" y="76" width="170" height="54" rx="4" class="dig"/>
+  <text x="347" y="107" class="blk" text-anchor="middle">Data memory</text>
+
+  <rect x="454" y="76" width="212" height="54" rx="4" class="dig"/>
+  <text x="560" y="107" class="blk" text-anchor="middle">Debug module + JTAG DTM</text>
+
+  <!-- interconnect -->
+  <rect x="44" y="190" width="622" height="56" rx="4" class="bus"/>
+  <text x="355" y="222" class="blk" text-anchor="middle">Interconnect</text>
+
+  <!-- memories to bus -->
+  <path d="M90,130 V190" class="fl2"/>
+  <text x="96" y="150" class="sig">fetch · data-rd</text>
+  <path d="M212,190 V130" class="fl"/>
+  <text x="218" y="176" class="sig">SBA / boot wr</text>
+
+  <path d="M296,130 V190" class="fl2"/>
+  <text x="302" y="165" class="sig">loads / stores</text>
+
+  <path d="M520,130 V190" class="fl2"/>
+  <text x="526" y="152" class="sig">slave port</text>
+  <path d="M628,130 V190" class="fl"/>
+  <text x="634" y="165" class="sig">SBA master</text>
+
+  <!-- core row -->
+  <rect x="44" y="290" width="250" height="60" rx="4" class="dig"/>
+  <text x="169" y="324" class="blk" text-anchor="middle">Ibex RV32IMC core</text>
+
+  <path d="M169,290 V246" class="fl2"/>
+  <text x="175" y="272" class="sig">instr · data ports</text>
+
+  <!-- debug_req / ndmreset: DM top, along the die's top edge, down the left gutter, into the core -->
+  <path d="M560,76 V64 H32 V320 H44" class="fl"/>
+  <text x="36" y="262" class="sig">debug_req</text>
+  <text x="36" y="274" class="sig">ndmreset</text>
+
+  <!-- SPI boot master -->
+  <rect x="330" y="290" width="200" height="60" rx="4" class="dig"/>
+  <text x="430" y="324" class="blk" text-anchor="middle">SPI boot master</text>
+
+  <path d="M430,290 V246" class="fl"/>
+  <text x="436" y="272" class="sig">loads image</text>
+  <path d="M330,335 H294" class="fl"/>
+  <text x="312" y="366" class="sig" text-anchor="middle">fw_valid</text>
+
+  <!-- host / registers row -->
+  <rect x="44" y="410" width="170" height="66" rx="4" class="dig"/>
+  <text x="129" y="447" class="blk" text-anchor="middle">SPI host interface</text>
+
+  <rect x="300" y="410" width="240" height="66" rx="4" class="dig"/>
+  <text x="420" y="447" class="blk" text-anchor="middle">Memory-mapped registers</text>
+
+  <path d="M600,246 V422 H540" class="fl"/>
+  <text x="606" y="300" class="sig">MMIO</text>
+
+  <!-- DONE irq back to core -->
+  <path d="M300,428 H100 V350" class="flc"/>
+  <text x="106" y="384" class="sigc">irq_fast[0] (DONE)</text>
+
+  <!-- registers -> SPI slave results (target, GAP-11) -->
+  <path d="M300,452 H214" class="fld"/>
+  <text x="257" y="500" class="sig" text-anchor="middle">results</text>
+
+  <!-- MEASUREMENT ENGINE -->
+  <rect x="740" y="76" width="264" height="470" rx="6" class="grpbox"/>
+  <text x="756" y="94" class="grp">MEASUREMENT ENGINE</text>
+
+  <rect x="772" y="112" width="200" height="46" rx="4" class="dig"/>
+  <text x="872" y="140" class="blk" text-anchor="middle">Excitation generator</text>
+
+  <rect x="772" y="262" width="200" height="50" rx="4" class="dig"/>
+  <text x="872" y="292" class="blk" text-anchor="middle">Measurement FSM</text>
+
+  <rect x="772" y="430" width="200" height="46" rx="4" class="dig"/>
+  <text x="872" y="458" class="blk" text-anchor="middle">SAR controller</text>
+
+  <path d="M820,262 V158" class="fl"/>
+  <text x="760" y="215" class="sig">exc_enable</text>
+  <path d="M924,158 V262" class="flc"/>
+  <text x="930" y="205" class="sigc">phase_index</text>
+  <text x="930" y="217" class="sigc">period_tick</text>
+
+  <path d="M820,312 V430" class="fl"/>
+  <text x="826" y="366" class="sig">sample_req</text>
+  <path d="M924,430 V312" class="fl"/>
+  <text x="930" y="392" class="sig">sar_done</text>
+  <text x="930" y="404" class="sig">d_plus / d_minus</text>
+
+  <!-- registers <-> FSM -->
+  <path d="M540,447 H700 V282 H772" class="fl"/>
+  <text x="606" y="441" class="sig">cfg, start</text>
+  <path d="M784,312 V462 H540" class="fl"/>
+  <text x="606" y="474" class="sig">done, result_i/q</text>
+
+  <!-- ANALOG FRONT END (tetrapolar: drive E1, sense E2/E3, return E4, all about VCM = 0.9 V) -->
+  <rect x="1030" y="96" width="500" height="504" rx="6" class="grpbox"/>
+  <text x="1046" y="114" class="grp">ANALOG FRONT END</text>
+
+  <!-- drive chain (column D) -->
+  <rect x="1050" y="126" width="130" height="46" rx="4" class="ana"/>
+  <text x="1115" y="145" class="blk2" text-anchor="middle">Sine DAC +</text>
+  <text x="1115" y="161" class="blk2" text-anchor="middle">recon. filter</text>
+  <rect x="1050" y="200" width="130" height="46" rx="4" class="ana"/>
+  <text x="1115" y="228" class="blk2" text-anchor="middle">Drive buffer</text>
+  <path d="M1115,172 V200" class="fl"/>
+
+  <!-- voltage chain (column V): E2/E3 -> high-Z differential PGA -> S/H -->
+  <rect x="1220" y="200" width="130" height="46" rx="4" class="ana"/>
+  <text x="1285" y="219" class="blk2" text-anchor="middle">Diff. PGA</text>
+  <text x="1285" y="235" class="blk2" text-anchor="middle">(E2 − E3)</text>
+  <rect x="1220" y="290" width="130" height="46" rx="4" class="ana"/>
+  <text x="1285" y="318" class="blk2" text-anchor="middle">S/H  ΔV</text>
+  <path d="M1285,246 V290" class="fl"/>
+  <text x="1291" y="272" class="sig">ΔV · gain 1/4/16</text>
+
+  <!-- current chain (column I): E4 -> TIA -> S/H -->
+  <rect x="1400" y="200" width="110" height="46" rx="4" class="ana"/>
+  <text x="1455" y="228" class="blk2" text-anchor="middle">TIA (E4)</text>
+  <rect x="1400" y="290" width="110" height="46" rx="4" class="ana"/>
+  <text x="1455" y="318" class="blk2" text-anchor="middle">S/H  I</text>
+  <path d="M1455,246 V290" class="fl"/>
+  <text x="1461" y="272" class="sig">VCM − I·Rf</text>
+
+  <!-- analog mux and shared ADC -->
+  <rect x="1220" y="370" width="290" height="46" rx="4" class="ana"/>
+  <text x="1365" y="398" class="blk" text-anchor="middle">Analog mux</text>
+  <path d="M1285,336 V370" class="fl"/>
+  <path d="M1455,336 V370" class="fl"/>
+
+  <rect x="1220" y="440" width="290" height="46" rx="4" class="ana"/>
+  <text x="1365" y="468" class="blk" text-anchor="middle">8-bit differential SAR ADC</text>
+  <path d="M1365,416 V440" class="fl"/>
+
+  <!-- temperature sensor and VCM reference (column D, lower) -->
+  <rect x="1050" y="370" width="130" height="46" rx="4" class="ana"/>
+  <text x="1115" y="389" class="blk2" text-anchor="middle">Temperature</text>
+  <text x="1115" y="405" class="blk2" text-anchor="middle">sensor</text>
+  <path d="M1180,406 H1220" class="fl"/>
+
+  <rect x="1050" y="520" width="130" height="46" rx="4" class="ana"/>
+  <text x="1115" y="539" class="blk2" text-anchor="middle">VCM reference</text>
+  <text x="1115" y="555" class="blk2" text-anchor="middle">0.9 V</text>
+  <path d="M1180,543 H1240 V486" class="fld"/>
+  <text x="1050" y="586" class="sig">VCM → buffer · TIA · PGA · ADC</text>
+
+  <!-- digital -> analog control -->
+  <path d="M972,135 H1050" class="fl"/>
+  <text x="982" y="129" class="sig">sine code</text>
+
+  <path d="M972,282 H1205 V380 H1220" class="fl"/>
+  <text x="985" y="276" class="sig">mux_sel</text>
+
+  <path d="M972,300 H1210 V313 H1220" class="flc"/>
+  <path d="M1350,313 H1400" class="flc"/>
+  <text x="1040" y="326" class="sigc">sample (phase-locked)</text>
+
+  <path d="M972,448 H1220" class="fl"/>
+  <text x="978" y="438" class="sig">adc_dac·en</text>
+  <text x="992" y="459" class="sig">sample</text>
+  <path d="M1220,466 H972" class="fl"/>
+  <text x="985" y="480" class="sig">adc_comp</text>
+
+  <!-- electrodes: E1 from the drive buffer; E2/E3 into the PGA; E4 into the TIA.
+       All four leave/enter along the top corridor and the right margin, then
+       drop to the electrode pads off-chip. -->
+  <path d="M1180,213 H1195 V64 H1538 V590 H1344 V690" class="fl"/>
+  <text x="1210" y="60" class="sig">E1 drive</text>
+  <path d="M1408,690 V598 H1546 V70 H1260 V200" class="fl"/>
+  <path d="M1472,690 V606 H1554 V76 H1310 V200" class="fl"/>
+  <text x="1262" y="188" class="sig">E2   E3</text>
+  <path d="M1536,690 V614 H1562 V82 H1455 V200" class="fl"/>
+  <text x="1461" y="188" class="sig">E4 return</text>
+
+  <!-- OFF-CHIP -->
+  <rect x="22" y="640" width="1558" height="130" rx="10" class="off"/>
+  <text x="38" y="662" class="hdr">OFF-CHIP</text>
+
+  <rect x="44" y="690" width="130" height="60" rx="4" class="ext"/>
+  <text x="109" y="724" class="blk" text-anchor="middle">SPI host</text>
+
+  <rect x="206" y="690" width="150" height="60" rx="4" class="ext"/>
+  <text x="281" y="724" class="blk" text-anchor="middle">External SPI flash</text>
+
+  <rect x="400" y="690" width="160" height="60" rx="4" class="ext"/>
+  <text x="480" y="724" class="blk" text-anchor="middle">JTAG debugger</text>
+
+  <rect x="760" y="690" width="120" height="60" rx="4" class="ext"/>
+  <text x="820" y="724" class="blk" text-anchor="middle">Clock</text>
+
+  <rect x="1030" y="690" width="170" height="60" rx="4" class="ext"/>
+  <text x="1115" y="724" class="blk" text-anchor="middle">Reference voltages</text>
+
+  <!-- tetrapolar soil probe -->
+  <rect x="1316" y="690" width="56" height="60" rx="4" class="ext"/>
+  <text x="1344" y="716" class="blk" text-anchor="middle">E1</text>
+  <text x="1344" y="732" class="blks" text-anchor="middle">drive</text>
+  <rect x="1380" y="690" width="56" height="60" rx="4" class="ext"/>
+  <text x="1408" y="716" class="blk" text-anchor="middle">E2</text>
+  <text x="1408" y="732" class="blks" text-anchor="middle">sense</text>
+  <rect x="1444" y="690" width="56" height="60" rx="4" class="ext"/>
+  <text x="1472" y="716" class="blk" text-anchor="middle">E3</text>
+  <text x="1472" y="732" class="blks" text-anchor="middle">sense</text>
+  <rect x="1508" y="690" width="56" height="60" rx="4" class="ext"/>
+  <text x="1536" y="716" class="blk" text-anchor="middle">E4</text>
+  <text x="1536" y="732" class="blks" text-anchor="middle">return</text>
+  <text x="1440" y="764" class="grp" text-anchor="middle">SOIL · TETRAPOLAR PROBE</text>
+
+  <!-- off-chip connections -->
+  <path d="M109,690 V476" class="fl2"/>
+  <text x="116" y="600" class="sig">commands · results</text>
+
+  <path d="M281,690 V372 H430 V350" class="fl2"/>
+  <text x="290" y="560" class="sig">4 pads: SCK CS_N MOSI MISO</text>
+
+  <path d="M480,690 V630 H725 V476 a14.5 14.5 0 0 1 0 -29 V103 H666" class="fl2"/>
+  <text x="492" y="676" class="sig">5 pads: TCK TMS TRST_N TDI TDO</text>
+
+  <path d="M820,690 V616" class="fl"/>
+  <text x="828" y="636" class="sig">clk</text>
+  <path d="M1115,690 V566" class="fl"/>
+  <text x="1122" y="628" class="sig">VREFH · VREFL · VCM · V_EXC</text>
+
+</svg>
+
+</div>
+
+<p class="note">Analog front end is tetrapolar: the sine DAC and drive buffer excite E1, the high-impedance differential PGA reads E2 − E3, the TIA converts the return current at E4, and two phase-locked sample-and-holds feed one differential SAR ADC through the mux, all about VCM = 0.9 V. The digital side computes Z(f) = ΔV(f) / I(f) from the two channels. <b>Open decision:</b> simultaneous S/H on both channels (preserves V/I phase directly, two matched switches) versus alternating cycles phase-locked to the same counter (one S/H, longer measurement). The drawing shows the simultaneous option.</p>
+
+</body>
+</html>

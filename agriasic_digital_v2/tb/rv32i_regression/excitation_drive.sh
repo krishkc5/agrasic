@@ -14,4 +14,4 @@ verilator --binary --timing -j 4 \
   tb_excitation_drive.sv excitation_ctrl.sv > build.log 2>&1 \
   || { echo "BUILD FAILED"; grep -E "^%Error|^%Warning" build.log | head -10; exit 1; }
 
-./obj_dir/sim_exc 2>&1 | grep -E "^\[TB\]|EXCITATION_|ASSERT_FAIL|FREQ_FAIL|PERIOD_FAIL|PHASE_MAP_FAIL|IDLE_FAIL" | head -20
+./obj_dir/sim_exc 2>&1 | grep -E "^\[TB\]|EXCITATION_|ASSERT_FAIL|FREQ_FAIL|PERIOD_FAIL|CODE_MAP_FAIL|SYMMETRY_FAIL|SAMPLE_POINT_FAIL|AMPLITUDE_FAIL|IDLE_FAIL" | head -20

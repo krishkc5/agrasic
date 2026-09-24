@@ -82,7 +82,7 @@
   <!-- ============ result vector ============ -->
   <rect x="640" y="92" width="560" height="454" rx="12" class="panel"/>
   <text x="660" y="122" class="h">Result set — 13 bytes behind one address</text>
-  <text x="660" y="146" class="sml">REG_RESULT_IDX walks bytes, not words. idx 0-3 are real today; 4-15 read 0x00 (Phase 7).</text>
+  <text x="660" y="146" class="sml">REG_RESULT_IDX walks bytes, not words. Rev 5: idx 0-7 are real (dV then current); 8-15 read 0x00.</text>
 
   <g transform="translate(660,170)">
     <!-- I/Q for the one frequency point that exists today -->
@@ -92,21 +92,21 @@
     <rect x="172" y="0" width="76" height="30" rx="5" class="byteI"/><text x="210" y="20" class="mono" text-anchor="middle">I hi</text>
     <rect x="254" y="0" width="76" height="30" rx="5" class="byteQ"/><text x="292" y="20" class="mono" text-anchor="middle">Q lo</text>
     <rect x="336" y="0" width="76" height="30" rx="5" class="byteQ"/><text x="374" y="20" class="mono" text-anchor="middle">Q hi</text>
-    <text x="424" y="20" class="new">idx 0–3, real</text>
+    <text x="424" y="20" class="new">idx 0–3: dV I/Q, real</text>
 
     <text x="0" y="60" class="lbl">point 2</text>
     <rect x="90"  y="46" width="76" height="30" rx="5" class="unwired"/><text x="128" y="66" class="mono" text-anchor="middle">0x00</text>
     <rect x="172" y="46" width="76" height="30" rx="5" class="unwired"/><text x="210" y="66" class="mono" text-anchor="middle">0x00</text>
     <rect x="254" y="46" width="76" height="30" rx="5" class="unwired"/><text x="292" y="66" class="mono" text-anchor="middle">0x00</text>
     <rect x="336" y="46" width="76" height="30" rx="5" class="unwired"/><text x="374" y="66" class="mono" text-anchor="middle">0x00</text>
-    <text x="424" y="66" class="resv">idx 4–7, Phase 7</text>
+    <text x="424" y="66" class="resv">idx 4–7: current I/Q, real</text>
 
     <text x="0" y="106" class="lbl">point 3</text>
     <rect x="90"  y="92" width="76" height="30" rx="5" class="unwired"/><text x="128" y="112" class="mono" text-anchor="middle">0x00</text>
     <rect x="172" y="92" width="76" height="30" rx="5" class="unwired"/><text x="210" y="112" class="mono" text-anchor="middle">0x00</text>
     <rect x="254" y="92" width="76" height="30" rx="5" class="unwired"/><text x="292" y="112" class="mono" text-anchor="middle">0x00</text>
     <rect x="336" y="92" width="76" height="30" rx="5" class="unwired"/><text x="374" y="112" class="mono" text-anchor="middle">0x00</text>
-    <text x="424" y="112" class="resv">idx 8–11, Phase 7</text>
+    <text x="424" y="112" class="resv">idx 8–11, future freq points</text>
 
     <text x="0" y="152" class="lbl">temp</text>
     <rect x="90"  y="138" width="76" height="30" rx="5" class="unwired"/><text x="128" y="158" class="mono" text-anchor="middle">0x00</text>

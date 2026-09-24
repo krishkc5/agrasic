@@ -52,16 +52,15 @@ module tb_agriasic_digital_spi_top;
   logic miso_o;
   logic miso_oe_o;
   logic conv_start_o;
-  logic exc_drive_p_o;
-  logic exc_drive_n_o;
+  logic [7:0] sine_code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o;
   logic adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
   logic busy_o;
   logic done_o;
-  logic signed [15:0] result_i_o;
-  logic signed [15:0] result_q_o;
+  logic signed [15:0] result_dv_i_o, result_dv_q_o, result_cur_i_o, result_cur_q_o;
 
   logic [7:0] status_byte;
   logic [7:0] result_i_lo;
@@ -79,22 +78,24 @@ module tb_agriasic_digital_spi_top;
   ) dut (
     .clk(clk),
     .rst_n(rst_n),
-    .sclk_i(sclk_i),
-    .cs_n_i(cs_n_i),
-    .mosi_i(mosi_i),
-    .miso_o(miso_o),
-    .miso_oe_o(miso_oe_o),
-    .conv_start_o(conv_start_o),
-    .exc_drive_p_o(exc_drive_p_o),
-    .exc_drive_n_o(exc_drive_n_o),
-    .adc_enable_o(adc_enable_o),
-    .adc_sample_o(adc_sample_o),
-    .adc_dac_o(adc_dac_o),
-    .adc_comp_i(adc_comp_i),
-    .busy_o(busy_o),
-    .done_o(done_o),
-    .result_i_o(result_i_o),
-    .result_q_o(result_q_o)
+    .gpio_spi_sclk_i(sclk_i),
+    .gpio_spi_cs_n_i(cs_n_i),
+    .gpio_spi_mosi_i(mosi_i),
+    .gpio_spi_miso_o(miso_o),
+    .gpio_spi_miso_oe_o(miso_oe_o),
+    .afe_conv_start_o(conv_start_o),
+    .afe_sine_code_o(sine_code_o),
+    .afe_mux_sel_o(mux_sel_o),
+    .afe_adc_enable_o(adc_enable_o),
+    .afe_sample_o(adc_sample_o),
+    .afe_adc_dac_o(adc_dac_o),
+    .afe_adc_comp_i(adc_comp_i),
+    .dbg_busy_o(busy_o),
+    .dbg_done_o(done_o),
+    .dbg_result_dv_i_o(result_dv_i_o),
+    .dbg_result_dv_q_o(result_dv_q_o),
+    .dbg_result_cur_i_o(result_cur_i_o),
+    .dbg_result_cur_q_o(result_cur_q_o)
   );
 
   always #5 clk = ~clk;
@@ -108,19 +109,21 @@ module tb_agriasic_digital_spi_top;
   // phase_index has already ticked past its nominal value by the time
   // adc_sample_o actually fires at N=1).
   //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
-  logic [ADC_WIDTH-1:0] adc_target_held_q;
+  // Rev 5 two-channel AFE model (see tb_agriasic_digital_top for the scheme).
+  logic [7:0] hold_dv_q, hold_cur_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      unique case (4'(dut.u_core.u_measurement_fsm.state_q))
-        4'd3:  adc_target_held_q <= 8'd220;  // S_SAMPLE_0:   D(0)
-        4'd8:  adc_target_held_q <= 8'd170;  // S_SAMPLE_90:  D(90)
-        4'd5:  adc_target_held_q <= 8'd100;  // S_SAMPLE_180: D(180)
-        4'd10: adc_target_held_q <= 8'd90;   // S_SAMPLE_270: D(270)
+      unique case (2'(dut.u_core.u_measurement_fsm.point_q))
+        2'd0: begin hold_dv_q <= 8'd220; hold_cur_q <= 8'd200; end  // PT_0
+        2'd1: begin hold_dv_q <= 8'd100; hold_cur_q <= 8'd110; end  // PT_180
+        2'd2: begin hold_dv_q <= 8'd170; hold_cur_q <= 8'd160; end  // PT_90
+        2'd3: begin hold_dv_q <= 8'd90;  hold_cur_q <= 8'd100; end  // PT_270
         default: begin end
       endcase
     end
   end
-  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
+  wire [7:0] adc_target = (mux_sel_o == 2'd0) ? hold_dv_q : hold_cur_q;
+  assign adc_comp_i = (adc_target >= adc_dac_o);
 
   task automatic spi_transfer_byte(
     input  logic [7:0] tx,
@@ -222,10 +225,10 @@ module tb_agriasic_digital_spi_top;
   endproperty
 
   assert property (p_conv_start_single_cycle)
-    else $error("ASSERT_FAIL: conv_start_o must be single-cycle pulse");
+    else $error("ASSERT_FAIL: afe_conv_start_o must be single-cycle pulse");
 
   assert property (p_done_not_busy)
-    else $error("ASSERT_FAIL: done_o and busy_o cannot be high together");
+    else $error("ASSERT_FAIL: dbg_done_o and dbg_busy_o cannot be high together");
 
   assert property (p_miso_oe_tracks_cs)
     else $error("ASSERT_FAIL: miso_oe_o must equal ~cs_n_i");
@@ -291,7 +294,7 @@ module tb_agriasic_digital_spi_top;
     end
 
     if (!done_o) begin
-      $error("SPI_TOP_TIMEOUT: done_o did not assert");
+      $error("SPI_TOP_TIMEOUT: dbg_done_o did not assert");
       $finish;
     end
 
@@ -355,11 +358,30 @@ module tb_agriasic_digital_spi_top;
       $finish;
     end
 
-    // Index 4 is reserved (frequency points 1/2 and temperature, not built
-    // yet) and must read as zero, not garbage or leftover I/Q data.
+    // Rev 5: indices 4-7 now carry the RETURN-CURRENT channel (TIA on E4),
+    // the second half of the tetrapolar result. Read all four and check them
+    // against the model's expected cur_i / cur_q, then confirm index 8 --
+    // the first still-reserved slot (future frequency points + temperature)
+    // -- reads as zero rather than garbage.
+    begin
+      logic [7:0] b0, b1, b2, b3;
+      spi_read_reg(REG_RESULT_DATA, b0);   // cur_i[7:0]
+      spi_read_reg(REG_RESULT_DATA, b1);   // cur_i[15:8]
+      spi_read_reg(REG_RESULT_DATA, b2);   // cur_q[7:0]
+      spi_read_reg(REG_RESULT_DATA, b3);   // cur_q[15:8]
+      if ({b1, b0} !== 16'd360) begin
+        $error("SPI_TOP_CUR_I_FAIL: expected cur_i=360 got=%0d", $signed({b1, b0}));
+        $finish;
+      end
+      if ({b3, b2} !== 16'd240) begin
+        $error("SPI_TOP_CUR_Q_FAIL: expected cur_q=240 got=%0d", $signed({b3, b2}));
+        $finish;
+      end
+    end
+
     spi_read_reg(REG_RESULT_DATA, reserved_byte);
     if (reserved_byte !== 8'd0) begin
-      $error("SPI_TOP_RESERVED_IDX_FAIL: expected reserved index 4 to read 0, got=0x%0h",
+      $error("SPI_TOP_RESERVED_IDX_FAIL: expected reserved index 8 to read 0, got=0x%0h",
              reserved_byte);
       $finish;
     end

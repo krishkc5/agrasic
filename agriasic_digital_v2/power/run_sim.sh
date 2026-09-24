@@ -7,7 +7,7 @@ python3 "$BASE/power/prepare_sim.py"
 cp "$BASE/power/build/tb_power_generated.sv" "$BUILD/work/"
 cp "$BASE/fw/agriasic_fw.hex" "$BUILD/work/"
 cp "$BASE"/rtl/*.sv "$BASE"/rtl/ctrl/*.sv "$BUILD/work/"
-cp "$BASE"/rtl/rv32i/agriasic_imem.sv "$BASE"/rtl/rv32i/agriasic_dmem.sv "$BASE"/rtl/rv32i/agriasic_rv32i_mmio.sv "$BASE"/rtl/rv32i/agriasic_rv32i_bus.sv "$BASE"/rtl/rv32i/agriasic_spi_boot.sv "$BUILD/work/"
+cp "$BASE"/rtl/rv32i/agriasic_imem.sv "$BASE"/rtl/rv32i/agriasic_dmem.sv "$BASE"/rtl/rv32i/agriasic_rv32i_mmio.sv "$BASE"/rtl/rv32i/agriasic_rv32i_bus.sv "$BASE"/rtl/rv32i/agriasic_spi_boot.sv "$BASE"/rtl/rv32i/agriasic_boot_rom.sv "$BUILD/work/"
 cp -r "$BASE/rtl/ibex" "$BUILD/work/ibex"
 cp -r "$BASE/rtl/riscv-dbg" "$BUILD/work/riscv-dbg"
 cd "$BUILD/work"
@@ -15,7 +15,7 @@ SOURCES=(
  agriasic_digital_rv32i_top.sv agriasic_rv32i_control_shell.sv
  agriasic_digital_top.sv rst_sync.sv measurement_fsm.sv excitation_ctrl.sv
  sar_controller.sv agriasic_imem.sv agriasic_dmem.sv
- agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv
+ agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv agriasic_boot_rom.sv
 )
 IBEX_FILES="$(sed 's#^#ibex/#' ibex/ibex.f | tr '\n' ' ')"
 DBG_FILES="$(sed 's#^#riscv-dbg/#' riscv-dbg/riscv_dbg.f | tr '\n' ' ')"

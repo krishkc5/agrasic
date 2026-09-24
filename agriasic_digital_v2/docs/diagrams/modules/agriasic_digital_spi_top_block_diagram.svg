@@ -18,10 +18,10 @@
 
   <rect x="240" y="500" width="1000" height="440" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="300" y="580" font-family="Arial" font-size="26" font-weight="700" fill="#ffffff">External SPI + analog pins</text>
-  <text x="300" y="620" font-family="Arial" font-size="18" fill="#ffffff">sclk_i, cs_n_i, mosi_i, miso_o, miso_oe_o</text>
+  <text x="300" y="620" font-family="Arial" font-size="18" fill="#ffffff">gpio_spi_sclk_i, _cs_n_i, _mosi_i, _miso_o, _miso_oe_o</text>
   <text x="300" y="652" font-family="Arial" font-size="18" fill="#ffffff">exc_drive_p_o, exc_drive_n_o</text>
-  <text x="300" y="684" font-family="Arial" font-size="18" fill="#ffffff">adc_enable_o, adc_sample_o, adc_dac_o[7:0], adc_comp_i</text>
-  <text x="300" y="716" font-family="Arial" font-size="18" fill="#ffffff">conv_start_o, busy_o, done_o, result_i_o, result_q_o</text>
+  <text x="300" y="684" font-family="Arial" font-size="18" fill="#ffffff">afe_adc_enable_o, afe_sample_o, afe_adc_dac_o[7:0], afe_adc_comp_i</text>
+  <text x="300" y="716" font-family="Arial" font-size="18" fill="#ffffff">afe_conv_start_o, dbg_busy_o, dbg_done_o, dbg_result_dv/cur_i/q_o</text>
   <text x="300" y="750" font-family="Arial" font-size="15" fill="#BDBDBD">adc_code_i / exc_pol_o / result_o no longer exist.</text>
 
   <rect x="1400" y="460" width="980" height="480" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
@@ -90,7 +90,7 @@
   <text x="3330" y="1250" font-family="Arial" font-size="17" fill="#212121">cfg_* + start</text>
 
   <path d="M1160,700 L2600,700 L2600,1550" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#mData)"/>
-  <text x="1190" y="724" font-family="Arial" font-size="17" fill="#212121">adc_comp_i</text>
+  <text x="1190" y="724" font-family="Arial" font-size="17" fill="#212121">afe_adc_comp_i</text>
 
   <path d="M4880,1560 L5040,1560" stroke="#000000" stroke-width="3" fill="none" marker-end="url(#mIf)"/>
   <text x="4780" y="1536" font-family="Arial" font-size="17" fill="#212121">exc/adc/status/result pins</text>

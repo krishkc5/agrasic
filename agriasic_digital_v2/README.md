@@ -36,7 +36,8 @@ rtl/
     src/, debug_rom/, common_cells/    dm_top, dmi_jtag, their pulp dependencies
   rv32i/
     agriasic_rv32i_bus.sv              interconnect: core instr/data + debug SBA + boot -> IMEM / RAM+MMIO / DM
-    agriasic_spi_boot.sv               SPI-flash boot master (header + CRC-32 -> IMEM) and post-boot SPI peripheral
+    agriasic_spi_boot.sv               boot loader: golden ROM or SPI flash -> IMEM; post-boot SPI peripheral
+    agriasic_boot_rom.sv               GENERATED golden image as a constant table (fw/gen_boot_rom.py)
     agriasic_imem.sv                   program memory (loadable), synchronous-SRAM contract
     agriasic_dmem.sv                   scratch RAM, synchronous-SRAM contract
     agriasic_rv32i_mmio.sv             RAM + peripheral registers behind the bus (Ibex/OBI)
@@ -45,6 +46,8 @@ rtl/
     agriasic_rv32i_cla.sv              RETIRED: carry-lookahead adder (Penn core)
     agriasic_rv32i_divider.sv          RETIRED: pipelined divider (Penn core)
 fw/                                    firmware: fw.c, start.S, link.ld, build.sh (also emits the flash image), openocd_agriasic.cfg
+  gen_boot_rom.py                      promote a build to golden and regenerate the boot-ROM RTL
+  golden/                              the pinned golden image + GOLDEN.md provenance
 tb/
   smoke/                               measurement and SPI smoke tests
   tb_agriasic_rv32i_e2e.sv             end-to-end: firmware drives the FSM
@@ -90,12 +93,67 @@ instead of `ecall`), `link.ld`, and `-march=rv32imc_zicsr` in `build.sh`. The
 two SRAM wrappers keep their 1-cycle contract: Ibex's `req/gnt/rvalid` maps
 onto it as `gnt = req`, `rvalid = registered req`.
 
+## Tetrapolar analog interface (Rev 5)
+
+The measurement engine now drives and senses the four-electrode probe:
+
+| | Before | Now |
+|---|---|---|
+| Excitation | `exc_drive_p_o` / `exc_drive_n_o`, 1-bit square, 7-state halves + dead time | `afe_sine_code_o[7:0]`, 16-point **cosine** table to the sine DAC, `cfg_amplitude` attenuation |
+| Channels | one ADC input | two: `dV` (diff PGA on E2/E3) and `I` (TIA on E4), through `afe_mux_sel_o[1:0]` |
+| Sampling | one `afe_sample_o` per conversion | one strobe freezes **both** S/H at the phase point; two conversions follow |
+| Results | `result_i_o`, `result_q_o` | `result_dv_i/q_o`, `result_cur_i/q_o` — a host computes Z(f) = dV(f) / I(f) |
+
+**Cosine, not sine.** The FSM samples at phase indices 0/4/8/12; the table
+puts the drive peaks at 0/8 (the I terms) and mid-code at 4/12 (the Q terms),
+which is what makes synchronous demodulation separate in-phase from
+quadrature. A sine table would put a zero crossing at index 0 and the I
+channel would measure nothing. `code[k] + code[k+8] == 256` exactly, so the
++/- chop still cancels offset and drift — the square wave got that from two
+equal drive halves, the table gets it from its own values.
+
+**16 phase states kept**, so `f_exc = f_clk/(16·N)` and the N = 1/100/10000
+presets are unchanged. `PHASE_STEPS` is a parameter for raising the point
+count later; doing so also changes the frequency contract and the firmware
+presets, so it is deliberately not a silent knob. There is no dead time any
+more (no complementary drive transistors) — **MAS GAP-6 is retired**.
+
+**Simultaneous sample-and-hold.** At each phase point the FSM issues one
+strobe (`take_sample_o = 1` on the first conversion), then converts dV and
+then current with `take_sample_o = 0`. Both channels are frozen at the same
+instant, so the voltage/current phase relationship is set by the strobe and
+not by conversion order. The alternative — dV on one excitation period, I on
+the next — needs one fewer S/H but assumes the soil and drive are stationary
+across adjacent periods, a weak claim at the 1 kHz point where a period is a
+millisecond. Cost: eight conversions per pair instead of four, negligible
+against settle time. `cfg_mux_settle` (new register) gates the mux + S/H
+settling before each conversion's first bit trial, the same runtime-register
+pattern as `cfg_conv_cycles`.
+
+New MMIO: `RESULT_CUR_I` `0x8000_0034`, `RESULT_CUR_Q` `0x8000_0038`,
+`AFE_CTRL` `0x8000_003C` (`[1:0]` pga_gain, `[3:2]` tia_rf, `[5:4]` amplitude,
+`[15:8]` mux_settle). `RESULT_I`/`RESULT_Q` keep their addresses and now carry
+the dV channel. On the SPI host map, the indexed result vector gains
+indices 4-7 for the current channel. Firmware stores four values per sweep
+point (`OUT_DV_I/Q`, `OUT_CUR_I/Q`); the result block grew from 48 B to 88 B.
+
+New analog-control pins on the RV32I top: `afe_sine_code_o[7:0]`,
+`afe_mux_sel_o[1:0]`, `afe_pga_gain_o[1:0]`, `afe_tia_rf_o[1:0]` (the last two
+are analog control, not pads if the AFE takes them internally).
+
+**Port naming.** Every port on a boundary module carries a prefix saying where
+the signal goes: `afe_` into the analog front end, `gpio_` off the die (bond
+these), `dbg_` observability only (do **not** bond). Unprefixed means die-internal
+block-to-block wiring (plus `clk` and `rst_n`, the only unprefixed pins). Leaf modules (`sar_controller`, `excitation_ctrl`,
+`measurement_fsm`, `spi_slave`, ...) deliberately keep unprefixed names — the
+prefix marks a chip boundary. See `docs/interface_contract.md`.
+
 ## Debug (Phase 2)
 
 The shell also instantiates pulp-platform **riscv-dbg** (`rtl/riscv-dbg/`,
 Debug Spec 0.13): `dmi_jtag` (5-wire IEEE 1149.1 TAP + DTM, IDCODE
-`0x14341001`) and `dm_top`. The chip top gained `jtag_tck_i / tms_i /
-trst_ni / tdi_i / tdo_o`. A new interconnect, `agriasic_rv32i_bus.sv`,
+`0x14341001`) and `dm_top`. The chip top gained `gpio_jtag_tck_i / _tms_i /
+_trst_ni / _tdi_i / _tdo_o`. A new interconnect, `agriasic_rv32i_bus.sv`,
 replaces the point-to-point memory wiring so that the debugger sees one flat
 address space:
 
@@ -113,7 +171,7 @@ back-pressure; every slave answers in one cycle. **DMEM moved from `0x0` to
 `SP`, the `OUT_*` result addresses and `link.ld`'s `RAM` region moved with it.
 `dmcontrol.ndmreset` resets the core and the peripheral bridge only (IMEM
 contents, the DM and the TAP survive), and is acknowledged back to the DM.
-While `start_i` is low the hart is in reset and reported `unavailable`.
+While `gpio_start_i` is low the hart is in reset and reported `unavailable`.
 
 `fw/openocd_agriasic.cfg` is a ready OpenOCD target file (`progbuf` first,
 `sysbus` fallback). `tb/tb_agriasic_jtag.sv` drives the pins with a
@@ -124,15 +182,57 @@ address, resume with the sweep then finishing correctly (results read back
 through the SBA), and the `ndmreset`/`havereset` handshake. It is stage 13 of
 `verify_all.sh`.
 
-## Boot from SPI flash (Phase 3, Option C)
+## Boot: golden ROM by default, SPI flash when strapped
 
-`agriasic_spi_boot.sv` is the fourth bus master. With the `boot_sel_i` strap
+The IMEM SRAM is **shadow-loaded** at reset from one of two sources, chosen by
+the `gpio_boot_sel_i` strap (sampled once on the first cycle out of reset, then
+ignored):
+
+| `gpio_boot_sel_i` | Source | Time | Use |
+|---|---|---|---|
+| **0** (default) | on-die synthesized **golden boot ROM** | ~150 cycles (0.9 µs) | a bare chip with no flash and no host starts and runs on its own |
+| 1 | external SPI flash, header + CRC-32 checked | ~80k cycles (0.5 ms) | the patchable path: build, program the flash, strap high |
+
+**The core always fetches from the SRAM, never from the ROM.** That is the
+point of shadow-loading rather than muxing the ROM onto the fetch path:
+
+- nothing is added to the fetch path's timing at 160 MHz;
+- firmware is linked once, at one address, for both sources;
+- **IMEM stays writable after a ROM boot** — halt over JTAG, patch a constant,
+  resume. Changing a config parameter during testing needs neither a rebuild
+  nor the flash. A fetch-from-ROM arrangement could not do this.
+
+The ROM holds the **golden (known-good) image**, frozen at tapeout. It is
+deliberately not regenerated by `build.sh`; promoting a new build is explicit:
+
+```bash
+python3 fw/gen_boot_rom.py --promote   # current build -> golden/, regenerate the ROM RTL
+python3 fw/gen_boot_rom.py             # regenerate the RTL from golden/ only
+```
+
+`fw/golden/GOLDEN.md` records the date, word count and SHA-256 of the promoted
+image, so what is in silicon is reviewable in version control. Only promote an
+image that has passed the full regression.
+
+`BOOT_CTRL` overrides the strap in both directions, so neither source is
+reachable only by re-strapping a board: bit 1 re-boots from flash, bit 2
+re-boots from the golden ROM, bit 0 releases the core without either.
+`BOOT_STATUS[13:12]` reports which source the running image actually came from
+(0 = none/skip, 1 = golden ROM, 2 = flash).
+
+Cost: the ROM is a constant table, so synthesis maps it into gates —
+**+1,027 combinational primitives and +6 flops** for the 148-word image,
+against the 4,736 storage bits a writable array of the same depth would need.
+
+## Boot from SPI flash (details)
+
+`agriasic_spi_boot.sv` is the fourth bus master. With the `gpio_boot_sel_i` strap
 high it waits `BOOT_DELAY_CYCLES` after reset (flash power-up), issues
 `READ 0x03` from flash address 0, checks a 16-byte header — `magic "AGRA"`,
 payload length, version, CRC-32 (zlib) of the payload — streams the payload
 into program memory as 32-bit words, and on a matching CRC raises `fw_valid`,
-which (together with `start_i`) releases the core. A bad magic, length, CRC or
-bus error leaves the core in reset with `boot_fail_o` high and an error code
+which (together with `gpio_start_i`) releases the core. A bad magic, length, CRC or
+bus error leaves the core in reset with `gpio_boot_fail_o` high and an error code
 in `BOOT_STATUS`. With the strap low nothing touches the flash and the core
 waits for `BOOT_CTRL.release` — the bench flow: OpenOCD loads IMEM over the
 SBA, then `mww 0x80000024 1`. `BOOT_CTRL.retry` re-runs the flash boot (used
@@ -143,8 +243,8 @@ host hands it a new image.
 
 `fw/build.sh` produces the image (`agriasic_fw_flash.bin` for the flash,
 `.hex` for simulation). Boot takes ~65.7k core cycles for the 484 B image at
-SCK = clk/16 (0.41 ms at 160 MHz). New chip pins: `boot_sel_i`,
-`flash_sck_o / cs_n_o / mosi_o / miso_i`, `boot_fail_o`. The boot loader resets
+SCK = clk/16 (0.41 ms at 160 MHz). New chip pins: `gpio_boot_sel_i`,
+`gpio_flash_sck_o / _cs_n_o / _mosi_o / _miso_i`, `gpio_boot_fail_o`. The boot loader resets
 only with the chip, never with `ndmreset`, so a debugger reset cannot restart
 a flash boot underneath an image it just loaded.
 
@@ -165,7 +265,12 @@ blackboxed, FF register file for hierarchy parity with the power testbench,
 primitives + 2,800 flops with the Penn core; 16,919 + 2,138 with Ibex;
 **25,043 + 3,254 with Ibex + bus + debug module** (the DM alone is 1,076
 register bits: abstract data, 8-word program buffer, SBA, DTM CDC);
-**27,094 + 3,615 with the SPI-flash boot loader** (342 register bits). Add
+**27,094 + 3,615 with the SPI-flash boot loader** (342 register bits);
+**27,538 + 3,720 with the Rev 5 tetrapolar front end** (the measurement engine
+grew from 144 to 235 register bits: four accumulators and their shadows
+instead of two, plus the sample-code holds); **28,565 + 3,726 with the golden
+boot ROM** (the ROM is combinational, so it costs gates, not flops; the 6 new
+flops are the strap latch, the two override bits and the source field). Add
 `-D AGRIASIC_LATCH_REGFILE` for the ASIC run to use Ibex's latch register
 file.
 

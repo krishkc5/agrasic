@@ -10,6 +10,10 @@
 //     engine itself.
 //   - The wrapper keeps the same measurement core used by the SPI top-level.
 //   - A future RV32I core with ROM can drive the program/write inputs directly.
+//   - SUPERSEDED by agriasic_rv32i_control_shell / agriasic_digital_rv32i_top,
+//     which is the built RV32I integration. Kept and maintained (it tracks the
+//     measurement core's interface, including the Rev 5 tetrapolar change) so
+//     it still elaborates, but nothing in the regression builds it.
 // -----------------------------------------------------------------------------
 module agriasic_digital_programming_top #(
   parameter int unsigned ADC_WIDTH = 8
@@ -23,23 +27,25 @@ module agriasic_digital_programming_top #(
   input  logic [7:0]           prog_cfg_data_i,
   input  logic                 prog_start_i,
 
-  output logic                 conv_start_o,
-  output logic                 exc_drive_p_o,
-  output logic                 exc_drive_n_o,
-  output logic                 adc_enable_o,
-  output logic                 adc_sample_o,
-  output logic [ADC_WIDTH-1:0] adc_dac_o,
-  input  logic                 adc_comp_i,
-  output logic                 busy_o,
-  output logic                 done_o,
-  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
-  output logic signed [15:0]   result_q_o,  // Rev 4.3 Phase 5: Q channel
+  output logic                 afe_conv_start_o,
+  output logic [ADC_WIDTH-1:0] afe_sine_code_o,     // Rev 5: sine DAC code -> E1 drive buffer
+  output logic [1:0]           afe_mux_sel_o,       // Rev 5: 0 = dV (PGA), 1 = I (TIA)
+  output logic                 afe_adc_enable_o,
+  output logic                 afe_sample_o,
+  output logic [ADC_WIDTH-1:0] afe_adc_dac_o,
+  input  logic                 afe_adc_comp_i,
+  output logic                 dbg_busy_o,
+  output logic                 dbg_done_o,
+  output logic signed [15:0]   dbg_result_dv_i_o,   // Rev 5: dV in-phase
+  output logic signed [15:0]   dbg_result_dv_q_o,   // Rev 5: dV quadrature
+  output logic signed [15:0]   dbg_result_cur_i_o,  // Rev 5: current in-phase
+  output logic signed [15:0]   dbg_result_cur_q_o,  // Rev 4.3 Phase 5: Q channel
 
   // Expose the active programming state for debug and bring-up.
-  output logic [3:0]           cfg_pair_log2_o,
-  output logic [7:0]           cfg_settle_cycles_o,
-  output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
-  output logic [7:0]           cfg_conv_cycles_o
+  output logic [3:0]           dbg_cfg_pair_log2_o,
+  output logic [7:0]           dbg_cfg_settle_cycles_o,
+  output logic [13:0]          dbg_cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
+  output logic [7:0]           dbg_cfg_conv_cycles_o
 );
 
   // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
@@ -79,10 +85,10 @@ module agriasic_digital_programming_top #(
     endcase
   end
 
-  assign cfg_pair_log2_o     = cfg_pair_log2_q;
-  assign cfg_settle_cycles_o = cfg_settle_q;
-  assign cfg_exc_divider_o   = cfg_divider_w;
-  assign cfg_conv_cycles_o   = cfg_conv_q;
+  assign dbg_cfg_pair_log2_o     = cfg_pair_log2_q;
+  assign dbg_cfg_settle_cycles_o = cfg_settle_q;
+  assign dbg_cfg_exc_divider_o   = cfg_divider_w;
+  assign dbg_cfg_conv_cycles_o   = cfg_conv_q;
 
   agriasic_digital_top #(
     .ADC_WIDTH(ADC_WIDTH)
@@ -94,17 +100,22 @@ module agriasic_digital_programming_top #(
     .cfg_settle_cycles_i(cfg_settle_q),
     .cfg_exc_divider_i  (cfg_divider_w),
     .cfg_conv_cycles_i  (cfg_conv_q),
-    .conv_start_o       (conv_start_o),
-    .exc_drive_p_o      (exc_drive_p_o),
-    .exc_drive_n_o      (exc_drive_n_o),
-    .adc_enable_o       (adc_enable_o),
-    .adc_sample_o       (adc_sample_o),
-    .adc_dac_o          (adc_dac_o),
-    .adc_comp_i         (adc_comp_i),
-    .busy_o             (busy_o),
-    .done_o             (done_o),
-    .result_i_o         (result_i_o),
-    .result_q_o         (result_q_o)
+    // Rev 5: not exposed on this legacy programming surface -- fixed defaults.
+    .cfg_mux_settle_i   (8'd2),
+    .cfg_amplitude_i    (2'd0),
+    .afe_conv_start_o       (afe_conv_start_o),
+    .afe_sine_code_o        (afe_sine_code_o),
+    .afe_mux_sel_o          (afe_mux_sel_o),
+    .afe_adc_enable_o       (afe_adc_enable_o),
+    .afe_sample_o       (afe_sample_o),
+    .afe_adc_dac_o          (afe_adc_dac_o),
+    .afe_adc_comp_i         (afe_adc_comp_i),
+    .busy_o             (dbg_busy_o),
+    .done_o             (dbg_done_o),
+    .result_dv_i_o      (dbg_result_dv_i_o),
+    .result_dv_q_o      (dbg_result_dv_q_o),
+    .result_cur_i_o     (dbg_result_cur_i_o),
+    .result_cur_q_o     (dbg_result_cur_q_o)
   );
 
   always_ff @(posedge clk or negedge rst_n_sync) begin

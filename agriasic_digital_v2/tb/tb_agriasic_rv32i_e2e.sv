@@ -28,12 +28,13 @@ module tb_agriasic_rv32i_e2e;
   logic rst_n;
   logic start_i;
 
-  logic conv_start_o, exc_drive_p_o, exc_drive_n_o, busy_o, done_o;
+  logic conv_start_o, busy_o, done_o;
+  logic [ADC_WIDTH-1:0] sine_code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o, adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
-  logic signed [15:0] result_i_o;
-  logic signed [15:0] result_q_o;
+  logic signed [15:0] result_dv_i_o, result_dv_q_o, result_cur_i_o, result_cur_q_o;
   logic [3:0]  cfg_pair_log2_o;
   logic [7:0]  cfg_settle_cycles_o;
   logic [13:0] cfg_exc_divider_o;  // Rev 4.3 Phase 4.2 width; was left at [7:0] here, fixed
@@ -48,19 +49,25 @@ module tb_agriasic_rv32i_e2e;
   // why phase_index itself can't be used directly (one-cycle sample-accept
   // lag inside sar_controller at small divider values).
   //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
-  logic [ADC_WIDTH-1:0] adc_target_held_q;
+  // Rev 5 two-channel AFE model: dV (analog mux channel 0, PGA on E2/E3) and
+  // return current (channel 1, TIA on E4). Both are frozen by the single
+  // adc_sample_o strobe at the FSM's chosen phase point; the comparator then
+  // answers for whichever channel mux_sel selects.
+  logic [ADC_WIDTH-1:0] hold_dv_q, hold_cur_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      unique case (4'(dut.u_measurement_top.u_measurement_fsm.state_q))
-        4'd3:  adc_target_held_q <= 8'd200;  // D(0)
-        4'd8:  adc_target_held_q <= 8'd150;  // D(90)
-        4'd5:  adc_target_held_q <= 8'd100;  // D(180)
-        4'd10: adc_target_held_q <= 8'd80;   // D(270)
+      unique case (2'(dut.u_measurement_top.u_measurement_fsm.point_q))
+        4'd0: begin hold_dv_q <= 8'd200; hold_cur_q <= 8'd170; end  // PT_0   (0 deg)
+        4'd1: begin hold_dv_q <= 8'd100; hold_cur_q <= 8'd110; end  // PT_180 (180 deg)
+        4'd2: begin hold_dv_q <= 8'd150; hold_cur_q <= 8'd140; end  // PT_90  (90 deg)
+        4'd3: begin hold_dv_q <= 8'd80; hold_cur_q <= 8'd90; end  // PT_270 (270 deg)
         default: begin end
       endcase
     end
   end
-  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
+  wire [ADC_WIDTH-1:0] adc_target = (mux_sel_o == 2'd0) ? hold_dv_q : hold_cur_q;
+  assign adc_comp_i = (adc_target >= adc_dac_o);
+
 
   agriasic_digital_rv32i_top #(
     .ADC_WIDTH         (ADC_WIDTH),
@@ -69,35 +76,41 @@ module tb_agriasic_rv32i_e2e;
   ) dut (
     .clk                 (clk),
     .rst_n               (rst_n),
-    .start_i             (start_i),
-    .conv_start_o        (conv_start_o),
-    .exc_drive_p_o       (exc_drive_p_o),
-    .exc_drive_n_o       (exc_drive_n_o),
-    .adc_enable_o        (adc_enable_o),
-    .adc_sample_o        (adc_sample_o),
-    .adc_dac_o           (adc_dac_o),
-    .adc_comp_i          (adc_comp_i),
-    .busy_o              (busy_o),
-    .done_o              (done_o),
-    .result_i_o          (result_i_o),
-    .result_q_o          (result_q_o),
-    .cfg_pair_log2_o     (cfg_pair_log2_o),
-    .cfg_settle_cycles_o (cfg_settle_cycles_o),
-    .cfg_exc_divider_o   (cfg_exc_divider_o),
-    .cfg_conv_cycles_o   (cfg_conv_cycles_o),
+    .gpio_start_i             (start_i),
+    .afe_conv_start_o        (conv_start_o),
+    .afe_sine_code_o         (sine_code_o),
+    .afe_mux_sel_o           (mux_sel_o),
+    .afe_adc_enable_o        (adc_enable_o),
+    .afe_sample_o        (adc_sample_o),
+    .afe_adc_dac_o           (adc_dac_o),
+    .afe_adc_comp_i          (adc_comp_i),
+    .dbg_busy_o              (busy_o),
+    .dbg_done_o              (done_o),
+    .dbg_result_dv_i_o       (result_dv_i_o),
+    .dbg_result_dv_q_o       (result_dv_q_o),
+    .dbg_result_cur_i_o      (result_cur_i_o),
+    .dbg_result_cur_q_o      (result_cur_q_o),
+    .dbg_cfg_pair_log2_o     (cfg_pair_log2_o),
+    .dbg_cfg_settle_cycles_o (cfg_settle_cycles_o),
+    .dbg_cfg_exc_divider_o   (cfg_exc_divider_o),
+    .dbg_cfg_conv_cycles_o   (cfg_conv_cycles_o),
+    .dbg_cfg_mux_settle_o    (),
+    .dbg_cfg_amplitude_o     (),
+    .afe_pga_gain_o      (),
+    .afe_tia_rf_o        (),
     // JTAG idle: TAP held in reset, no debugger attached in this test.
-    .jtag_tck_i          (1'b0),
-    .jtag_tms_i          (1'b1),
-    .jtag_trst_ni        (rst_n),
-    .jtag_tdi_i          (1'b0),
-    .jtag_tdo_o          (),
+    .gpio_jtag_tck_i          (1'b0),
+    .gpio_jtag_tms_i          (1'b1),
+    .gpio_jtag_trst_ni        (rst_n),
+    .gpio_jtag_tdi_i          (1'b0),
+    .gpio_jtag_tdo_o          (),
     // No flash: boot strap low, IMEM preloaded (see parameter above).
-    .boot_sel_i          (1'b0),
-    .flash_sck_o         (),
-    .flash_cs_n_o        (),
-    .flash_mosi_o        (),
-    .flash_miso_i        (1'b0),
-    .boot_fail_o         ()
+    .gpio_boot_sel_i          (1'b0),
+    .gpio_flash_sck_o         (),
+    .gpio_flash_cs_n_o        (),
+    .gpio_flash_mosi_o        (),
+    .gpio_flash_miso_i        (1'b0),
+    .gpio_boot_fail_o         ()
   );
 
   // The shell's done_o (firmware wrote CTRL.FW_DONE) is NOT exposed at the
@@ -117,9 +130,11 @@ module tb_agriasic_rv32i_e2e;
   localparam int W_COUNT      = 'h100 / 4;
   localparam int W_NUM_POINTS = 'h104 / 4;
   localparam int W_DIV        = 'h110 / 4;
-  localparam int W_I          = 'h120 / 4;
-  localparam int W_Q          = 'h130 / 4;
+  localparam int W_DV_I       = 'h120 / 4;
+  localparam int W_DV_Q       = 'h130 / 4;
   localparam int W_TEMP       = 'h140 / 4;
+  localparam int W_CUR_I      = 'h150 / 4;
+  localparam int W_CUR_Q      = 'h160 / 4;
 
   localparam int NUM_FREQ_POINTS  = 3;
   localparam int NUM_MEASUREMENTS = 2;
@@ -142,7 +157,7 @@ module tb_agriasic_rv32i_e2e;
     else if (conv_start_o) begin
       conv_high_run <= conv_high_run + 1;
       if (conv_high_run >= 1) begin
-        $error("conv_start_o held high for more than one cycle");
+        $error("afe_conv_start_o held high for more than one cycle");
         errors <= errors + 1;
       end
     end else begin
@@ -153,7 +168,7 @@ module tb_agriasic_rv32i_e2e;
   // busy and done must never be simultaneously high.
   always_ff @(posedge clk) begin
     if (rst_n && busy_o && done_o) begin
-      $error("busy_o and done_o both high at cycle %0d", cycles);
+      $error("dbg_busy_o and dbg_done_o both high at cycle %0d", cycles);
       errors <= errors + 1;
     end
   end
@@ -248,9 +263,15 @@ module tb_agriasic_rv32i_e2e;
     // Frequency-invariant ADC model (see header): every point gives the
     // same I/Q numbers. That is the correct expectation here, not a bug --
     // see the header comment on what this test actually verifies.
+    // Rev 5: four results per point. The ADC model gives dV(0)=200,
+    // dV(180)=100, dV(90)=150, dV(270)=80 -> dv_i=400, dv_q=280; and
+    // I(0)=170, I(180)=110, I(90)=140, I(270)=90 -> cur_i=240, cur_q=200.
+    // Deliberately different per channel: a swapped analog mux fails here.
     for (int p = 0; p < NUM_FREQ_POINTS; p++) begin
-      check_word($sformatf("OUT_I[%0d]", p), W_I + p, 32'd400);
-      check_word($sformatf("OUT_Q[%0d]", p), W_Q + p, 32'd280);
+      check_word($sformatf("OUT_DV_I[%0d]",  p), W_DV_I  + p, 32'd400);
+      check_word($sformatf("OUT_DV_Q[%0d]",  p), W_DV_Q  + p, 32'd280);
+      check_word($sformatf("OUT_CUR_I[%0d]", p), W_CUR_I + p, 32'd240);
+      check_word($sformatf("OUT_CUR_Q[%0d]", p), W_CUR_Q + p, 32'd200);
     end
 
     if (cfg_pair_log2_o !== 4'd2) begin

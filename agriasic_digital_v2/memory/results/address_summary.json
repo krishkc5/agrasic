@@ -6,58 +6,56 @@
     "sections": [
       {
         "name": ".text",
-        "size_bytes": 482,
+        "size_bytes": 592,
         "vma_start": 0,
-        "vma_highest_byte": 481,
-        "vma_end_exclusive": 482,
+        "vma_highest_byte": 591,
+        "vma_end_exclusive": 592,
         "lma_start": 0,
-        "lma_highest_byte": 481,
+        "lma_highest_byte": 591,
         "alignment_bytes": 2,
         "nobits": false
       }
     ],
-    "allocated_section_bytes_sum": 482,
-    "highest_occupied_vma_byte": 481,
-    "vma_end_exclusive": 482,
-    "address_span_from_origin_bytes": 482,
-    "highest_initialized_lma_byte": 481,
+    "allocated_section_bytes_sum": 592,
+    "highest_occupied_vma_byte": 591,
+    "vma_end_exclusive": 592,
+    "address_span_from_origin_bytes": 592,
+    "highest_initialized_lma_byte": 591,
     "note": "This linker describes IMEM only. Absolute result buffers, stack and heap are not allocated sections."
   },
   "instruction_fetch": {
     "lowest_byte": "0x00000080",
-    "highest_byte": "0x000001EB",
-    "distinct_bytes": 356,
-    "span_bytes": 364
+    "highest_byte": "0x00000257",
+    "distinct_bytes": 464,
+    "span_bytes": 472
   },
-  "highest_fetch_word_address": "0x000001E8",
-  "highest_retired_instruction_address": "0x000001E0",
+  "highest_fetch_word_address": "0x00000254",
+  "highest_retired_instruction_address": "0x0000024E",
   "fetch_word_addresses_beyond_linked_image": [
-    "0x000001E0",
-    "0x000001E4",
-    "0x000001E8"
+    "0x00000250",
+    "0x00000254"
   ],
   "retired_addresses_beyond_linked_image": [],
   "data_memory": {
     "lowest_byte": "0x00000100",
     "highest_byte": "0x000007FF",
-    "distinct_bytes": 68,
+    "distinct_bytes": 100,
     "span_bytes": 1792
   },
   "result_buffers": {
     "lowest_byte": "0x00000100",
-    "highest_byte": "0x00000143",
-    "distinct_bytes": 48,
-    "span_bytes": 68
+    "highest_byte": "0x0000016B",
+    "distinct_bytes": 72,
+    "span_bytes": 108
   },
   "stack_accesses": {
-    "lowest_byte": "0x000007E8",
+    "lowest_byte": "0x000007E0",
     "highest_byte": "0x000007FF",
-    "distinct_bytes": 20,
-    "span_bytes": 24
+    "distinct_bytes": 28,
+    "span_bytes": 32
   },
   "stack_pointer_values_in_order": [
     "0x00011000",
-    "0x00010800",
     "0x00000000",
     "0x00011000",
     "0x00010800",
@@ -107,16 +105,31 @@
       "kind": "load",
       "word_address": "0x8000001C",
       "count": 6
+    },
+    {
+      "kind": "load",
+      "word_address": "0x80000034",
+      "count": 6
+    },
+    {
+      "kind": "load",
+      "word_address": "0x80000038",
+      "count": 6
+    },
+    {
+      "kind": "store",
+      "word_address": "0x8000003C",
+      "count": 1
     }
   ],
   "invalid_accesses": [],
   "data_loads_before_observed_store": [],
   "event_counts": {
-    "fetch": 183,
-    "retire": 213,
-    "sp": 7,
-    "store": 35,
-    "load": 27
+    "fetch": 230,
+    "retire": 278,
+    "sp": 6,
+    "store": 48,
+    "load": 45
   },
-  "hex_sha256": "efb4348ec1334fcdda446cdae5573c87d8cf17af73371d568310730910b67b4b"
+  "hex_sha256": "cc5208d52509a0880d346a4c1fafa1c9788f21f3605ad46c2ea3887135e86ab3"
 }

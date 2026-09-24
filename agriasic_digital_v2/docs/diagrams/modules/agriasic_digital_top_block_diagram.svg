@@ -20,7 +20,7 @@
   <text x="390" y="592" font-family="Arial" font-size="19" fill="#fff">cfg_pair_log2, cfg_settle_cycles</text>
   <text x="390" y="628" font-family="Arial" font-size="19" fill="#fff">cfg_exc_divider [13:0]</text>
   <text x="390" y="664" font-family="Arial" font-size="19" fill="#fff">cfg_conv_cycles</text>
-  <text x="390" y="700" font-family="Arial" font-size="19" fill="#fff">adc_comp_i   (from analog comparator)</text>
+  <text x="390" y="700" font-family="Arial" font-size="19" fill="#fff">afe_adc_comp_i   (from analog comparator)</text>
   <text x="390" y="748" font-family="Arial" font-size="17" fill="#BDBDBD">cfg_settle counts excitation PERIODS, not core cycles</text>
 
   <rect x="1560" y="420" width="1080" height="340" rx="10" fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
@@ -54,11 +54,11 @@
   <rect x="3020" y="860" width="1500" height="700" rx="10" fill="#FFE0B2" stroke="#E65100" stroke-width="2"/>
   <text x="3080" y="936" font-family="Arial" font-size="30" font-weight="700" fill="#212121">Top-level outputs</text>
   <text x="3080" y="990" font-family="Arial" font-size="20" fill="#212121">exc_drive_p_o, exc_drive_n_o</text>
-  <text x="3080" y="1030" font-family="Arial" font-size="20" fill="#212121">adc_enable_o, adc_sample_o</text>
-  <text x="3080" y="1070" font-family="Arial" font-size="20" fill="#212121">adc_dac_o [7:0], conv_start_o</text>
+  <text x="3080" y="1030" font-family="Arial" font-size="20" fill="#212121">afe_adc_enable_o, afe_sample_o</text>
+  <text x="3080" y="1070" font-family="Arial" font-size="20" fill="#212121">afe_adc_dac_o [7:0], afe_conv_start_o</text>
   <text x="3080" y="1110" font-family="Arial" font-size="20" fill="#212121">busy_o, done_o</text>
-  <text x="3080" y="1150" font-family="Arial" font-size="20" fill="#212121">result_i_o [15:0] signed</text>
-  <text x="3080" y="1190" font-family="Arial" font-size="20" fill="#212121">result_q_o [15:0] signed</text>
+  <text x="3080" y="1150" font-family="Arial" font-size="20" fill="#212121">result_dv_i_o / result_cur_i_o [15:0]</text>
+  <text x="3080" y="1190" font-family="Arial" font-size="20" fill="#212121">result_dv_q_o / result_cur_q_o [15:0]</text>
   <text x="3080" y="1258" font-family="Arial" font-size="18" fill="#616161">adc_* pins face the analog boundary;</text>
   <text x="3080" y="1292" font-family="Arial" font-size="18" fill="#616161">result_* face the host and core paths.</text>
   <text x="3080" y="1360" font-family="Arial" font-size="18" fill="#616161">Results are raw signed sums with no</text>
@@ -76,7 +76,7 @@
   <text x="1150" y="1560" font-family="Arial" font-size="17" fill="#212121">cfg_conv</text>
 
   <path d="M1320,716 L1360,716 L1360,1790 L1556,1790" stroke="#1565C0" stroke-width="2" fill="none" marker-end="url(#a1)"/>
-  <text x="1130" y="1860" font-family="Arial" font-size="17" fill="#212121">adc_comp_i</text>
+  <text x="1130" y="1860" font-family="Arial" font-size="17" fill="#212121">afe_adc_comp_i</text>
 
   <path d="M2100,760 L2100,916" stroke="#7B1FA2" stroke-width="4" fill="none" marker-end="url(#a3)"/>
   <text x="2140" y="820" font-family="Arial" font-size="20" font-weight="700" fill="#4A148C">phase_index [3:0]</text>

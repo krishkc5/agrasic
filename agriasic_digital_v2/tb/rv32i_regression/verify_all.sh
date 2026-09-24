@@ -73,7 +73,7 @@ echo ""
 echo "=================================================="
 echo "12. SETTLE x CONV GRID SWEEP (Rev 4.3 Phase 8, closes V-1)"
 echo "=================================================="
-bash "$R/settle_conv_sweep.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | tail -6
+bash "$R/settle_conv_sweep.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | tail -12
 
 echo ""
 echo "=================================================="
@@ -83,6 +83,6 @@ bash "$R/jtag.sh" 2>&1 | grep -E "^\[TB\]|JTAG_DEBUG_" | tail -8
 
 echo ""
 echo "=================================================="
-echo "14. SPI-FLASH BOOT (Phase 3: header/CRC load into IMEM, fail-hold, retry)"
+echo "14. BOOT: GOLDEN ROM + SPI FLASH (header/CRC into IMEM, fail-hold, retry, strap override)"
 echo "=================================================="
-bash "$R/flash_boot.sh" 2>&1 | grep -E "^\[TB\] [A-D]:|FLASH_BOOT_" | tail -6
+bash "$R/flash_boot.sh" 2>&1 | grep -E "^\[TB\] [A-G]:|FLASH_BOOT_" | tail -12

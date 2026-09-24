@@ -405,3 +405,49 @@ SCK = clk/16 — but the loader enforces `length <= 4096` (the 4 KiB IMEM); if
 IMEM is shrunk to 2 KiB the `IMEM_BYTES` parameter must follow. The loader
 adds 342 register bits (header, CRC, byte/word staging, SPI engine) and no
 memory of its own. DMEM is untouched.
+
+### Rev 5 (tetrapolar analog interface) update
+
+The two-channel front end doubles the result data and grows the firmware, but
+both stay far inside the recommended sizes:
+
+| Quantity | Phase 3 | Rev 5 |
+|---|---|---|
+| `.text` | 482 B (121 words) | **592 B (148 words)** |
+| Fetch span observed | `0x080–0x1EB` | **`0x080–0x257`** |
+| Result payload in DMEM | 48 B (`0x100–0x143`) | **72 B (`0x100–0x16B`)** — four values per point instead of two |
+| Stack bytes touched | 20 (`0x7E8–0x7FF`) | **28 (`0x7E0–0x7FF`)** — `run_sweep_point` now carries a 4-field struct |
+| Distinct DMEM bytes | 68 | **100** |
+| MMIO words accessed | 8 | **11** (adds `RESULT_CUR_I/Q` and `AFE_CTRL`) |
+| Out-of-map accesses | none | **none** |
+| Generic synthesis | 27,094 comb + 3,615 regs | **27,538 comb + 3,720 regs** (measurement engine 144 → 235 register bits) |
+
+Sizing conclusions are unchanged: **1 KiB IMEM** still has ~40% headroom over
+the 592 B image (the boot loader's `length <= IMEM_BYTES` check now bounds it
+explicitly), and **1 KiB DMEM** is untouched by the extra 24 B of results and
+8 B of stack. The only figure worth watching is `.text`: it grew 23% for one
+extra channel, so a third channel or on-die calibration math should be sized
+against 2 KiB IMEM rather than 1 KiB.
+
+### Golden boot ROM update (both Option A and Option C, strap-selectable)
+
+The recommendation's Option A (fixed firmware in a synthesized ROM) and
+Option C (autonomous flash boot) are now both implemented and chosen by the
+`BOOT_SEL` strap, rather than being alternatives:
+
+| | Golden ROM (strap = 0, default) | SPI flash (strap = 1) |
+|---|---|---|
+| Source | `agriasic_boot_rom.sv`, constant table | external SPI NOR |
+| Load time | ~150 cycles (0.9 µs) | ~80k cycles (0.5 ms) |
+| Integrity | none needed (gates cannot corrupt) | 16-byte header + CRC-32 |
+| Cost | **+1,027 comb primitives, +6 flops** | 4 pads + the loader |
+| Field-updatable | no (frozen at tapeout) | yes |
+
+Both load into the **same IMEM SRAM**, so the earlier conclusion stands
+unchanged: IMEM must be writable RAM, 1 KiB with the 592 B image. The ROM does
+not remove the SRAM — it removes the *dependency on an external part* for a
+chip to start. Note the ROM is sized 256 words (1 KiB) independently of IMEM's
+1024; only `USED_WORDS` are copied.
+
+What this buys over a fetch-path ROM mux: **IMEM stays writable after a ROM
+boot**, so bench-time config changes are a JTAG poke rather than a rebuild.

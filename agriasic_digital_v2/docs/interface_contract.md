@@ -22,6 +22,35 @@ Phase 6's full register-map renumbering (see the register map below; **every
 address after 0x2 has moved or changed meaning** compared to any document
 predating this one).
 
+## Port naming convention
+
+Every port on a boundary module (`agriasic_digital_rv32i_top`,
+`agriasic_digital_spi_top`, `agriasic_digital_programming_top`,
+`agriasic_digital_top`, `agriasic_rv32i_control_shell`) carries a prefix
+saying where the signal goes:
+
+| Prefix | Meaning |
+|---|---|
+| `afe_` | Crosses into the **analog front end**. Die-internal, unless the AFE is off-chip in a test configuration. |
+| `gpio_` | Leaves the die — **bond these**. |
+| `dbg_` | **Observability only. Do not bond.** Exposed so testbenches, the power flow and the memory audit can watch internal state without hierarchical references. |
+| *(none)* | **Die-internal block-to-block wiring**, plus `clk` and `rst_n`. The two clock/reset pins are real pads, but "GPIO" implies a general-purpose bidirectional cell, which they are not. |
+
+The prefix classifies a signal by **where it ends up**, not by which module
+declares it. So a boundary module still has unprefixed ports where they simply
+connect it to another block on the same die — `agriasic_rv32i_control_shell`
+drives the measurement engine through `cfg_*_o` / `result_*_o` / `busy_o` /
+`done_o`, and `agriasic_digital_top` receives them through `cfg_*_i` and
+`start`. None of those reach a pad or the AFE, so none of them take a prefix.
+The same signals *do* take `dbg_` where a chip top re-exports them purely for
+observability.
+
+Leaf modules (`sar_controller`, `excitation_ctrl`,
+`measurement_fsm`, `spi_slave`, `regfile`, `agriasic_spi_boot`) deliberately
+keep unprefixed local names — the prefix marks a chip boundary, and would
+mean nothing three levels down. So `sar_controller.mux_sel_o` connects to
+`agriasic_digital_top.afe_mux_sel_o`, and both names are correct.
+
 ## Clock and Reset
 - `clk`: single digital clock domain for the entire design. As of Phase 3,
   there is no second clock domain anywhere in the synthesizable RTL — SPI's
@@ -34,20 +63,34 @@ predating this one).
   when the external pin actually released.
 
 ## Measurement control
-- `start` / `start_i`: one-cycle pulse to begin one measurement run
+Names below are the measurement engine's (`agriasic_digital_top`). At a chip
+top the same signals appear as `gpio_start_i` (in) and `dbg_busy_o` /
+`dbg_done_o` / `dbg_result_*` (out).
+
+- `start` / `gpio_start_i`: one-cycle pulse to begin one measurement run
 - `busy_o`: high while the FSM is executing the run
 - `done_o`: pulses high for one core cycle when the run completes (the SPI
   wrapper latches this into a sticky `REG_STATUS` bit — see below — because a
   host polling over SPI cannot reliably catch a single-cycle pulse)
-- `result_i_o[15:0]` / `result_q_o[15:0]` (Rev 4.3 Phase 5, replacing the
-  single `result_o[15:0]`): the I and Q channel accumulators, each
+- `result_dv_i_o` / `result_dv_q_o` / `result_cur_i_o` / `result_cur_q_o`,
+  all `[15:0]` (Rev 5; these replaced the Rev 4.3 `result_i_o`/`result_q_o`
+  pair, which in turn replaced a single `result_o`): the voltage and current
+  channel accumulators, in-phase and quadrature, each
   independently signed and valid once `done_o` has pulsed. Both are **shadow
   registers** — they latch the internal accumulators' final value only on
   measurement completion, so a read mid-run always returns the *previous*
   run's result, never a partial sum in progress (see the register map below
   for how these are exposed over each host interface)
 
-## Analog front-end interface (Rev 4.3 Phases 1 and 4)
+## Analog front-end interface (Rev 4.3 Phases 1 and 4) — SUPERSEDED
+
+> **Superseded by "Analog front-end interface (Rev 5, tetrapolar)" below.**
+> Kept for the `adc_comp_i` convention and the SAR timing discussion, which
+> still hold. Two things here are out of date: `exc_drive_p_o`/`exc_drive_n_o`
+> no longer exist (Rev 5 replaced the square-wave pair with a sine DAC code),
+> and every port named below now carries the `afe_` prefix at a boundary
+> module — `adc_sample_o` is `afe_sample_o`, the rest are `afe_<name>`.
+
 `adc_code_i` no longer exists anywhere in this design. The digital side now
 runs the SAR bit-trial search itself:
 
@@ -89,17 +132,17 @@ interface.
 
 ## SPI protocol
 - Mode: SPI mode-0 (`CPOL=0`, `CPHA=0`)
-- **Max SCLK = f_clk/16.** This is load-bearing, not a suggestion: `sclk_i`,
-  `cs_n_i` and `mosi_i` are 2FF-oversampled into the `clk` domain (Rev 4.3
+- **Max SCLK = f_clk/16.** This is load-bearing, not a suggestion: `gpio_spi_sclk_i`,
+  `gpio_spi_cs_n_i` and `gpio_spi_mosi_i` are 2FF-oversampled into the `clk` domain (Rev 4.3
   Phase 3), and the synchronizers need this much margin to resolve edges
   reliably. Exceeding it corrupts data — verified directly by
   `tb_spi_domain_crossing.sv`, which shows correct operation at exactly this
   rate and demonstrated corruption below the sampling clock's own Nyquist
   rate.
-- `miso_o` changes on a **synchronized** SCLK falling edge (an edge detected
-  on the oversampled signal, not a real clock edge — there is no `sclk_i`
+- `gpio_spi_miso_o` changes on a **synchronized** SCLK falling edge (an edge detected
+  on the oversampled signal, not a real clock edge — there is no `gpio_spi_sclk_i`
   clock domain to speak of anymore)
-- `miso_oe_o`: high only while `cs_n_i` is selected (synchronized), so
+- `gpio_spi_miso_oe_o`: high only while `gpio_spi_cs_n_i` is selected (synchronized), so
   pad-level logic can put `MISO` in high-Z otherwise. Combinationally derived
   from the synchronized `cs_n`, so it changes the same cycle selection does.
 - Command byte format:
@@ -109,7 +152,7 @@ interface.
 - Every transaction is 2 bytes (`Byte0=command`, `Byte1=data/dummy`)
 - If `Byte0` is illegal (reserved bits or bad address), the wrapper consumes
   `Byte1` and discards it to keep framing aligned
-- **`cs_n_i` deasserted mid-byte** resets only the SPI framing state (bit
+- **`gpio_spi_cs_n_i` deasserted mid-byte** resets only the SPI framing state (bit
   counter, TX shift register) — never any measurement state, which
   `spi_slave` has no access to in the first place. Reselecting starts a clean
   new byte; no chip reset is needed to recover from an aborted transaction.
@@ -121,6 +164,10 @@ interface.
   completes, and at `f_clk/16` even a fully back-to-back byte leaves at least
   8 `clk` cycles of margin before the next possible falling edge. The
   `f_clk/16` rate limit already covers it.
+
+The `spi_slave` leaf module inside `agriasic_digital_spi_top` keeps its own
+unprefixed `sclk_i`/`cs_n_i`/`mosi_i`/`miso_o`/`miso_oe_o` port names; the
+`gpio_spi_` names above are the chip pins those connect to.
 
 ## SPI response codes
 - `0xA5`: write accepted (ACK)
@@ -247,11 +294,11 @@ variant; `agriasic_digital_spi_top` is unchanged.
 
 | Pin | Dir | Notes |
 |---|---|---|
-| `jtag_tck_i` | in | Test clock. Keep well below the core clock (the DTM crosses TCK -> clk with a 2-phase handshake); 1 MHz is safe for any core clock above ~10 MHz. |
-| `jtag_tms_i` | in | Test mode select. Five cycles high resets the TAP without TRST. |
-| `jtag_trst_ni` | in | Asynchronous TAP reset, active low. Independent of `rst_n`, so a debugger can stay attached across a chip reset. Tie high if unused. |
-| `jtag_tdi_i` | in | Data in, sampled on rising TCK. |
-| `jtag_tdo_o` | out | Data out, launched on falling TCK. Not tri-stated (single device on the chain). |
+| `gpio_jtag_tck_i` | in | Test clock. Keep well below the core clock (the DTM crosses TCK -> clk with a 2-phase handshake); 1 MHz is safe for any core clock above ~10 MHz. |
+| `gpio_jtag_tms_i` | in | Test mode select. Five cycles high resets the TAP without TRST. |
+| `gpio_jtag_trst_ni` | in | Asynchronous TAP reset, active low. Independent of `rst_n`, so a debugger can stay attached across a chip reset. Tie high if unused. |
+| `gpio_jtag_tdi_i` | in | Data in, sampled on rising TCK. |
+| `gpio_jtag_tdo_o` | out | Data out, launched on falling TCK. Not tri-stated (single device on the chain). |
 
 IDCODE `0x14341001` (version 1, part `0x4341`). IR length 5: `0x01` IDCODE,
 `0x10` DTMCS, `0x11` DMI (abits = 7). DM base `0x1A11_0000`; halt / resume /
@@ -264,7 +311,7 @@ is a bus error. `dmcontrol.ndmreset` resets the core and the MMIO bridge
 (config registers, sticky flags) but not IMEM, the DM or the TAP.
 
 The hart is held in reset and reported `unavailable` to the debugger while
-`start_i` is low. `fw/openocd_agriasic.cfg` is the reference OpenOCD target
+`gpio_start_i` is low. `fw/openocd_agriasic.cfg` is the reference OpenOCD target
 file.
 
 ---
@@ -273,12 +320,12 @@ file.
 
 | Pin | Dir | Notes |
 |---|---|---|
-| `boot_sel_i` | in | Strap. 1: boot from flash at reset. 0: leave the flash alone; the core waits for `BOOT_CTRL.release` (debugger/host). |
-| `flash_sck_o` | out | SPI mode 0 clock, clk/16 during boot (10 MHz at 160 MHz); firmware-selectable afterwards. |
-| `flash_cs_n_o` | out | Active-low chip select. |
-| `flash_mosi_o` | out | Master out. |
-| `flash_miso_i` | in | Master in. |
-| `boot_fail_o` | out | High when the boot FSM ended in FAIL (also `BOOT_STATUS[10]`). |
+| `gpio_boot_sel_i` | in | Strap, sampled once on the first cycle out of reset. **0 (default): shadow-load the on-die golden boot ROM into IMEM** -- no flash needed. 1: load from external SPI flash instead. `BOOT_CTRL` overrides either way. |
+| `gpio_flash_sck_o` | out | SPI mode 0 clock, clk/16 during boot (10 MHz at 160 MHz); firmware-selectable afterwards. |
+| `gpio_flash_cs_n_o` | out | Active-low chip select. |
+| `gpio_flash_mosi_o` | out | Master out. |
+| `gpio_flash_miso_i` | in | Master in. |
+| `gpio_boot_fail_o` | out | High when the boot FSM ended in FAIL (also `BOOT_STATUS[10]`). |
 
 Flash image at address 0, little-endian words: `0x41475241` ("AGRA"),
 payload length (bytes, multiple of 4, <= 4096), version, CRC-32 (zlib) of the
@@ -291,8 +338,52 @@ Registers (data-port / SBA window `0x8000_0020..0x8000_003F`):
 
 | Address | Name | Access | Bits |
 |---|---|---|---|
-| `0x8000_0020` | `BOOT_STATUS` | R | [3:0] state (7 DONE, 8 FAIL, 9 SKIP), [6:4] error (1 magic, 2 length, 3 CRC, 4 bus), [8] fw_valid, [9] boot_sel, [10] boot_fail, [11] busy, [31:16] image version |
-| `0x8000_0024` | `BOOT_CTRL` | W | [0] release core, [1] retry flash boot (drops fw_valid: core reset, reboot) |
+| `0x8000_0020` | `BOOT_STATUS` | R | [3:0] state (7 DONE, 8 FAIL, 9 SKIP, 10 ROM copy), [6:4] error (1 magic, 2 length, 3 CRC, 4 bus; a ROM boot can only report 4), [8] fw_valid, [9] latched strap, [10] boot_fail, [11] busy, [13:12] source (0 none/skip, 1 golden ROM, 2 flash), [31:16] image version (flash header; 0 for a ROM boot) |
+| `0x8000_0024` | `BOOT_CTRL` | W | [0] release core, [1] re-boot from flash, [2] re-boot from the golden ROM (each drops fw_valid first: core reset, then reboot) |
 | `0x8000_0028` | `SPI_CTRL` | RW | [0] cs_n, [15:8] clock divider (SCK = clk / 2(div+1)) |
 | `0x8000_002C` | `SPI_DATA` | RW | W: byte to send (starts a transfer); R: last byte received |
 | `0x8000_0030` | `SPI_STATUS` | R | [0] busy, [1] firmware owns the SPI pins (boot FSM idle) |
+
+---
+
+## Analog front-end interface (Rev 5, tetrapolar)
+
+Digital-to-analog signals on `agriasic_digital_rv32i_top` and
+`agriasic_digital_spi_top`. These are die-internal to the AFE, not pads,
+except where the AFE is off-chip in a test configuration.
+
+| Signal | Dir | Meaning |
+|---|---|---|
+| `afe_sine_code_o[7:0]` | out | Sine DAC code, offset binary, mid-code 128 = VCM (0.9 V). 16-point cosine, one code per phase state. |
+| `afe_mux_sel_o[1:0]` | out | Analog mux: 0 = dV (differential PGA on E2/E3), 1 = return current (TIA on E4). Stable for the whole conversion. |
+| `afe_sample_o` | out | Track-and-hold strobe. Fires ONCE per phase point and freezes **both** channels' S/H simultaneously. |
+| `afe_adc_enable_o` | out | High for the duration of each conversion (comparator bias/power gate). |
+| `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. |
+| `afe_adc_comp_i` | in | One comparator decision: 1 = input >= trial code. Timed, unsynchronized — `REG_CONV` must cover regeneration at the worst corner. |
+| `afe_conv_start_o` | out | One-cycle pulse at the start of each conversion. |
+| `afe_pga_gain_o[1:0]` | out | Differential PGA gain select (1 / 4 / 16). |
+| `afe_tia_rf_o[1:0]` | out | TIA feedback resistor select (10k / 100k / 1M). |
+
+Per sample point the sequence is: strobe both S/H at the target phase ->
+`mux_sel = 0`, wait `AFE_CTRL.mux_settle`, 8 bit trials -> `mux_sel = 1`,
+wait, 8 bit trials. Four phase points (0/90/180/270 deg) make one
+accumulation pair, so a pair is eight conversions.
+
+Accumulators (all signed 16-bit, host-visible only via the shadow snapshot
+taken when `busy` falls):
+
+    dv_i  = sum( dV(0deg)  - dV(180deg) )      cur_i = sum( I(0deg)  - I(180deg) )
+    dv_q  = sum( dV(90deg) - dV(270deg) )      cur_q = sum( I(90deg) - I(270deg) )
+
+Impedance is computed off-die: Z(f) = (dv_i + j*dv_q) / (cur_i + j*cur_q).
+
+Open analog decision, not fixed in RTL: the design assumes **simultaneous**
+sample-and-hold on both channels (two matched switches). The alternative —
+measuring dV on one excitation period and I on the next, phase-locked to the
+same counter — needs one fewer S/H but doubles the measurement time and
+assumes stationarity across adjacent periods.
+
+The golden ROM image is generated from `fw/golden/agriasic_fw_golden.hex` by
+`fw/gen_boot_rom.py` into `rtl/rv32i/agriasic_boot_rom.sv`. It is frozen at
+tapeout; the flash path is how a newer image is run. Both load into the same
+IMEM SRAM at address 0, so firmware is linked once for both.

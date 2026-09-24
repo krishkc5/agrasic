@@ -17,13 +17,20 @@
 // -----------------------------------------------------------------------------
 module tb_agriasic_digital_top;
   localparam int unsigned ADC_WIDTH = 8;
-  // D(0)=220, D(180)=100 -> I delta = 120/pair -> I = 4*120 = 480
-  // D(90)=170, D(270)=90 -> Q delta =  80/pair -> Q = 4*80  = 320
+  // Rev 5 two-channel model. dV (mux channel 0, PGA on E2/E3):
+  //   dV(0)=220, dV(180)=100 -> I delta = 120/pair -> dv_i = 4*120 = 480
+  //   dV(90)=170, dV(270)=90 -> Q delta =  80/pair -> dv_q = 4*80  = 320
+  // Current (mux channel 1, TIA on E4), deliberately DIFFERENT values so a
+  // swapped mux or a mis-sequenced conversion cannot pass:
+  //   I(0)=200, I(180)=110  -> I delta = 90/pair  -> cur_i = 4*90 = 360
+  //   I(90)=160, I(270)=100 -> Q delta = 60/pair  -> cur_q = 4*60 = 240
   // Deliberately different deltas so a channel-swap or "Q silently copies I"
   // bug would produce a numerically wrong, not just coincidentally right,
   // result.
   localparam logic signed [15:0] EXPECTED_I = 16'sd480;
   localparam logic signed [15:0] EXPECTED_Q = 16'sd320;
+  localparam logic signed [15:0] EXPECTED_CUR_I = 16'sd360;
+  localparam logic signed [15:0] EXPECTED_CUR_Q = 16'sd240;
 
   logic clk;
   logic rst_n;
@@ -33,16 +40,18 @@ module tb_agriasic_digital_top;
   logic [13:0] cfg_exc_divider_i;
   logic [7:0]  cfg_conv_cycles_i;
   logic conv_start_o;
-  logic exc_drive_p_o;
-  logic exc_drive_n_o;
+  logic [ADC_WIDTH-1:0] sine_code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o;
   logic adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
   logic busy_o;
   logic done_o;
-  logic signed [15:0] result_i_o;
-  logic signed [15:0] result_q_o;
+  logic signed [15:0] result_dv_i_o;
+  logic signed [15:0] result_dv_q_o;
+  logic signed [15:0] result_cur_i_o;
+  logic signed [15:0] result_cur_q_o;
 
   agriasic_digital_top #(
     .ADC_WIDTH(ADC_WIDTH)
@@ -54,17 +63,21 @@ module tb_agriasic_digital_top;
     .cfg_settle_cycles_i(cfg_settle_cycles_i),
     .cfg_exc_divider_i(cfg_exc_divider_i),
     .cfg_conv_cycles_i(cfg_conv_cycles_i),
-    .conv_start_o(conv_start_o),
-    .exc_drive_p_o(exc_drive_p_o),
-    .exc_drive_n_o(exc_drive_n_o),
-    .adc_enable_o(adc_enable_o),
-    .adc_sample_o(adc_sample_o),
-    .adc_dac_o(adc_dac_o),
-    .adc_comp_i(adc_comp_i),
+    .cfg_mux_settle_i(8'd2),
+    .cfg_amplitude_i(2'd0),
+    .afe_conv_start_o(conv_start_o),
+    .afe_sine_code_o(sine_code_o),
+    .afe_mux_sel_o(mux_sel_o),
+    .afe_adc_enable_o(adc_enable_o),
+    .afe_sample_o(adc_sample_o),
+    .afe_adc_dac_o(adc_dac_o),
+    .afe_adc_comp_i(adc_comp_i),
     .busy_o(busy_o),
     .done_o(done_o),
-    .result_i_o(result_i_o),
-    .result_q_o(result_q_o)
+    .result_dv_i_o(result_dv_i_o),
+    .result_dv_q_o(result_dv_q_o),
+    .result_cur_i_o(result_cur_i_o),
+    .result_cur_q_o(result_cur_q_o)
   );
 
   // 100 MHz equivalent simulation clock.
@@ -89,23 +102,25 @@ module tb_agriasic_digital_top;
   // combinational read.
   //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
   //   (see the state numbering note below, by the phase-match check)
-  logic [ADC_WIDTH-1:0] adc_target_held_q;
+  // Rev 5 two-channel AFE model: dV (analog mux channel 0, PGA on E2/E3) and
+  // return current (channel 1, TIA on E4). Both are frozen by the single
+  // adc_sample_o strobe at the FSM's chosen phase point; the comparator then
+  // answers for whichever channel mux_sel selects.
+  logic [ADC_WIDTH-1:0] hold_dv_q, hold_cur_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      unique case (4'(dut.u_measurement_fsm.state_q))
-        4'd3:  adc_target_held_q <= 8'd220;  // S_SAMPLE_0:   D(0)
-        4'd8:  adc_target_held_q <= 8'd170;  // S_SAMPLE_90:  D(90)
-        4'd5:  adc_target_held_q <= 8'd100;  // S_SAMPLE_180: D(180)
-        4'd10: adc_target_held_q <= 8'd90;   // S_SAMPLE_270: D(270)
-        default: begin
-          // The FSM should never request a sample from any other state.
-          // Leave the held value unchanged rather than guessing, so a bug
-          // here shows up as a wrong final result instead of a plausible one.
-        end
+      unique case (2'(dut.u_measurement_fsm.point_q))
+        4'd0: begin hold_dv_q <= 8'd220; hold_cur_q <= 8'd200; end  // PT_0   (0 deg)
+        4'd1: begin hold_dv_q <= 8'd100; hold_cur_q <= 8'd110; end  // PT_180 (180 deg)
+        4'd2: begin hold_dv_q <= 8'd170; hold_cur_q <= 8'd160; end  // PT_90  (90 deg)
+        4'd3: begin hold_dv_q <= 8'd90; hold_cur_q <= 8'd100; end  // PT_270 (270 deg)
+        default: begin end
       endcase
     end
   end
-  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
+  wire [ADC_WIDTH-1:0] adc_target = (mux_sel_o == 2'd0) ? hold_dv_q : hold_cur_q;
+  assign adc_comp_i = (adc_target >= adc_dac_o);
+
 
   // --------------------------------------------------------------------------
   // Precise phase-match check (Rev 4.3 Phase 4, extended for Phase 5's four
@@ -121,59 +136,44 @@ module tb_agriasic_digital_top;
   // compares the raw state_q value against its numeric position instead --
   // fragile only if that declaration order changes, which is exactly why
   // this comment exists.
-  //   0=S_IDLE 1=S_SETTLE 2=S_WAIT_0 3=S_SAMPLE_0 4=S_WAIT_180 5=S_SAMPLE_180
-  //   6=S_ACCUM_I 7=S_WAIT_90 8=S_SAMPLE_90 9=S_WAIT_270 10=S_SAMPLE_270
-  //   11=S_ACCUM_Q 12=S_LOOP 13=S_DONE
-  localparam logic [3:0] ST_WAIT_0     = 4'd2;
-  localparam logic [3:0] ST_SAMPLE_0   = 4'd3;
-  localparam logic [3:0] ST_WAIT_180   = 4'd4;
-  localparam logic [3:0] ST_SAMPLE_180 = 4'd5;
-  localparam logic [3:0] ST_WAIT_90    = 4'd7;
-  localparam logic [3:0] ST_SAMPLE_90  = 4'd8;
-  localparam logic [3:0] ST_WAIT_270   = 4'd9;
-  localparam logic [3:0] ST_SAMPLE_270 = 4'd10;
+  //   Rev 5 encoding: 0=S_IDLE 1=S_SETTLE 2=S_WAIT 3=S_CONV_DV 4=S_CONV_CUR
+  //   5=S_ACCUM 6=S_LOOP 7=S_DONE. The four sample points now share one
+  //   S_WAIT state and are told apart by point_q (0=PT_0, 1=PT_180, 2=PT_90,
+  //   3=PT_270), so the check is on the S_WAIT -> S_CONV_DV transition: the
+  //   phase at that instant must be exactly the one this point names.
+  localparam logic [2:0] ST_WAIT    = 3'd2;
+  localparam logic [2:0] ST_CONV_DV = 3'd3;
 
   logic [3:0] phase_prev_q;
-  logic [3:0] state_prev_q;
+  logic [2:0] state_prev_q;
+  logic [1:0] point_prev_q;
   int         phase_match_errors;
+
+  // Expected phase index for each point.
+  function automatic logic [3:0] expected_phase(input logic [1:0] pt);
+    unique case (pt)
+      2'd0:    return 4'd0;    // PT_0
+      2'd1:    return 4'd8;    // PT_180
+      2'd2:    return 4'd4;    // PT_90
+      default: return 4'd12;   // PT_270
+    endcase
+  endfunction
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       phase_prev_q       <= 4'd0;
-      state_prev_q       <= 4'd0;
+      state_prev_q       <= 3'd0;
+      point_prev_q       <= 2'd0;
       phase_match_errors <= 0;
     end else begin
       phase_prev_q <= dut.exc_phase_index;
-      state_prev_q <= 4'(dut.u_measurement_fsm.state_q);
+      state_prev_q <= 3'(dut.u_measurement_fsm.state_q);
+      point_prev_q <= 2'(dut.u_measurement_fsm.point_q);
 
-      if (state_prev_q == ST_WAIT_0 && 4'(dut.u_measurement_fsm.state_q) == ST_SAMPLE_0) begin
-        if (phase_prev_q !== 4'd0) begin
-          $error("PHASE_MATCH_FAIL: entered S_SAMPLE_0 at phase_index=%0d, expected exactly 0",
-                 phase_prev_q);
-          phase_match_errors <= phase_match_errors + 1;
-        end
-      end
-
-      if (state_prev_q == ST_WAIT_180 && 4'(dut.u_measurement_fsm.state_q) == ST_SAMPLE_180) begin
-        if (phase_prev_q !== 4'd8) begin
-          $error("PHASE_MATCH_FAIL: entered S_SAMPLE_180 at phase_index=%0d, expected exactly 8",
-                 phase_prev_q);
-          phase_match_errors <= phase_match_errors + 1;
-        end
-      end
-
-      if (state_prev_q == ST_WAIT_90 && 4'(dut.u_measurement_fsm.state_q) == ST_SAMPLE_90) begin
-        if (phase_prev_q !== 4'd4) begin
-          $error("PHASE_MATCH_FAIL: entered S_SAMPLE_90 at phase_index=%0d, expected exactly 4",
-                 phase_prev_q);
-          phase_match_errors <= phase_match_errors + 1;
-        end
-      end
-
-      if (state_prev_q == ST_WAIT_270 && 4'(dut.u_measurement_fsm.state_q) == ST_SAMPLE_270) begin
-        if (phase_prev_q !== 4'd12) begin
-          $error("PHASE_MATCH_FAIL: entered S_SAMPLE_270 at phase_index=%0d, expected exactly 12",
-                 phase_prev_q);
+      if (state_prev_q == ST_WAIT && 3'(dut.u_measurement_fsm.state_q) == ST_CONV_DV) begin
+        if (phase_prev_q !== expected_phase(point_prev_q)) begin
+          $error("PHASE_MATCH_FAIL: point %0d sampled at phase_index=%0d, expected exactly %0d",
+                 point_prev_q, phase_prev_q, expected_phase(point_prev_q));
           phase_match_errors <= phase_match_errors + 1;
         end
       end
@@ -197,8 +197,10 @@ module tb_agriasic_digital_top;
   // every cycle busy_o reads 1, not just "most of the time."
   property p_shadow_stable_while_busy;
     @(posedge clk) disable iff (!rst_n)
-      busy_o |-> $stable(dut.u_measurement_fsm.i_shadow_q) &&
-                  $stable(dut.u_measurement_fsm.q_shadow_q);
+      busy_o |-> $stable(dut.u_measurement_fsm.dv_i_sh_q)  &&
+                  $stable(dut.u_measurement_fsm.dv_q_sh_q)  &&
+                  $stable(dut.u_measurement_fsm.cur_i_sh_q) &&
+                  $stable(dut.u_measurement_fsm.cur_q_sh_q);
   endproperty
   assert property (p_shadow_stable_while_busy)
     else $error("SHADOW_FAIL: shadow register changed while busy_o was high");
@@ -209,20 +211,21 @@ module tb_agriasic_digital_top;
   // targets (a target-swap bug, e.g. S_WAIT_0 accidentally comparing against
   // phase 8, would still pass a weaker "matches one of the four" check).
   // dut.sample_req (measurement_fsm's sample_req_o, an internal wire -- not
-  // a top-level port) is combinational on phase_index_i while in a WAIT
-  // state (section 6.1), so $rose fires on the exact match cycle, not one
-  // cycle later the way the state-transition-based phase_prev_q check above
-  // does -- a genuinely different, cross-checking way to verify the same
-  // property, not a restatement of it.
-  //   2=S_WAIT_0 4=S_WAIT_180 7=S_WAIT_90 9=S_WAIT_270 (declaration order,
-  //   same numbering note as the phase-match check above)
+  // a top-level port) is combinational on phase_index_i while in S_WAIT
+  // (section 6.1), so $rose fires on the exact match cycle.
+  // Rev 5: the FSM visits the four points through one shared S_WAIT state,
+  // with point_q saying which; the check is that the phase matches the point
+  // exactly -- a target-swap bug (e.g. PT_0 comparing against phase 8) still
+  // fails. States: 2 = S_WAIT. Points: 0 = PT_0, 1 = PT_180, 2 = PT_90,
+  // 3 = PT_270.
   property p_sample_req_exact_phase_match;
     @(posedge clk) disable iff (!rst_n)
       $rose(dut.sample_req) |->
-        (4'(dut.u_measurement_fsm.state_q) == 4'd2 && dut.exc_phase_index == 4'd0)  ||
-        (4'(dut.u_measurement_fsm.state_q) == 4'd4 && dut.exc_phase_index == 4'd8)  ||
-        (4'(dut.u_measurement_fsm.state_q) == 4'd7 && dut.exc_phase_index == 4'd4)  ||
-        (4'(dut.u_measurement_fsm.state_q) == 4'd9 && dut.exc_phase_index == 4'd12);
+        (3'(dut.u_measurement_fsm.state_q) == 3'd2) &&
+        ((2'(dut.u_measurement_fsm.point_q) == 2'd0 && dut.exc_phase_index == 4'd0)  ||
+         (2'(dut.u_measurement_fsm.point_q) == 2'd1 && dut.exc_phase_index == 4'd8)  ||
+         (2'(dut.u_measurement_fsm.point_q) == 2'd2 && dut.exc_phase_index == 4'd4)  ||
+         (2'(dut.u_measurement_fsm.point_q) == 2'd3 && dut.exc_phase_index == 4'd12));
   endproperty
   assert property (p_sample_req_exact_phase_match)
     else $error("SAMPLE_REQ_FAIL: sample_req_o rose without an exact phase-index match for its state");
@@ -234,21 +237,28 @@ module tb_agriasic_digital_top;
   // safety-margin check, not a restatement of the clamp: it would catch a
   // bug in the clamp itself, or a wider ADC_WIDTH parameterization that
   // widened the per-pair delta without re-deriving this bound.
+  // Rev 5: all FOUR accumulators obey the same bound -- the second channel
+  // does not relax it, since each accumulates its own +/-255-bounded delta.
   localparam int signed ACC_SAFE_MAX = 16320;
-  property p_i_acc_in_range;
+  property p_acc_in_range;
     @(posedge clk) disable iff (!rst_n)
-      (dut.u_measurement_fsm.i_acc_q <= ACC_SAFE_MAX) &&
-      (dut.u_measurement_fsm.i_acc_q >= -ACC_SAFE_MAX);
+      (dut.u_measurement_fsm.dv_i_q  <= ACC_SAFE_MAX) && (dut.u_measurement_fsm.dv_i_q  >= -ACC_SAFE_MAX) &&
+      (dut.u_measurement_fsm.dv_q_q  <= ACC_SAFE_MAX) && (dut.u_measurement_fsm.dv_q_q  >= -ACC_SAFE_MAX) &&
+      (dut.u_measurement_fsm.cur_i_q <= ACC_SAFE_MAX) && (dut.u_measurement_fsm.cur_i_q >= -ACC_SAFE_MAX) &&
+      (dut.u_measurement_fsm.cur_q_q <= ACC_SAFE_MAX) && (dut.u_measurement_fsm.cur_q_q >= -ACC_SAFE_MAX);
   endproperty
-  property p_q_acc_in_range;
+  assert property (p_acc_in_range)
+    else $error("ACC_RANGE_FAIL: an accumulator exceeded the +/-16320 safe bound");
+
+  // Rev 5: the analog mux must be stable for the whole conversion it belongs
+  // to -- a mux change between the settle wait and the last bit trial would
+  // digitise a mixture of the two channels.
+  property p_mux_stable_during_conversion;
     @(posedge clk) disable iff (!rst_n)
-      (dut.u_measurement_fsm.q_acc_q <= ACC_SAFE_MAX) &&
-      (dut.u_measurement_fsm.q_acc_q >= -ACC_SAFE_MAX);
+      (3'(dut.u_sar_controller.state_q) != 3'd0) |-> $stable(mux_sel_o);
   endproperty
-  assert property (p_i_acc_in_range)
-    else $error("ACC_RANGE_FAIL: i_acc_q exceeded the +/-16320 safe bound");
-  assert property (p_q_acc_in_range)
-    else $error("ACC_RANGE_FAIL: q_acc_q exceeded the +/-16320 safe bound");
+  assert property (p_mux_stable_during_conversion)
+    else $error("MUX_FAIL: afe_mux_sel_o changed during a conversion");
 
   initial begin
     // Initialize DUT inputs.
@@ -277,15 +287,20 @@ module tb_agriasic_digital_top;
       @(posedge clk);
 
       if (done_o) begin
-        if (result_i_o !== EXPECTED_I) begin
-          $error("SMOKE_FAIL: expected I=%0d got=%0d", EXPECTED_I, result_i_o);
-        end else if (result_q_o !== EXPECTED_Q) begin
-          $error("SMOKE_FAIL: expected Q=%0d got=%0d", EXPECTED_Q, result_q_o);
+        if (result_dv_i_o !== EXPECTED_I) begin
+          $error("SMOKE_FAIL: expected I=%0d got=%0d", EXPECTED_I, result_dv_i_o);
+        end else if (result_dv_q_o !== EXPECTED_Q) begin
+          $error("SMOKE_FAIL: expected Q=%0d got=%0d", EXPECTED_Q, result_dv_q_o);
+        end else if (result_cur_i_o !== EXPECTED_CUR_I) begin
+          $error("SMOKE_FAIL: expected cur_I=%0d got=%0d", EXPECTED_CUR_I, result_cur_i_o);
+        end else if (result_cur_q_o !== EXPECTED_CUR_Q) begin
+          $error("SMOKE_FAIL: expected cur_Q=%0d got=%0d", EXPECTED_CUR_Q, result_cur_q_o);
         end else if (phase_match_errors != 0) begin
           $error("SMOKE_FAIL: result correct but %0d sample(s) landed on the wrong phase_index",
                  phase_match_errors);
         end else begin
-          $display("SMOKE_PASS: I=%0d Q=%0d (phase-match checked, 0 errors)", result_i_o, result_q_o);
+          $display("SMOKE_PASS: dV I=%0d Q=%0d  cur I=%0d Q=%0d (phase-match checked, 0 errors)",
+                   result_dv_i_o, result_dv_q_o, result_cur_i_o, result_cur_q_o);
         end
         $finish;
       end

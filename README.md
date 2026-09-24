@@ -164,7 +164,9 @@ neither of which lives in this repo. See `tb/rv32i_regression/` for those script
 
 | Check | Result |
 | --- | --- |
-| SPI-flash boot (`tb_agriasic_flash_boot`) | pass: empty IMEM loaded from a behavioural NOR in 65.7k cycles, image matches word-for-word, sweep runs; corrupted CRC -> error 3 / core held; blank flash -> error 1; restored image boots again |
+| Measurement smoke (`tb_agriasic_digital_top`) | pass, dV I=480 Q=320 and current I=360 Q=240 — the two channels use deliberately different targets, so a swapped analog mux fails |
+| Boot: golden ROM + flash (`tb_agriasic_flash_boot`) | pass: ROM boot with the flash blanked (150 cycles, IMEM matches the golden image word for word, firmware runs), IMEM still writable afterwards, BOOT_CTRL overrides the strap in both directions |
+| SPI-flash boot, same suite | pass: empty IMEM loaded from a behavioural NOR in 65.7k cycles, image matches word-for-word, sweep runs; corrupted CRC -> error 3 / core held; blank flash -> error 1; restored image boots again |
 | JTAG / debug module (`tb_agriasic_jtag`) | pass: IDCODE, DM activation, halt during `wfi`, `dpc`/`sp` abstract reads, SBA to RAM/IMEM/MMIO + `sberror` on unmapped, resume with correct sweep results read over the SBA, `ndmreset`/`havereset` handshake |
 | Processor — rv32ui ISA suite + dhrystone | **Superseded.** The Penn core was replaced by lowRISC Ibex (see "Ibex core swap"); the cocotb harness targeted the retired core. Ibex carries its own riscv-dv/Spike verification upstream |
 | Measurement smoke (`tb_agriasic_digital_top`) | pass, I=480 Q=320, every sample (16 of them) phase-matched exactly (0 errors) |
@@ -231,20 +233,42 @@ speaks Ibex's OBI handshake with full address decode; firmware boots through a
 32-entry vector table at 0x0 with reset at 0x80, sleeps in `wfi` during each
 measurement, and signals completion with `CTRL.FW_DONE` instead of `ecall`.
 Phase 2 then added the **RISC-V debug module**: pulp `riscv-dbg` (JTAG DTM +
-DM, Debug Spec 0.13) behind five new chip pins (`jtag_tck/tms/trst_n/tdi/tdo`),
+DM, Debug Spec 0.13) behind five new chip pins (`gpio_jtag_tck/tms/trst_n/tdi/tdo`),
 a small interconnect (`agriasic_rv32i_bus.sv`) giving the debugger one flat
 map — IMEM `0x0` (now loadable), **DMEM relocated to `0x0001_0000`**, DM
 `0x1A11_0000`, MMIO `0x8000_0000` — and an OpenOCD config in `fw/`. Full
 detail in `agriasic_digital_v2/README.md`, "Processor provenance" and
 "Debug (Phase 2)".
 
+**Rev 5 adapts the measurement engine to the tetrapolar analog front end:**
+excitation is a 16-point cosine to a sine DAC on E1 (no more square-wave
+drive pair), and every measurement now returns TWO complex results — the
+differential voltage across E2/E3 and the return current at E4 — sampled by
+one shared strobe and digitised through an analog mux into one SAR ADC. A
+host computes Z(f) = dV(f) / I(f). See `agriasic_digital_v2/README.md`,
+"Tetrapolar analog interface".
+
+**Boot defaults to an on-die golden ROM.** With the `BOOT_SEL` strap low --
+an unstrapped pin with a pull-down -- the boot loader shadow-loads a
+synthesized, known-good firmware image into the IMEM SRAM in ~150 cycles and
+releases the core, so a bare chip with no flash and no host runs on its own.
+Strapping high boots from external SPI flash instead. Because the image is
+copied *into RAM* rather than fetched from ROM, IMEM stays patchable over JTAG
+in either mode -- config parameters can be changed at the bench without a
+rebuild or a reflash. `BOOT_CTRL` overrides the strap both ways.
+
 Phase 3 added **autonomous boot from external SPI flash** (Option C):
 `agriasic_spi_boot.sv` reads a header + CRC-32 image into program memory at
 reset and releases the core only on a good image; a bad image holds the core
-and raises `boot_fail_o`, and the debugger (or a host) can load IMEM and
+and raises `gpio_boot_fail_o`, and the debugger (or a host) can load IMEM and
 release it instead. After boot the SPI master is a firmware peripheral so the
-chip can rewrite its own flash. Six more pins: `boot_sel_i`, four flash SPI
-pins, `boot_fail_o`.
+chip can rewrite its own flash. Six more pins: `gpio_boot_sel_i`, four flash SPI
+pins, `gpio_boot_fail_o`.
+
+All boundary-module ports are now prefixed by destination: `afe_` into the
+analog front end, `gpio_` off the die, `dbg_` observability only (never
+bonded); `clk` and `rst_n` are the only unprefixed pins. Leaf modules keep
+unprefixed names on purpose.
 
 **Phase 2 (clock and reset discipline) is also done.** A 2FF reset
 synchronizer (`rst_sync.sv`, async assert / sync deassert) sits in each

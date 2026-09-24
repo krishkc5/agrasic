@@ -23,11 +23,13 @@ module tb_sar_bit_trial;
   logic clk = 1'b0;
   logic rst_n = 1'b0;
   logic sample_req_i = 1'b0;
-  logic sample_phase_i = 1'b0;
+  logic take_sample_i = 1'b1;
+  logic [1:0] channel_i = 2'd0;
   logic [7:0] conv_cycles_i = 8'd2;  // regeneration wait per bit trial
 
   logic conv_start_o, sample_done_o, busy_o;
-  logic [ADC_WIDTH-1:0] d_plus_o, d_minus_o;
+  logic [ADC_WIDTH-1:0] code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o, adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
@@ -43,13 +45,15 @@ module tb_sar_bit_trial;
     .clk            (clk),
     .rst_n          (rst_n),
     .sample_req_i   (sample_req_i),
-    .sample_phase_i (sample_phase_i),
+    .take_sample_i  (take_sample_i),
+    .channel_i      (channel_i),
+    .mux_settle_cycles_i (8'd2),
     .conv_cycles_i  (conv_cycles_i),
     .conv_start_o   (conv_start_o),
     .sample_done_o  (sample_done_o),
     .busy_o         (busy_o),
-    .d_plus_o       (d_plus_o),
-    .d_minus_o      (d_minus_o),
+    .code_o         (code_o),
+    .mux_sel_o      (mux_sel_o),
     .adc_enable_o   (adc_enable_o),
     .adc_sample_o   (adc_sample_o),
     .adc_dac_o      (adc_dac_o),
@@ -72,7 +76,7 @@ module tb_sar_bit_trial;
     logic [ADC_WIDTH-1:0] got;
     begin
       target_code    = target;
-      sample_phase_i = phase;
+      channel_i = {1'b0, phase};   // reuse the sweep's phase bit as the mux channel
       @(negedge clk);
       sample_req_i = 1'b1;
       @(negedge clk);
@@ -85,13 +89,16 @@ module tb_sar_bit_trial;
       if (!sample_done_o) begin
         $error("SAR_TIMEOUT: target=%0d phase=%0d did not complete in %0d cycles", target, phase, budget);
         errors++;
+      end else if (mux_sel_o !== {1'b0, phase}) begin
+        $error("MUX_FAIL: requested channel %0d but mux_sel_o = %0d", phase, mux_sel_o);
+        errors++;
       end else begin
-        got = phase ? d_plus_o : d_minus_o;
+        got = code_o;
         if (got !== target) begin
           $error("SAR_MISMATCH: target=%0d phase=%0d got=%0d", target, phase, got);
           errors++;
         end else begin
-          $display("[TB]   target=%0d phase=%0d -> converged=%0d OK (%0d cycles)", target, phase, got, n);
+          $display("[TB]   target=%0d channel=%0d -> converged=%0d OK (%0d cycles)", target, phase, got, n);
         end
       end
       sample_req_i = 1'b0;

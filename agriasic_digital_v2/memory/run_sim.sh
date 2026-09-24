@@ -7,7 +7,7 @@ python3 "$BASE/memory/prepare_sim.py"
 cp "$BASE/memory/build/tb_memory_generated.sv" "$BUILD/"
 cp "$BASE/fw/agriasic_fw.hex" "$BUILD/"
 cp "$BASE"/rtl/*.sv "$BASE"/rtl/ctrl/*.sv "$BUILD/"
-cp "$BASE"/rtl/rv32i/agriasic_imem.sv "$BASE"/rtl/rv32i/agriasic_dmem.sv "$BASE"/rtl/rv32i/agriasic_rv32i_mmio.sv "$BASE"/rtl/rv32i/agriasic_rv32i_bus.sv "$BASE"/rtl/rv32i/agriasic_spi_boot.sv "$BUILD/"
+cp "$BASE"/rtl/rv32i/agriasic_imem.sv "$BASE"/rtl/rv32i/agriasic_dmem.sv "$BASE"/rtl/rv32i/agriasic_rv32i_mmio.sv "$BASE"/rtl/rv32i/agriasic_rv32i_bus.sv "$BASE"/rtl/rv32i/agriasic_spi_boot.sv "$BASE"/rtl/rv32i/agriasic_boot_rom.sv "$BUILD/"
 cp -r "$BASE/rtl/ibex" "$BUILD/ibex"
 cp -r "$BASE/rtl/riscv-dbg" "$BUILD/riscv-dbg"
 cd "$BUILD"
@@ -21,7 +21,7 @@ verilator --binary --timing --assert -j 4 -Wno-fatal \
  tb_memory_generated.sv agriasic_digital_rv32i_top.sv \
  agriasic_rv32i_control_shell.sv agriasic_digital_top.sv rst_sync.sv \
  measurement_fsm.sv excitation_ctrl.sv sar_controller.sv \
- agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv \
+ agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv agriasic_boot_rom.sv \
  > "$BASE/memory/build/build.log" 2>&1
 ./obj_dir/sim_memory > "$BASE/memory/results/simulation.log" 2>&1
 cp accesses.csv "$BASE/memory/results/"

@@ -42,21 +42,29 @@
 //   to 0x0001_0000 so a debugger's single address space has no overlap
 //   between the two memories (firmware SP / result addresses moved with it).
 //
-// Boot (Phase 3, Option C):
-//   agriasic_spi_boot is a fourth bus master. With boot_sel_i = 1 it reads a
-//   header + CRC-32 firmware image from the external SPI flash into IMEM
-//   after reset and then asserts fw_valid; the core is held in reset until
-//   fw_valid AND start_i are both high. With boot_sel_i = 0 the flash is
-//   left alone and fw_valid waits for BOOT_CTRL.release (debugger over the
-//   SBA, or a host), unless IMEM_PRELOADED (simulation) is set. boot_fail_o
-//   is raised on a bad magic/length/CRC/bus error. After boot the same SPI
-//   engine is a firmware peripheral (SPI_CTRL/SPI_DATA) for reflashing.
+// Boot:
+//   agriasic_spi_boot is a fourth bus master, and the IMEM SRAM is loaded
+//   from one of two sources selected by the BOOT_SEL strap:
+//     0 (default)  the GOLDEN image, shadow-loaded from the on-die
+//                  synthesized boot ROM (agriasic_boot_rom) -- a bare chip
+//                  with no flash and no host starts and runs on its own
+//     1            an image from external SPI flash, header + CRC-32 checked
+//   Either way the core fetches from the SRAM, never from the ROM, so IMEM
+//   stays writable after boot: a debugger can halt, patch a constant over
+//   JTAG and resume without rebuilding or reflashing. That is why this is a
+//   shadow-load and not a fetch-path mux -- the mux would have cost timing on
+//   the fetch path AND given up patchability in ROM mode.
+//   The core is held in reset until fw_valid AND gpio_start_i are both high.
+//   gpio_boot_fail_o is raised on a bad magic/length/CRC/bus error (a ROM copy can
+//   only fail on a bus error). BOOT_CTRL overrides the strap in both
+//   directions. After boot the same SPI engine is a firmware peripheral
+//   (SPI_CTRL/SPI_DATA) for reflashing.
 //
 // Run control:
-//   The core is held in reset while start_i is low or fw_valid is low
-//   (reported to the DM as `unavailable`, so a debugger must raise start_i
+//   The core is held in reset while gpio_start_i is low or fw_valid is low
+//   (reported to the DM as `unavailable`, so a debugger must raise gpio_start_i
 //   and release the boot before it can halt the hart) and boots from
-//   boot_addr_i + 0x80 = 0x80 when start_i is asserted (Ibex convention: the
+//   boot_addr_i + 0x80 = 0x80 when gpio_start_i is asserted (Ibex convention: the
 //   32-entry trap vector table occupies 0x00-0x7F, mtvec = boot_addr_i).
 //   Holding the core in reset between runs is also the power-saving state.
 //
@@ -93,15 +101,21 @@
 module agriasic_rv32i_control_shell #(
   parameter int unsigned ADC_WIDTH         = 8,
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait (~5 ms at 160 MHz)
+  parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
+  parameter int unsigned ROM_USED_WORDS    = 148,      // words the golden image occupies
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation: IMEM filled by $readmemh
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation preload ("" = none)
 ) (
   input  logic                 clk,
   input  logic                 rst_n,
-  input  logic                 start_i,
+  input  logic                 gpio_start_i,
   input  logic                 measurement_done_i,
-  input  logic signed [15:0]   measurement_result_i_i,  // I channel (Rev 4.3 Phase 5)
-  input  logic signed [15:0]   measurement_result_q_i,  // Q channel (Rev 4.3 Phase 5)
+  // Rev 5: two channels. dV = differential voltage (PGA on E2/E3),
+  // cur = return current (TIA on E4). Z(f) = dV(f) / I(f), computed host-side.
+  input  logic signed [15:0]   measurement_result_dv_i_i,
+  input  logic signed [15:0]   measurement_result_dv_q_i,
+  input  logic signed [15:0]   measurement_result_cur_i_i,
+  input  logic signed [15:0]   measurement_result_cur_q_i,
 
   output logic                 busy_o,
   output logic                 done_o,
@@ -112,23 +126,29 @@ module agriasic_rv32i_control_shell #(
   output logic [7:0]           cfg_settle_cycles_o,
   output logic [13:0]          cfg_exc_divider_o,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
   output logic [7:0]           cfg_conv_cycles_o,
-  output logic signed [15:0]   result_i_o,  // Rev 4.3 Phase 5: I channel
-  output logic signed [15:0]   result_q_o,  // Rev 4.3 Phase 5: Q channel
+  output logic [7:0]           cfg_mux_settle_o,   // Rev 5
+  output logic [1:0]           cfg_amplitude_o,    // Rev 5
+  output logic [1:0]           afe_pga_gain_o,     // Rev 5 (analog control)
+  output logic [1:0]           afe_tia_rf_o,       // Rev 5 (analog control)
+  output logic signed [15:0]   result_dv_i_o,
+  output logic signed [15:0]   result_dv_q_o,
+  output logic signed [15:0]   result_cur_i_o,
+  output logic signed [15:0]   result_cur_q_o,
 
   // JTAG (Phase 2): 5-wire, IEEE 1149.1 TAP inside dmi_jtag
-  input  logic                 jtag_tck_i,
-  input  logic                 jtag_tms_i,
-  input  logic                 jtag_trst_ni,
-  input  logic                 jtag_tdi_i,
-  output logic                 jtag_tdo_o,
+  input  logic                 gpio_jtag_tck_i,
+  input  logic                 gpio_jtag_tms_i,
+  input  logic                 gpio_jtag_trst_ni,
+  input  logic                 gpio_jtag_tdi_i,
+  output logic                 gpio_jtag_tdo_o,
 
   // Boot from SPI flash (Phase 3)
-  input  logic                 boot_sel_i,      // 1: boot from flash, 0: wait for release
-  output logic                 flash_sck_o,
-  output logic                 flash_cs_n_o,
-  output logic                 flash_mosi_o,
-  input  logic                 flash_miso_i,
-  output logic                 boot_fail_o
+  input  logic                 gpio_boot_sel_i,      // 1: boot from flash, 0: wait for release
+  output logic                 gpio_flash_sck_o,
+  output logic                 gpio_flash_cs_n_o,
+  output logic                 gpio_flash_mosi_o,
+  input  logic                 gpio_flash_miso_i,
+  output logic                 gpio_boot_fail_o
 );
 
   // ADC_WIDTH is retained for interface compatibility; the control core does
@@ -161,7 +181,7 @@ module agriasic_rv32i_control_shell #(
   // --------------------------------------------------------------------------
   // Core reset control
   //
-  // Registering !start_i gives a glitch-free, synchronously released reset
+  // Registering !gpio_start_i gives a glitch-free, synchronously released reset
   // for the core. Ibex resets asynchronously (rst_ni), so the flop output is
   // used directly.
   // --------------------------------------------------------------------------
@@ -180,7 +200,7 @@ module agriasic_rv32i_control_shell #(
     if (!rst_n) begin
       core_rst <= 1'b1;
     end else begin
-      core_rst <= !(start_i && fw_valid);
+      core_rst <= !(gpio_start_i && fw_valid);
     end
   end
 
@@ -247,7 +267,8 @@ module agriasic_rv32i_control_shell #(
   logic [31:0] boot_addr, boot_wdata, boot_rdata;
 
   // Boot / SPI-master register plumbing
-  logic        boot_release, boot_retry, spi_ctrl_we, spi_data_we;
+  logic        boot_release, boot_retry, boot_rom_req, spi_ctrl_we, spi_data_we;
+  logic [31:0] rom_addr, rom_data;
   logic [15:0] spi_ctrl_wdata;
   logic [7:0]  spi_data_wdata, spi_rx;
   logic [31:0] boot_status, spi_ctrl_rd, spi_status;
@@ -484,14 +505,21 @@ module agriasic_rv32i_control_shell #(
     .cfg_settle_cycles_o (cfg_settle_cycles_o),
     .cfg_exc_divider_o   (cfg_exc_divider_o),
     .cfg_conv_cycles_o   (cfg_conv_cycles_o),
+    .cfg_mux_settle_o    (cfg_mux_settle_o),
+    .cfg_amplitude_o     (cfg_amplitude_o),
+    .cfg_pga_gain_o      (afe_pga_gain_o),
+    .cfg_tia_rf_o        (afe_tia_rf_o),
     .fw_done_o           (fw_done),
     .trap_seen_o         (trap_seen),
     .meas_done_irq_o     (meas_done_irq),
     .done_i              (measurement_done_i),
-    .result_i_i          (measurement_result_i_i),
-    .result_q_i          (measurement_result_q_i),
+    .result_dv_i_i       (measurement_result_dv_i_i),
+    .result_dv_q_i       (measurement_result_dv_q_i),
+    .result_cur_i_i      (measurement_result_cur_i_i),
+    .result_cur_q_i      (measurement_result_cur_q_i),
     .boot_release_o      (boot_release),
     .boot_retry_o        (boot_retry),
+    .boot_rom_o          (boot_rom_req),
     .spi_ctrl_we_o       (spi_ctrl_we),
     .spi_ctrl_wdata_o    (spi_ctrl_wdata),
     .spi_data_we_o       (spi_data_we),
@@ -507,18 +535,31 @@ module agriasic_rv32i_control_shell #(
   // ndmreset: the debugger's reset must not restart a flash boot underneath
   // an image it just loaded.
   // --------------------------------------------------------------------------
+  // Golden image, synthesized as a constant table (generated from
+  // fw/golden/agriasic_fw_golden.hex by fw/gen_boot_rom.py). Combinational:
+  // the copier registers the data on its way into the SRAM.
+  agriasic_boot_rom #(
+    .NUM_WORDS (ROM_WORDS)
+  ) u_boot_rom (
+    .addr_i (rom_addr),
+    .data_o (rom_data)
+  );
+
   agriasic_spi_boot #(
     .IMEM_BYTES        (IMEM_BYTES),
     .BOOT_DELAY_CYCLES (BOOT_DELAY_CYCLES),
-    .IMEM_PRELOADED    (IMEM_PRELOADED)
+    .IMEM_PRELOADED    (IMEM_PRELOADED),
+    .ROM_USED_WORDS    (ROM_USED_WORDS)
   ) u_boot (
     .clk              (clk),
     .rst_n            (rst_n),
-    .boot_sel_i       (boot_sel_i),
-    .spi_sck_o        (flash_sck_o),
-    .spi_cs_n_o       (flash_cs_n_o),
-    .spi_mosi_o       (flash_mosi_o),
-    .spi_miso_i       (flash_miso_i),
+    .boot_sel_i       (gpio_boot_sel_i),
+    .rom_addr_o       (rom_addr),
+    .rom_data_i       (rom_data),
+    .spi_sck_o        (gpio_flash_sck_o),
+    .spi_cs_n_o       (gpio_flash_cs_n_o),
+    .spi_mosi_o       (gpio_flash_mosi_o),
+    .spi_miso_i       (gpio_flash_miso_i),
     .bus_req_o        (boot_req),
     .bus_we_o         (boot_we),
     .bus_be_o         (boot_be),
@@ -529,9 +570,10 @@ module agriasic_rv32i_control_shell #(
     .bus_rdata_i      (boot_rdata),
     .bus_err_i        (boot_err),
     .fw_valid_o       (fw_valid),
-    .boot_fail_o      (boot_fail_o),
+    .boot_fail_o      (gpio_boot_fail_o),
     .ctrl_release_i   (boot_release),
     .ctrl_retry_i     (boot_retry),
+    .ctrl_boot_rom_i  (boot_rom_req),
     .spi_ctrl_we_i    (spi_ctrl_we),
     .spi_ctrl_wdata_i (spi_ctrl_wdata),
     .spi_data_we_i    (spi_data_we),
@@ -558,11 +600,11 @@ module agriasic_rv32i_control_shell #(
     .dmi_resp_i       (dmi_resp),
     .dmi_resp_ready_o (dmi_resp_ready),
     .dmi_resp_valid_i (dmi_resp_valid),
-    .tck_i            (jtag_tck_i),
-    .tms_i            (jtag_tms_i),
-    .trst_ni          (jtag_trst_ni),
-    .td_i             (jtag_tdi_i),
-    .td_o             (jtag_tdo_o),
+    .tck_i            (gpio_jtag_tck_i),
+    .tms_i            (gpio_jtag_tms_i),
+    .trst_ni          (gpio_jtag_trst_ni),
+    .td_i             (gpio_jtag_tdi_i),
+    .td_o             (gpio_jtag_tdo_o),
     .tdo_oe_o         ()
   );
 
@@ -581,7 +623,7 @@ module agriasic_rv32i_control_shell #(
     .ndmreset_ack_i       (ndmreset_ack),
     .dmactive_o           (),
     .debug_req_o          (debug_req),
-    .unavailable_i        (core_rst),        // hart held in reset while start_i is low
+    .unavailable_i        (core_rst),        // hart held in reset while gpio_start_i is low
     .hartinfo_i           (HART_INFO),
     // Slave: debug ROM / program buffer / data0..1 / flags, via the bus
     .slave_req_i          (dm_req),
@@ -617,24 +659,31 @@ module agriasic_rv32i_control_shell #(
   // Latch both measurement results so result_i_o/result_q_o stay stable after
   // done, matching the earlier shells' behavior.
   // --------------------------------------------------------------------------
-  logic signed [15:0] result_i_q;
-  logic signed [15:0] result_q_q;
+  logic signed [15:0] result_dv_i_q, result_dv_q_q, result_cur_i_q, result_cur_q_q;
 
   always_ff @(posedge clk or negedge sys_rst_n) begin
     if (!sys_rst_n) begin
-      result_i_q <= 16'd0;
-      result_q_q <= 16'd0;
-    end else if (!start_i) begin
-      result_i_q <= 16'd0;
-      result_q_q <= 16'd0;
+      result_dv_i_q  <= 16'd0;
+      result_dv_q_q  <= 16'd0;
+      result_cur_i_q <= 16'd0;
+      result_cur_q_q <= 16'd0;
+    end else if (!gpio_start_i) begin
+      result_dv_i_q  <= 16'd0;
+      result_dv_q_q  <= 16'd0;
+      result_cur_i_q <= 16'd0;
+      result_cur_q_q <= 16'd0;
     end else if (measurement_done_i) begin
-      result_i_q <= measurement_result_i_i;
-      result_q_q <= measurement_result_q_i;
+      result_dv_i_q  <= measurement_result_dv_i_i;
+      result_dv_q_q  <= measurement_result_dv_q_i;
+      result_cur_i_q <= measurement_result_cur_i_i;
+      result_cur_q_q <= measurement_result_cur_q_i;
     end
   end
 
-  assign result_i_o = result_i_q;
-  assign result_q_o = result_q_q;
+  assign result_dv_i_o  = result_dv_i_q;
+  assign result_dv_q_o  = result_dv_q_q;
+  assign result_cur_i_o = result_cur_i_q;
+  assign result_cur_q_o = result_cur_q_q;
   assign done_o     = fw_done;                       // firmware wrote CTRL.FW_DONE
   assign busy_o     = !core_rst && !fw_done;         // program running
 

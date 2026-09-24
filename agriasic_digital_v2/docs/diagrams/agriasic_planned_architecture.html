@@ -1,4 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="790" viewBox="0 0 1600 790" role="img" aria-labelledby="t d">
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriASIC Die Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --bg:#161a16; --panel:#1c211c; --line:#2f362f; --text:#e6e9e4; --muted:#9aa39a;
+    --amber:#e0b84a; --cyan:#6fc9e8; --indigo:#6b6fe0; --red:#e06b6b; --green:#9fd8a4;
+    --sans:"IBM Plex Sans",system-ui,"Segoe UI",Arial,sans-serif;
+    --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+    --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  }
+  html{color-scheme:dark}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0;padding-block:28px 48px;padding-inline:clamp(16px,3vw,40px)}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 24px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}
+  h1{font-family:var(--cond);font-weight:600;font-size:clamp(24px,3vw,32px);letter-spacing:.2px;margin:0;text-wrap:balance}
+  .sub{color:var(--muted);font-family:var(--mono);font-size:12.5px;letter-spacing:.4px}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow-x:auto;padding:6px}
+  .sheet svg{display:block;width:100%;min-width:1100px;height:auto}
+  .band{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:22px;margin-top:26px}
+  @media (max-width:900px){.band{grid-template-columns:1fr}}
+  h2{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+  ul.chg{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+  ul.chg li{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start}
+  .tag{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.6px;padding:2px 6px;border-radius:3px;color:var(--text);background:#2c3346;border:1px solid #454d66;text-align:center;margin-top:3px}
+  .tag.chg{background:#c9a13c} .tag.del{background:var(--red)} .tag.same{background:#5a605a;color:var(--text)}
+  li b{font-weight:500;color:var(--text)} li span{color:var(--muted)}
+  code{font-family:var(--mono);font-size:12.5px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-family:var(--cond);font-weight:500;letter-spacing:.6px;text-transform:uppercase;font-size:11.5px}
+  td.a{font-family:var(--mono);color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.m{color:var(--muted)}
+  .pads{margin:14px 0 0;color:var(--muted);font-size:13.5px}
+  ol.boot{margin:0;padding:0;list-style:none;display:grid;counter-reset:s}
+  ol.boot li{position:relative;padding:6px 0 10px 26px;border-left:1px solid var(--line);margin-left:9px}
+  ol.boot li::before{counter-increment:s;content:counter(s);position:absolute;left:-10px;top:8px;width:19px;height:19px;border-radius:50%;background:var(--panel);border:1px solid var(--amber);color:var(--amber);font-family:var(--mono);font-size:10.5px;display:grid;place-items:center}
+  ol.boot li.fail::before{border-color:var(--red);color:var(--red)}
+  ol.boot code{color:var(--cyan)}
+  .note{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;max-width:70ch}
+  .note code{color:var(--text)}
+</style>
+</head>
+<body>
+
+
+<header>
+  <h1>AgriASIC digital die</h1>
+  <div class="sub">planned architecture · tetrapolar analog front end</div>
+</header>
+
+<div class="sheet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 790" role="img" aria-labelledby="t d">
   <title id="t">AgriASIC planned die architecture</title>
   <desc id="d">Block diagram of the planned AgriASIC single-die impedance sensing node: Ibex RV32IMC control core, bus interconnect with a flat address map, loadable program memory, RISC-V debug module over JTAG, SPI boot master reading firmware from external flash, memory-mapped registers driving the phase-locked measurement engine, and a tetrapolar analog front end: sine DAC and drive buffer on E1, high-impedance differential PGA on E2/E3, transimpedance amplifier on E4, two phase-locked sample-and-holds, an analog mux and a shared 8-bit differential SAR ADC, all referenced to a 0.9 V common mode.</desc>
   <defs>
@@ -271,3 +326,10 @@
   <text x="1122" y="628" class="sig">VREFH · VREFL · VCM · V_EXC</text>
 
 </svg>
+
+</div>
+
+<p class="note">Analog front end is tetrapolar: the sine DAC and drive buffer excite E1, the high-impedance differential PGA reads E2 − E3, the TIA converts the return current at E4, and two phase-locked sample-and-holds feed one differential SAR ADC through the mux, all about VCM = 0.9 V. The digital side computes Z(f) = ΔV(f) / I(f) from the two channels. <b>Open decision:</b> simultaneous S/H on both channels (preserves V/I phase directly, two matched switches) versus alternating cycles phase-locked to the same counter (one S/H, longer measurement). The drawing shows the simultaneous option.</p>
+
+</body>
+</html>

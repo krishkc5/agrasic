@@ -41,16 +41,18 @@ module tb_accum_edge_cases;
   logic [13:0] cfg_exc_divider_i;
   logic [7:0]  cfg_conv_cycles_i;
   logic conv_start_o;
-  logic exc_drive_p_o;
-  logic exc_drive_n_o;
+  logic [ADC_WIDTH-1:0] sine_code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o;
   logic adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
   logic busy_o;
   logic done_o;
-  logic signed [15:0] result_i_o;
-  logic signed [15:0] result_q_o;
+  logic signed [15:0] result_dv_i_o;
+  logic signed [15:0] result_dv_q_o;
+  logic signed [15:0] result_cur_i_o;
+  logic signed [15:0] result_cur_q_o;
 
   // Behavioral-model targets, settable per run before each start pulse.
   logic [ADC_WIDTH-1:0] d0_target_q, d90_target_q, d180_target_q, d270_target_q;
@@ -65,17 +67,21 @@ module tb_accum_edge_cases;
     .cfg_settle_cycles_i(cfg_settle_cycles_i),
     .cfg_exc_divider_i(cfg_exc_divider_i),
     .cfg_conv_cycles_i(cfg_conv_cycles_i),
-    .conv_start_o(conv_start_o),
-    .exc_drive_p_o(exc_drive_p_o),
-    .exc_drive_n_o(exc_drive_n_o),
-    .adc_enable_o(adc_enable_o),
-    .adc_sample_o(adc_sample_o),
-    .adc_dac_o(adc_dac_o),
-    .adc_comp_i(adc_comp_i),
+    .cfg_mux_settle_i(8'd2),
+    .cfg_amplitude_i(2'd0),
+    .afe_conv_start_o(conv_start_o),
+    .afe_sine_code_o(sine_code_o),
+    .afe_mux_sel_o(mux_sel_o),
+    .afe_adc_enable_o(adc_enable_o),
+    .afe_sample_o(adc_sample_o),
+    .afe_adc_dac_o(adc_dac_o),
+    .afe_adc_comp_i(adc_comp_i),
     .busy_o(busy_o),
     .done_o(done_o),
-    .result_i_o(result_i_o),
-    .result_q_o(result_q_o)
+    .result_dv_i_o(result_dv_i_o),
+    .result_dv_q_o(result_dv_q_o),
+    .result_cur_i_o(result_cur_i_o),
+    .result_cur_q_o(result_cur_q_o)
   );
 
   always #5 clk = ~clk;
@@ -85,19 +91,25 @@ module tb_accum_edge_cases;
   // the correct thing to key on), but with runtime-settable targets so each
   // case can reconfigure the model between runs.
   //   3=S_SAMPLE_0 5=S_SAMPLE_180 8=S_SAMPLE_90 10=S_SAMPLE_270
-  logic [ADC_WIDTH-1:0] adc_target_held_q;
+  // Rev 5 two-channel AFE model: dV (analog mux channel 0, PGA on E2/E3) and
+  // return current (channel 1, TIA on E4). Both are frozen by the single
+  // adc_sample_o strobe at the FSM's chosen phase point; the comparator then
+  // answers for whichever channel mux_sel selects.
+  logic [ADC_WIDTH-1:0] hold_dv_q, hold_cur_q;
   always_ff @(posedge clk) begin
     if (adc_sample_o) begin
-      unique case (4'(dut.u_measurement_fsm.state_q))
-        4'd3:  adc_target_held_q <= d0_target_q;
-        4'd8:  adc_target_held_q <= d90_target_q;
-        4'd5:  adc_target_held_q <= d180_target_q;
-        4'd10: adc_target_held_q <= d270_target_q;
+      unique case (2'(dut.u_measurement_fsm.point_q))
+        4'd0: begin hold_dv_q <= d0_target_q; hold_cur_q <= d0_target_q; end  // PT_0   (0 deg)
+        4'd1: begin hold_dv_q <= d180_target_q; hold_cur_q <= d180_target_q; end  // PT_180 (180 deg)
+        4'd2: begin hold_dv_q <= d90_target_q; hold_cur_q <= d90_target_q; end  // PT_90  (90 deg)
+        4'd3: begin hold_dv_q <= d270_target_q; hold_cur_q <= d270_target_q; end  // PT_270 (270 deg)
         default: begin end
       endcase
     end
   end
-  assign adc_comp_i = (adc_target_held_q >= adc_dac_o);
+  wire [ADC_WIDTH-1:0] adc_target = (mux_sel_o == 2'd0) ? hold_dv_q : hold_cur_q;
+  assign adc_comp_i = (adc_target >= adc_dac_o);
+
 
   int errors;
 
@@ -135,16 +147,16 @@ module tb_accum_edge_cases;
         $error("ACCUM_EDGE_HANG: case %s did not complete in %0d cycles", label, budget);
         errors++;
       end else begin
-        if (result_i_o !== expected_i) begin
-          $error("ACCUM_EDGE_FAIL: case %s expected I=%0d got=%0d", label, expected_i, result_i_o);
+        if (result_dv_i_o !== expected_i) begin
+          $error("ACCUM_EDGE_FAIL: case %s expected I=%0d got=%0d", label, expected_i, result_dv_i_o);
           errors++;
         end
-        if (result_q_o !== expected_q) begin
-          $error("ACCUM_EDGE_FAIL: case %s expected Q=%0d got=%0d", label, expected_q, result_q_o);
+        if (result_dv_q_o !== expected_q) begin
+          $error("ACCUM_EDGE_FAIL: case %s expected Q=%0d got=%0d", label, expected_q, result_dv_q_o);
           errors++;
         end
-        if (result_i_o === expected_i && result_q_o === expected_q) begin
-          $display("[TB] case %-24s I=%0d Q=%0d (%0d cycles) OK", label, result_i_o, result_q_o, n);
+        if (result_dv_i_o === expected_i && result_dv_q_o === expected_q) begin
+          $display("[TB] case %-24s I=%0d Q=%0d (%0d cycles) OK", label, result_dv_i_o, result_dv_q_o, n);
         end
       end
 

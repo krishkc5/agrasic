@@ -1,7 +1,7 @@
 ELF allocated-memory report: agriasic_fw.elf
-.text: 482 bytes, VMA 0x00000000..0x000001E1, alignment 2
-Allocated section sum: 482 bytes
-Highest occupied byte: 0x000001E1
-Next address (exclusive end): 0x000001E2
-Required address span from origin 0x00000000: 482 bytes (includes gaps)
+.text: 592 bytes, VMA 0x00000000..0x0000024F, alignment 2
+Allocated section sum: 592 bytes
+Highest occupied byte: 0x0000024F
+Next address (exclusive end): 0x00000250
+Required address span from origin 0x00000000: 592 bytes (includes gaps)
 This linker describes IMEM only. Absolute result buffers, stack and heap are not allocated sections.

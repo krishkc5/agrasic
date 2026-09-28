@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3000" viewBox="0 0 5000 3000" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_rv32i_bus</title>
+  <desc id="d">Interconnect block diagram. Masters in priority order: M1 the core data port, M2 the debug system-bus-access master, M3 the boot loader, M0 the core fetch port. Targets: IMEM at 0x0000_0000, DMEM and MMIO at 0x0001_0000 and 0x8000_0000, the debug module at 0x1A11_0000, and an error responder for everything else. Each master reaches only the targets its permissions allow.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="3000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_rv32i_bus</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.15 - four masters, four targets, fixed priority, per-master permissions</text>
+  <rect x="80" y="180" width="4840" height="2700" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="220" y="440" width="1200" height="230" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="246" y="482" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">M1   core data port</text>
+  <text x="246" y="522" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">IMEM  -  DMEM/MMIO  -  DM</text>
+  <line x1="1420" y1="555" x2="1780" y2="555" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="220" y="740" width="1200" height="230" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="246" y="782" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">M2   debug SBA</text>
+  <text x="246" y="822" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">IMEM  -  DMEM/MMIO          (DM -&gt; error)</text>
+  <line x1="1420" y1="855" x2="1780" y2="855" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="220" y="1040" width="1200" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="246" y="1082" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">M3   boot loader</text>
+  <text x="246" y="1122" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">IMEM only                   (else -&gt; error)</text>
+  <line x1="1420" y1="1155" x2="1780" y2="1155" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="220" y="1340" width="1200" height="230" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="246" y="1382" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">M0   core fetch</text>
+  <text x="246" y="1422" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">IMEM  -  DM                 (else -&gt; error)</text>
+  <line x1="1420" y1="1455" x2="1780" y2="1455" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="1780" y="440" width="980" height="1330" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="1806" y="482" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">decode  +  arbitrate</text>
+  <text x="1806" y="522" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="1806" y="552" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">fixed priority, highest first:</text>
+  <text x="1806" y="582" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="1806" y="612" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">    M1   core data</text>
+  <text x="1806" y="642" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">    M2   debug SBA</text>
+  <text x="1806" y="672" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">    M3   boot loader</text>
+  <text x="1806" y="702" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">    M0   core fetch</text>
+  <text x="1806" y="732" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="1806" y="762" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">permissions are enforced in</text>
+  <text x="1806" y="792" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">the decode, not merely</text>
+  <text x="1806" y="822" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">documented: a master that</text>
+  <text x="1806" y="852" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">reaches outside its own set</text>
+  <text x="1806" y="882" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gets a bus error, never a</text>
+  <text x="1806" y="912" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">silent wrong access</text>
+  <line x1="2760" y1="555" x2="3120" y2="555" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="3120" y="440" width="1640" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3146" y="482" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">IMEM</text>
+  <text x="3146" y="522" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0000_0000          4 KiB</text>
+  <line x1="2760" y1="855" x2="3120" y2="855" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="3120" y="740" width="1640" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3146" y="782" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">DMEM  +  MMIO</text>
+  <text x="3146" y="822" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0001_0000  /  0x8000_0000          2 KiB  +  64 B</text>
+  <line x1="2760" y1="1155" x2="3120" y2="1155" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="3120" y="1040" width="1640" height="230" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="3146" y="1082" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Debug module</text>
+  <text x="3146" y="1122" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x1A11_0000          4 KiB</text>
+  <line x1="2760" y1="1455" x2="3120" y2="1455" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="3120" y="1340" width="1640" height="230" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="3146" y="1382" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">error   (no target)</text>
+  <text x="3146" y="1422" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">anything else          bus error -&gt; precise trap</text>
+  <text x="120" y="1930" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">A bus error is not a segmentation fault - there is no OS and no MMU here. The target returns err, Ibex takes it as a precise load/store access fault, and the</text>
+  <text x="120" y="1980" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">trap handler sets CTRL.TRAP_SEEN. The regression asserts that bit never fires, and the instrumented memory audit records zero accesses outside the map.</text>
+</svg>

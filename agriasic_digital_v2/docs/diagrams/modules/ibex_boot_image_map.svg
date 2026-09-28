@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
+  <title id="t">Firmware image layout in IMEM</title>
+  <desc id="d">Memory map of the 592-byte firmware image in instruction memory. 0x000 to 0x07F is the 32-entry trap vector table, 128 bytes: entry 0 is exceptions, entry i is interrupt i, entry 31 is the NMI. 0x080 is _start, which sets the stack pointer, enables mie fast interrupt 0 and calls main. The image ends at 0x250. The rest of the 4 KiB IMEM is unused and filled with NOPs.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2400" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Firmware image layout in IMEM</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.14 - Ibex fetches boot_addr_i + 0x80; the vector table occupies 0x000-0x07F</text>
+  <rect x="80" y="180" width="4840" height="2100" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="780" y="330" width="2880" height="300" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="806" y="372" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">.vectors    32 x  j trap</text>
+  <text x="806" y="412" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">128 B - entry 0 = exceptions, entry i = interrupt i, entry 31 = NMI</text>
+  <text x="740" y="376" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x000</text>
+  <text x="3700" y="376" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">128 B</text>
+  <rect x="780" y="670" width="2880" height="260" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="806" y="712" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">_start</text>
+  <text x="806" y="752" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">li sp, 0x0001_0800   csrw mie, 1&lt;&lt;16 (fast0)   call main</text>
+  <text x="740" y="716" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x080</text>
+  <text x="3700" y="716" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">64 B</text>
+  <rect x="780" y="970" width="2880" height="300" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="806" y="1012" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">main,  run_sweep_point,  store_point</text>
+  <text x="806" y="1052" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">the three-frequency sweep; ends parked in wfi after writing CTRL.FW_DONE</text>
+  <text x="740" y="1016" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x0C0</text>
+  <text x="3700" y="1016" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">400 B</text>
+  <rect x="780" y="1310" width="2880" height="360" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="806" y="1352" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">unused IMEM</text>
+  <text x="806" y="1392" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">filled with 0x0000_0013 (NOP) - 4 KiB instantiated, 592 B used</text>
+  <text x="740" y="1356" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x250</text>
+  <text x="3700" y="1356" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">3504 B</text>
+  <text x="740" y="1720" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x1000</text>
+  <rect x="3900" y="330" width="900" height="700" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="3926" y="372" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Why 0x80</text>
+  <text x="3926" y="412" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">Ibex sets mtvec from</text>
+  <text x="3926" y="444" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">boot_addr_i and begins</text>
+  <text x="3926" y="476" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">execution at</text>
+  <text x="3926" y="508" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">boot_addr_i + 0x80.</text>
+  <text x="3926" y="540" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="3926" y="572" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">boot_addr_i = 0, so the</text>
+  <text x="3926" y="604" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">vector table lands at 0</text>
+  <text x="3926" y="636" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">and _start at 0x80 -</text>
+  <text x="3926" y="668" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">no linker trickery.</text>
+  <rect x="3900" y="1080" width="900" height="420" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="3926" y="1122" font-family="Arial" font-size="22" font-weight="700" fill="#212121" xml:space="preserve">Asserted at link time</text>
+  <text x="3926" y="1162" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">_vectors == 0x0</text>
+  <text x="3926" y="1192" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">_start   == 0x80</text>
+  <text x="3926" y="1222" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">rodata/data/bss empty</text>
+  <text x="3926" y="1252" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve"></text>
+  <text x="3926" y="1282" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">a layout mistake fails</text>
+  <text x="3926" y="1312" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">the build, not the die</text>
+  <text x="120" y="2180" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The whole image is 592 B with no heap, no malloc and no libc; measured stack use is 28 B. That is what makes a synthesized golden ROM viable at all.</text>
+</svg>

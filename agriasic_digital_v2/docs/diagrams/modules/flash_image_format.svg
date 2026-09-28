@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2000" viewBox="0 0 5000 2000" role="img" aria-labelledby="t d">
+  <title id="t">Flash image format</title>
+  <desc id="d">Flash image format. Offset 0 is the magic 0x41475241, the ASCII AGRA, which proves this is our firmware and catches a blank part that reads all ones. Offset 4 is the payload length in bytes. Offset 8 is a version reported in BOOT_STATUS bits 31 to 16. Offset 12 is a CRC-32, zlib or IEEE 802.3, over the payload only. Offset 16 onward is the linker output word for word.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Flash image format</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.18 - 16-byte header at flash address 0, then the linker output verbatim</text>
+  <rect x="80" y="180" width="4840" height="1700" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <text x="700" y="390" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">offset  0</text>
+  <rect x="760" y="330" width="3980" height="220" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="786" y="372" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">magic      0x41475241   "AGRA"</text>
+  <text x="786" y="412" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">proves this is our firmware, and catches a blank part (reads 0xFF..)</text>
+  <text x="700" y="640" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">offset  4</text>
+  <rect x="760" y="580" width="3980" height="220" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="786" y="622" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">length     payload bytes</text>
+  <text x="786" y="662" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">checked against IMEM_BYTES and for 4-byte alignment BEFORE any write</text>
+  <text x="700" y="890" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">offset  8</text>
+  <rect x="760" y="830" width="3980" height="220" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="786" y="872" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">version    reported in BOOT_STATUS[31:16]</text>
+  <text x="786" y="912" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">0 for a ROM boot, since a ROM image carries no header</text>
+  <text x="700" y="1140" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">offset 12</text>
+  <rect x="760" y="1080" width="3980" height="220" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="786" y="1122" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">crc32      zlib / IEEE 802.3</text>
+  <text x="786" y="1162" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">over the PAYLOAD only - checked before the core is ever released</text>
+  <text x="700" y="1390" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">offset 16</text>
+  <rect x="760" y="1330" width="3980" height="260" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="786" y="1372" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">payload    the linker output, word for word</text>
+  <text x="786" y="1412" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">written straight into IMEM through the bus, as master M3</text>
+  <text x="120" y="1720" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The CRC is over the payload only, so a corrupt header fails earlier and more specifically (error 1 or 2) than a corrupt payload (error 3).</text>
+  <text x="120" y="1770" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Verified by tb_agriasic_flash_boot scenarios B (corrupted payload byte) and C (blank flash), which must both leave the core in reset.</text>
+</svg>

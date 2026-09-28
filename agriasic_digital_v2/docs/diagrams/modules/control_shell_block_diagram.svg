@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2620" viewBox="0 0 5000 2620" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_rv32i_control_shell</title>
+  <desc id="d">Block diagram of agriasic_rv32i_control_shell. Chip pins enter on the left: clk, rst_n, gpio_start_i, gpio_boot_sel_i, five JTAG wires and four flash SPI wires. The shell contains the Ibex core, the four-master interconnect, IMEM, the MMIO bridge with DMEM, the boot loader, the golden boot ROM and the riscv-dbg debug module. Measurement-engine configuration and results leave on the right.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2620" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_rv32i_control_shell</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.13 - the control subsystem: Ibex, interconnect, memories, boot, debug</text>
+  <rect x="80" y="180" width="4840" height="2320" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="190" y="300" width="760" height="1060" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="216" y="342" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Chip pins (in)</text>
+  <text x="216" y="382" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">clk</text>
+  <text x="216" y="418" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">rst_n</text>
+  <text x="216" y="454" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_start_i</text>
+  <text x="216" y="490" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_boot_sel_i</text>
+  <text x="216" y="526" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="216" y="562" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tck_i</text>
+  <text x="216" y="598" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tms_i</text>
+  <text x="216" y="634" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_trst_ni</text>
+  <text x="216" y="670" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tdi_i</text>
+  <text x="216" y="706" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="216" y="742" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_flash_miso_i</text>
+  <rect x="190" y="1450" width="760" height="560" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="216" y="1492" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Chip pins (out)</text>
+  <text x="216" y="1532" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tdo_o</text>
+  <text x="216" y="1568" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_boot_fail_o</text>
+  <text x="216" y="1604" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="216" y="1640" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_flash_sck_o</text>
+  <text x="216" y="1676" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_flash_cs_n_o</text>
+  <text x="216" y="1712" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_flash_mosi_o</text>
+  <rect x="1120" y="290" width="2680" height="1980" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="1146" y="332" font-family="Arial" font-size="30" font-weight="700" fill="#212121" xml:space="preserve">control shell</text>
+  <rect x="1190" y="390" width="1180" height="320" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="1216" y="432" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">ibex_top</text>
+  <text x="1216" y="472" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">RV32IMC + Zicsr, 3-stage</text>
+  <text x="1216" y="506" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">RV32MFast multiplier</text>
+  <text x="1216" y="540" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">latch regfile for ASIC</text>
+  <rect x="2500" y="390" width="1220" height="320" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="2526" y="432" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">dmi_jtag  +  dm_top</text>
+  <text x="2526" y="472" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">TAP + DTM, IDCODE 0x14341001</text>
+  <text x="2526" y="506" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">DM at 0x1A11_0000</text>
+  <text x="2526" y="540" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">SBA is a full bus master</text>
+  <rect x="1190" y="800" width="2530" height="230" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="1216" y="842" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_bus   -   4 masters / 4 targets</text>
+  <text x="1216" y="882" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">priority   M1 core-data  &gt;  M2 debug-SBA  &gt;  M3 boot-loader  &gt;  M0 core-fetch</text>
+  <rect x="1190" y="1120" width="780" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1216" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_imem</text>
+  <text x="1216" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">4 KiB, 1024 x 32</text>
+  <text x="1216" y="1236" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">writable: shadow-load target</text>
+  <text x="1216" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">and JTAG patch target</text>
+  <rect x="2030" y="1120" width="820" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2056" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_mmio</text>
+  <text x="2056" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">64 B peripheral window</text>
+  <text x="2056" y="1236" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">instantiates agriasic_dmem</text>
+  <text x="2056" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">2 KiB, 512 x 32</text>
+  <rect x="2910" y="1120" width="810" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2936" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_spi_boot</text>
+  <text x="2936" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">golden ROM or SPI flash</text>
+  <text x="2936" y="1236" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">header + CRC-32 check</text>
+  <text x="2936" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">then a firmware peripheral</text>
+  <rect x="2910" y="1470" width="810" height="200" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="2936" y="1512" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_boot_rom</text>
+  <text x="2936" y="1552" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">148 words, constant table</text>
+  <rect x="1190" y="1730" width="2530" height="430" rx="10" fill="#fff" stroke="#616161" stroke-width="2"/>
+  <text x="1216" y="1772" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Three reset domains</text>
+  <text x="1216" y="1812" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">rst_n_sync   -&gt;  dm_top, dmi_jtag            debug survives everything</text>
+  <text x="1216" y="1842" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">sys_rst_n    -&gt;  MMIO bridge, result latches  adds  &amp;&amp; !ndmreset</text>
+  <text x="1216" y="1872" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">core_rst_n   -&gt;  ibex_top only                adds  &amp;&amp; !core_rst</text>
+  <text x="1216" y="1902" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">see control_shell_reset_domains.svg</text>
+  <rect x="3970" y="300" width="850" height="900" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="3996" y="342" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">To measurement engine</text>
+  <text x="3996" y="382" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">start_pulse_o</text>
+  <text x="3996" y="418" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">clear_errors_o</text>
+  <text x="3996" y="454" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_pair_log2_o</text>
+  <text x="3996" y="490" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_settle_cycles_o</text>
+  <text x="3996" y="526" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_exc_divider_o</text>
+  <text x="3996" y="562" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_conv_cycles_o</text>
+  <text x="3996" y="598" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_mux_settle_o</text>
+  <text x="3996" y="634" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">cfg_amplitude_o</text>
+  <rect x="3970" y="1260" width="850" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="3996" y="1302" font-family="Arial" font-size="24" font-weight="700" fill="#fff" xml:space="preserve">From measurement engine</text>
+  <text x="3996" y="1342" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">measurement_done_i</text>
+  <text x="3996" y="1378" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">measurement_result_dv_i/q_i</text>
+  <text x="3996" y="1414" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">measurement_result_cur_i/q_i</text>
+  <rect x="3970" y="1740" width="850" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3996" y="1782" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">To analog front end</text>
+  <text x="3996" y="1822" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_pga_gain_o[1:0]</text>
+  <text x="3996" y="1856" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_tia_rf_o[1:0]</text>
+  <line x1="950" y1="700" x2="1120" y2="700" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="950" y1="1650" x2="1120" y2="1650" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="3800" y1="700" x2="3970" y2="700" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <line x1="3970" y1="1430" x2="3800" y2="1430" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <line x1="3800" y1="1880" x2="3970" y2="1880" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <text x="120" y="2480" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Every port on the left edge is a bond pad. The cfg_* and result_* ports on the right are die-internal wiring to the measurement engine - not pads, which is why they carry no gpio_ prefix.</text>
+  <text x="120" y="2530" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The core always fetches from IMEM SRAM, never from the boot ROM: both boot sources shadow-load into the same writable array.</text>
+</svg>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2200" viewBox="0 0 5000 2200" role="img" aria-labelledby="t d">
+  <title id="t">Reset domains inside the control shell</title>
+  <desc id="d">Reset tree. The chip pin rst_n passes through rst_sync to rst_n_sync, which resets the debug module and TAP and is removed by nothing else. sys_rst_n adds NOT ndmreset and resets the MMIO bridge and the result latches. core_rst_n adds NOT core_rst and resets only the Ibex core; core_rst is the registered inverse of gpio_start_i AND fw_valid.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2200" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Reset domains inside the control shell</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.13 - three distinct resets; confusing them is the classic integration bug</text>
+  <rect x="80" y="180" width="4840" height="1900" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="200" y="430" width="540" height="180" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="226" y="472" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">rst_n</text>
+  <text x="226" y="512" font-family="Arial" font-size="18" fill="#fff" xml:space="preserve">chip pin, asynchronous</text>
+  <line x1="740" y1="520" x2="900" y2="520" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="900" y="430" width="540" height="180" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="926" y="472" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">rst_sync</text>
+  <text x="926" y="512" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">2FF, synchronous release</text>
+  <line x1="1440" y1="520" x2="1700" y2="520" stroke="#1565C0" stroke-width="3"/>
+  <line x1="1700" y1="520" x2="1700" y2="1660" stroke="#1565C0" stroke-width="3"/>
+  <line x1="1700" y1="520" x2="2020" y2="520" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2020" y="425" width="660" height="190" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="2046" y="467" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">rst_n_sync</text>
+  <line x1="2680" y1="520" x2="2980" y2="520" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2980" y="425" width="1800" height="190" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="3006" y="467" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">dm_top,  dmi_jtag</text>
+  <text x="3006" y="507" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">Debug survives everything. If ndmreset reset the DM, the debugger would</text>
+  <text x="3006" y="533" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">disconnect itself the moment it asked for a reset.</text>
+  <line x1="1700" y1="1090" x2="2020" y2="1090" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2020" y="995" width="660" height="190" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="2046" y="1037" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">sys_rst_n</text>
+  <text x="2046" y="1077" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">&amp;&amp; !ndmreset</text>
+  <line x1="2680" y1="1090" x2="2980" y2="1090" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2980" y="995" width="1800" height="190" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="3006" y="1037" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">MMIO bridge,  result latches</text>
+  <text x="3006" y="1077" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">The debugger's "reset the system": config and sticky flags clear; the</text>
+  <text x="3006" y="1103" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">memories are untouched, so a debugger can load and then ndmreset.</text>
+  <line x1="1700" y1="1660" x2="2020" y2="1660" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2020" y="1565" width="660" height="190" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2046" y="1607" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">core_rst_n</text>
+  <text x="2046" y="1647" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">&amp;&amp; !core_rst</text>
+  <line x1="2680" y1="1660" x2="2980" y2="1660" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2980" y="1565" width="1800" height="190" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="3006" y="1607" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">ibex_top   (and nothing else)</text>
+  <text x="3006" y="1647" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">core_rst = !(gpio_start_i &amp;&amp; fw_valid), registered, so the release edge is</text>
+  <text x="3006" y="1673" font-family="Arial" font-size="17" fill="#616161" xml:space="preserve">glitch-free. Holding the core in reset is also the power-saving state.</text>
+  <text x="120" y="1960" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Read top to bottom as widening scope: each domain resets its own block plus everything below it. Nothing above a line is ever reset by something below it.</text>
+</svg>

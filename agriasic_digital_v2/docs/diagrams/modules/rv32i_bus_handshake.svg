@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2000" viewBox="0 0 5000 2000" role="img" aria-labelledby="t d">
+  <title id="t">Bus handshake timing</title>
+  <desc id="d">Two-cycle handshake. In cycle 0 a master asserts req with an address, the decode grants it combinationally if it wins arbitration, and the selected target is registered. In cycle 1 rvalid and rdata return, muxed by that registered target select, together with err if the target was none or the bridge reported an error. No latency is added.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2000" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Bus handshake timing</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.15 - OBI-style req/gnt/rvalid; the target select is registered, not re-decoded</text>
+  <rect x="80" y="180" width="4840" height="1700" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="280" y="400" width="1860" height="190" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="306" y="442" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">cycle 0</text>
+  <text x="306" y="482" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">master asserts   req + addr + we + be + wdata</text>
+  <line x1="2140" y1="495" x2="2520" y2="495" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2520" y="400" width="1320" height="190" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="2546" y="442" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">decode</text>
+  <text x="2546" y="482" font-family="Arial" font-size="18" fill="#fff" xml:space="preserve">combinational: who wins, and which target</text>
+  <line x1="3840" y1="495" x2="4260" y2="495" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="4260" y="400" width="480" height="190" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="4286" y="442" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">gnt</text>
+  <path d="M3180,590 L3180,820" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="2520" y="820" width="1320" height="210" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2546" y="862" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">register the target</text>
+  <text x="2546" y="902" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">one 2-bit select per master</text>
+  <path d="M3180,1030 L3180,1200" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="280" y="1200" width="1860" height="190" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="306" y="1242" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">cycle 1</text>
+  <text x="306" y="1282" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">the selected target drives read data</text>
+  <line x1="2140" y1="1295" x2="2520" y2="1295" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2520" y="1200" width="1320" height="190" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="2546" y="1242" font-family="Arial" font-size="23" font-weight="700" fill="#fff" xml:space="preserve">mux by registered select</text>
+  <line x1="3840" y1="1295" x2="4260" y2="1295" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="4260" y="1200" width="480" height="190" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="4286" y="1242" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">rvalid</text>
+  <text x="4286" y="1282" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">rdata</text>
+  <path d="M3180,1390 L3180,1500" fill="none" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="2520" y="1500" width="2220" height="180" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="2546" y="1542" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">err</text>
+  <text x="2546" y="1582" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">if the registered target was "none", or the bridge itself reported an error</text>
+  <text x="120" y="1810" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Cost: three registered target-selects plus three rvalid flops. No latency is added to any access - what is registered is the select, not the data path.</text>
+</svg>

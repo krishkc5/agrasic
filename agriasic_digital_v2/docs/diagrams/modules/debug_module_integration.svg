@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2550" viewBox="0 0 5000 2550" role="img" aria-labelledby="t d">
+  <title id="t">Debug module integration (riscv-dbg)</title>
+  <desc id="d">Debug module integration. The five JTAG pins drive dmi_jtag, the TAP and debug transport module, which crosses to the core clock domain and talks DMI to dm_top. dm_top raises debug_req to ibex_top and ndmreset to the system reset, and is a slave on both core ports: the instruction side reaches the debug ROM and program buffer, the data side reaches data0/1 and the halted and resume flags. Its system bus access port is a bus master alongside the core.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2550" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Debug module integration (riscv-dbg)</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.20 - the DM is a slave on BOTH core ports, and a master in its own right</text>
+  <rect x="80" y="180" width="4840" height="2250" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="240" y="420" width="800" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="266" y="462" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">JTAG pins</text>
+  <text x="266" y="502" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tck_i</text>
+  <text x="266" y="538" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tms_i</text>
+  <text x="266" y="574" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_trst_ni</text>
+  <text x="266" y="610" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tdi_i</text>
+  <text x="266" y="646" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_jtag_tdo_o</text>
+  <line x1="1040" y1="630" x2="1360" y2="630" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="1360" y="420" width="900" height="420" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="1386" y="462" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">dmi_jtag</text>
+  <text x="1386" y="502" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">TAP + DTM</text>
+  <text x="1386" y="532" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IDCODE 0x14341001</text>
+  <text x="1386" y="562" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IR length 5</text>
+  <text x="1386" y="592" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="1386" y="622" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">TCK -&gt; clk CDC:</text>
+  <text x="1386" y="652" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">2-phase handshake</text>
+  <line x1="2260" y1="630" x2="2620" y2="630" stroke="#7B1FA2" stroke-width="3" marker-end="url(#mp)"/>
+  <text x="2440" y="600" font-family="Arial" font-size="20" font-weight="700" text-anchor="middle" fill="#7B1FA2" xml:space="preserve">DMI</text>
+  <rect x="2620" y="420" width="1000" height="420" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="2646" y="462" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">dm_top</text>
+  <text x="2646" y="502" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">Debug Spec 0.13</text>
+  <text x="2646" y="532" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">DM at 0x1A11_0000</text>
+  <text x="2646" y="562" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2646" y="592" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">halt +0x800</text>
+  <text x="2646" y="622" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">resume +0x808</text>
+  <text x="2646" y="652" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">exception +0x810</text>
+  <line x1="3620" y1="520" x2="4180" y2="520" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="4180" y="440" width="620" height="160" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="4206" y="482" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">ibex_top</text>
+  <text x="4206" y="522" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">debug_req</text>
+  <line x1="3620" y1="740" x2="4180" y2="740" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="4180" y="660" width="620" height="160" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="4206" y="702" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">sys_rst_n</text>
+  <text x="4206" y="742" font-family="Arial" font-size="18" fill="#212121" xml:space="preserve">ndmreset</text>
+  <line x1="3120" y1="840" x2="3120" y2="1080" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <text x="3160" y="990" font-family="Arial" font-size="21" font-weight="700" fill="#1B5E20" xml:space="preserve">SBA - a bus master, like the core data port</text>
+  <rect x="2300" y="1080" width="1640" height="200" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="2326" y="1122" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_bus</text>
+  <text x="2326" y="1162" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">master M2</text>
+  <rect x="240" y="1420" width="4560" height="500" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="266" y="1462" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">The DM is also a SLAVE on both core ports</text>
+  <text x="266" y="1502" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">instruction side  -&gt;  debug ROM + program buffer      the core fetches its debug handler from the DM</text>
+  <text x="266" y="1540" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">data side         -&gt;  data0/1, halted and resume flags  the core reports status back through the DM</text>
+  <text x="266" y="1578" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve"></text>
+  <text x="266" y="1616" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">That is why the bus lets M0 (core fetch) and M1 (core data) target 0x1A11_0000 at all.</text>
+  <rect x="240" y="1990" width="4560" height="260" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="266" y="2032" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Note: exception address</text>
+  <text x="266" y="2072" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">riscv-dbg places the exception entry 16 bytes past halt (+0x810), NOT the +0x808 that Ibex defaults to.</text>
+  <text x="266" y="2104" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">DmExceptionAddr is set explicitly in the shell - getting this wrong makes abstract commands fail in ways that look like core bugs.</text>
+  <text x="120" y="2420" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">ndmreset resets the core and the peripheral bridge only. The DM, the TAP and every memory survive it, so a debugger can load an image and then reset the system.</text>
+</svg>

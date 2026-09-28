@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
+  <title id="t">rst_sync - asynchronous assert, synchronous release</title>
+  <desc id="d">Reset synchronizer. The asynchronous chip pin rst_n clears both flops of a two-flop chain immediately, so assertion is visible within nanoseconds regardless of clock phase. Release is synchronous: a 1 walks through the two flops, so rst_n_sync deasserts exactly two clock edges later and always on a rising edge. This gives every internal flop a clean release edge no matter when the external pin actually released.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2400" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">rst_sync - asynchronous assert, synchronous release</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.12 - one instance per chip-boundary top; everything internal runs off rst_n_sync</text>
+  <rect x="80" y="180" width="4840" height="2100" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="240" y="380" width="620" height="200" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="266" y="422" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">rst_n</text>
+  <text x="266" y="462" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">chip pin,</text>
+  <text x="266" y="496" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">asynchronous</text>
+  <rect x="1120" y="380" width="700" height="200" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="1146" y="422" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">FF1</text>
+  <text x="1146" y="462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">D = 1</text>
+  <rect x="2080" y="380" width="700" height="200" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="2106" y="422" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">FF2</text>
+  <text x="2106" y="462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">D = FF1</text>
+  <rect x="3040" y="380" width="800" height="200" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="3066" y="422" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">rst_n_sync</text>
+  <text x="3066" y="462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">to every internal block</text>
+  <line x1="860" y1="480" x2="1120" y2="480" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="1820" y1="480" x2="2080" y2="480" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <line x1="2780" y1="480" x2="3040" y2="480" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <path d="M550,580 L550,720 L1470,720 L1470,580" fill="none" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <path d="M550,720 L2430,720 L2430,580" fill="none" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <text x="1200" y="780" font-family="Arial" font-size="21" font-weight="700" fill="#B71C1C" xml:space="preserve">asynchronous clear reaches BOTH flops directly</text>
+  <rect x="240" y="880" width="4520" height="420" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="266" y="922" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">The two halves behave differently on purpose</text>
+  <text x="266" y="962" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">ASSERT    asynchronous - visible within 1 ns regardless of clock phase, so a reset works even with no clock running.</text>
+  <text x="266" y="1000" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">RELEASE   synchronous  - a 1 walks the chain, so rst_n_sync rises exactly 2 clk edges later and always on a posedge.</text>
+  <text x="266" y="1038" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">That asymmetry is the whole point: you can always stop the chip, but it only ever starts on a clean edge.</text>
+  <rect x="240" y="1380" width="2180" height="420" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="266" y="1422" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Instantiated once per chip top</text>
+  <text x="266" y="1462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">agriasic_digital_rv32i_top</text>
+  <text x="266" y="1492" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">agriasic_digital_spi_top</text>
+  <text x="266" y="1522" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">agriasic_digital_programming_top</text>
+  <text x="266" y="1552" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="266" y="1582" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">NOT inside agriasic_digital_top, which always</text>
+  <text x="266" y="1612" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">receives an already-synchronized reset.</text>
+  <rect x="2580" y="1380" width="2180" height="420" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="2606" y="1422" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Verified by tb_rst_sync.sv (stage 6)</text>
+  <text x="2606" y="1462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">Four clk-unaligned assert/deassert phase offsets:</text>
+  <text x="2606" y="1492" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2606" y="1522" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">- assertion visible within 1 ns at every phase</text>
+  <text x="2606" y="1552" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">- deassertion always exactly 2 clk edges</text>
+  <text x="2606" y="1582" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">- deassertion always lands on a posedge</text>
+  <text x="2606" y="1612" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2606" y="1642" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">which proves it is not working by lucky alignment.</text>
+  <text x="120" y="1930" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">In the RV32I design rst_n_sync is only the first of three domains: sys_rst_n adds &amp;&amp; !ndmreset, and core_rst_n adds &amp;&amp; !core_rst.</text>
+  <text x="120" y="1980" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">See control_shell_reset_domains.svg (section 6.13) for how the three relate.</text>
+</svg>

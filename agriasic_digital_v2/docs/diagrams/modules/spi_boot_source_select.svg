@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
+  <title id="t">Boot source selection</title>
+  <desc id="d">Boot source selection. BOOT_SEL is latched on the first cycle out of reset because it is a strap, not a runtime control: a glitch after reset must not redirect a boot. Strap 0, the default, shadow-loads the golden ROM in about 150 cycles with no CRC needed because it is gates. Strap 1 loads from SPI flash in about 80,000 cycles with a header and CRC-32 check. Both write the same IMEM SRAM, and fw_valid then tells the shell to release the core.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2400" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Boot source selection</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.18 - the BOOT_SEL strap is latched once, on the first cycle out of reset</text>
+  <rect x="80" y="180" width="4840" height="2100" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="900" y="300" width="3200" height="260" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="926" y="342" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">gpio_boot_sel_i   latched on the FIRST cycle out of reset</text>
+  <text x="926" y="382" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">a strap, not a runtime control - a glitch after reset must not redirect a boot</text>
+  <path d="M2500,560 L2500,700" fill="none" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <path d="M2500,700 L1500,700 L1500,800" fill="none" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <path d="M2500,700 L3500,700 L3500,800" fill="none" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <text x="1500" y="770" font-family="Arial" font-size="22" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">strap = 0   (default)</text>
+  <text x="3500" y="770" font-family="Arial" font-size="22" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">strap = 1</text>
+  <rect x="830" y="800" width="1340" height="520" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="856" y="842" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">GOLDEN ROM shadow</text>
+  <text x="856" y="882" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="856" y="914" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">~150 cycles  (0.9 us)</text>
+  <text x="856" y="946" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="856" y="978" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">no CRC needed -</text>
+  <text x="856" y="1010" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">it is gates, it cannot rot</text>
+  <text x="856" y="1042" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="856" y="1074" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">a bare die with no flash</text>
+  <text x="856" y="1106" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">and no host runs on its own</text>
+  <rect x="2830" y="800" width="1340" height="520" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2856" y="842" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">SPI FLASH load</text>
+  <text x="2856" y="882" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2856" y="914" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">~80k cycles  (0.5 ms)</text>
+  <text x="2856" y="946" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2856" y="978" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">16-byte header + CRC-32</text>
+  <text x="2856" y="1010" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">checked BEFORE release</text>
+  <text x="2856" y="1042" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2856" y="1074" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">the patchable path:</text>
+  <text x="2856" y="1106" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">build, program, strap high</text>
+  <line x1="1500" y1="1320" x2="1500" y2="1500" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <line x1="3500" y1="1320" x2="3500" y2="1500" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="1700" y="1500" width="1600" height="230" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="1726" y="1542" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">IMEM SRAM</text>
+  <text x="1726" y="1582" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">one writable array - both sources land here</text>
+  <path d="M1500,1500 L1500,1615 L1700,1615" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <path d="M3500,1500 L3500,1615 L3300,1615" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <line x1="2500" y1="1730" x2="2500" y2="1900" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="1700" y="1900" width="1600" height="200" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="1726" y="1942" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">fw_valid</text>
+  <text x="1726" y="1982" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">the shell releases the core</text>
+  <text x="120" y="2200" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">BOOT_CTRL overrides the strap in both directions: bit 1 re-boots from flash, bit 2 from the golden ROM, bit 0 releases the core without either.</text>
+  <text x="120" y="2250" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Because this is a shadow-load and not a fetch-path mux, IMEM stays writable afterwards - a debugger can patch a constant over JTAG with no rebuild or reflash.</text>
+</svg>

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2800" viewBox="0 0 5000 2800" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_rv32i_mmio register map</title>
+  <desc id="d">Register map of the peripheral window. CTRL, PAIR_LOG2, SETTLE, DIVIDER and CONV configure and start a measurement; STATUS and the four RESULT registers read it back; AFE_CTRL carries the analog gain and mux settling controls; BOOT_STATUS and BOOT_CTRL control the boot loader; SPI_CTRL, SPI_DATA and SPI_STATUS are the boot SPI engine handed to firmware after boot.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2800" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_rv32i_mmio register map</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.17 - the complete 64-byte peripheral window at 0x8000_0000</text>
+  <rect x="80" y="180" width="4840" height="2500" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="220" y="300" width="4560" height="612" rx="8" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="246" y="342" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">measurement</text>
+  <text x="280" y="418" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0000</text>
+  <text x="1000" y="418" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">CTRL</text>
+  <text x="1720" y="418" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">W</text>
+  <text x="1900" y="418" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">start, clear_err, FW_DONE, TRAP_SEEN</text>
+  <text x="280" y="510" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0004</text>
+  <text x="1000" y="510" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">PAIR_LOG2</text>
+  <text x="1720" y="510" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="510" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">M = 2^n sample pairs, clamped to 64</text>
+  <text x="280" y="602" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0008</text>
+  <text x="1000" y="602" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">SETTLE</text>
+  <text x="1720" y="602" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="602" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">excitation PERIODS to wait after start</text>
+  <text x="280" y="694" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_000C</text>
+  <text x="1000" y="694" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">DIVIDER</text>
+  <text x="1720" y="694" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="694" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">raw N;  f_exc = f_clk / (16 N)</text>
+  <text x="280" y="786" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0010</text>
+  <text x="1000" y="786" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">CONV</text>
+  <text x="1720" y="786" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="786" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">SAR comparator regeneration, per bit trial</text>
+  <text x="280" y="878" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0014</text>
+  <text x="1000" y="878" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">STATUS</text>
+  <text x="1720" y="878" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="878" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, done, overrange, trap_seen, fw_done</text>
+  <rect x="220" y="952" width="4560" height="428" rx="8" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="246" y="994" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">results  (host computes Z(f) = dV(f) / I(f))</text>
+  <text x="280" y="1070" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0018</text>
+  <text x="1000" y="1070" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">RESULT_I</text>
+  <text x="1720" y="1070" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="1070" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">dV in-phase</text>
+  <text x="280" y="1162" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_001C</text>
+  <text x="1000" y="1162" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">RESULT_Q</text>
+  <text x="1720" y="1162" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="1162" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">dV quadrature</text>
+  <text x="280" y="1254" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0034</text>
+  <text x="1000" y="1254" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">RESULT_CUR_I</text>
+  <text x="1720" y="1254" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="1254" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">current in-phase</text>
+  <text x="280" y="1346" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0038</text>
+  <text x="1000" y="1346" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">RESULT_CUR_Q</text>
+  <text x="1720" y="1346" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="1346" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">current quadrature</text>
+  <rect x="220" y="1420" width="4560" height="152" rx="8" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="246" y="1462" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">analog front end</text>
+  <text x="280" y="1538" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_003C</text>
+  <text x="1000" y="1538" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">AFE_CTRL</text>
+  <text x="1720" y="1538" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="1538" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">pga_gain, tia_rf, amplitude, mux_settle</text>
+  <rect x="220" y="1612" width="4560" height="244" rx="8" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="246" y="1654" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">boot</text>
+  <text x="280" y="1730" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0020</text>
+  <text x="1000" y="1730" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">BOOT_STATUS</text>
+  <text x="1720" y="1730" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="1730" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">state, error, fw_valid, strap, source, version</text>
+  <text x="280" y="1822" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0024</text>
+  <text x="1000" y="1822" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">BOOT_CTRL</text>
+  <text x="1720" y="1822" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">W</text>
+  <text x="1900" y="1822" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">release / re-boot from flash / re-boot from ROM</text>
+  <rect x="220" y="1896" width="4560" height="336" rx="8" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="246" y="1938" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">boot SPI engine, handed to firmware after boot (self-reflash)</text>
+  <text x="280" y="2014" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0028</text>
+  <text x="1000" y="2014" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">SPI_CTRL</text>
+  <text x="1720" y="2014" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="2014" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">cs_n, clock divider</text>
+  <text x="280" y="2106" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_002C</text>
+  <text x="1000" y="2106" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">SPI_DATA</text>
+  <text x="1720" y="2106" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
+  <text x="1900" y="2106" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">tx byte / rx byte</text>
+  <text x="280" y="2198" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0030</text>
+  <text x="1000" y="2198" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">SPI_STATUS</text>
+  <text x="1720" y="2198" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
+  <text x="1900" y="2198" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, fw_owned</text>
+  <text x="120" y="2332" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Pulse generation: a store to CTRL asserts we for exactly one cycle, so start_pulse_o is a single-cycle pulse no matter how long the bus access takes.</text>
+  <text x="120" y="2382" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">A repeated write therefore cannot restart a run already in progress. Section 7.1 has the bit fields.</text>
+</svg>

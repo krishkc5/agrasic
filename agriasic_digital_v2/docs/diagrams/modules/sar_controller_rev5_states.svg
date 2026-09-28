@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2200" viewBox="0 0 5000 2200" role="img" aria-labelledby="t d">
+  <title id="t">sar_controller - Rev 5 channel multiplexing</title>
+  <desc id="d">Rev 5 SAR controller state machine. S_IDLE accepts a request and drives afe_mux_sel_o from channel_i and afe_sample_o from take_sample_i. S_MUX_WAIT is new: it waits mux_settle_cycles_i so the analog mux and the selected sample-and-hold settle onto the comparator input before the first trial. S_TRIAL_SET, S_TRIAL_WAIT and S_TRIAL_EVAL then run eight bit trials MSB first, and the converged code is returned on code_o.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2200" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">sar_controller - Rev 5 channel multiplexing</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.23 - S_MUX_WAIT is new; acquisition is separated from conversion</text>
+  <rect x="80" y="180" width="4840" height="1900" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="280" y="480" width="800" height="190" rx="10" fill="#fff" stroke="#212121" stroke-width="2.5"/>
+  <text x="680.0" y="584.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_IDLE</text>
+  <rect x="1180" y="480" width="800" height="190" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="1580.0" y="584.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_MUX_WAIT</text>
+  <text x="1580.0" y="702" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">NEW in Rev 5</text>
+  <rect x="2180" y="480" width="800" height="190" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="2580.0" y="584.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_TRIAL_SET</text>
+  <text x="2580.0" y="702" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">drive the trial code</text>
+  <rect x="3100" y="480" width="800" height="190" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="3500.0" y="584.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_TRIAL_WAIT</text>
+  <text x="3500.0" y="702" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">comparator regenerates</text>
+  <rect x="4020" y="480" width="800" height="190" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="4420.0" y="584.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_TRIAL_EVAL</text>
+  <text x="4420.0" y="702" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">keep or drop the bit</text>
+  <line x1="1080" y1="575" x2="1180" y2="575" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <line x1="1980" y1="575" x2="2180" y2="575" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <line x1="2980" y1="575" x2="3100" y2="575" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <line x1="3900" y1="575" x2="4020" y2="575" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <text x="1130" y="545" font-family="Arial" font-size="20" font-weight="700" text-anchor="middle" fill="#1565C0" xml:space="preserve">accept</text>
+  <path d="M4420,670 L4420,900 L2580,900 L2580,670" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <text x="3500" y="870" font-family="Arial" font-size="22" font-weight="700" text-anchor="middle" fill="#1B5E20" xml:space="preserve">8 trials, MSB first</text>
+  <path d="M4820,575 L4900,575 L4900,1060 L700,1060 L700,670" fill="none" stroke="#616161" stroke-width="2.5" marker-end="url(#my)"/>
+  <text x="4300" y="1030" font-family="Arial" font-size="22" font-weight="700" text-anchor="end" fill="#616161" xml:space="preserve">done  -&gt;  code_o</text>
+  <rect x="280" y="1200" width="2280" height="480" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="306" y="1242" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">On acceptance, in S_IDLE</text>
+  <text x="306" y="1282" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">afe_mux_sel_o   &lt;=  channel_i</text>
+  <text x="306" y="1314" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">afe_sample_o    &lt;=  take_sample_i</text>
+  <text x="306" y="1346" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="306" y="1378" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">Separating acquisition from conversion is what lets the FSM</text>
+  <text x="306" y="1410" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">strobe ONE sample-and-hold for a phase point and then run</text>
+  <text x="306" y="1442" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">two conversions off the held values.</text>
+  <rect x="2680" y="1200" width="2040" height="480" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="2706" y="1242" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">S_MUX_WAIT</text>
+  <text x="2706" y="1282" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">mux_settle_cycles_i lets the analog mux and the</text>
+  <text x="2706" y="1314" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">selected S/H settle onto the comparator input</text>
+  <text x="2706" y="1346" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">BEFORE trial 1.</text>
+  <text x="2706" y="1378" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2706" y="1410" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">It is a runtime register (AFE_CTRL[15:8]), not a</text>
+  <text x="2706" y="1442" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">parameter - the settling time is an analog number</text>
+  <text x="2706" y="1474" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">nobody knows yet.</text>
+  <rect x="280" y="1780" width="4440" height="300" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="306" y="1822" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Conversion time</text>
+  <text x="306" y="1862" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">8 x (3 + conv_cycles_i) clock cycles.   Verified empirically: 24 cycles at conv_cycles_i = 0, 40 at conv_cycles_i = 2.</text>
+  <text x="306" y="1900" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">At 160 MHz with conv_cycles_i = 1 that is 200 ns per conversion, so afe_adc_dac_o must settle within 25 ns per trial.</text>
+  <text x="120" y="2010" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The converged code is returned on code_o; the Rev 4.3 d_plus_o / d_minus_o pair is gone, because the two channels are now sequenced by the FSM rather than held here.</text>
+  <text x="120" y="2060" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">afe_adc_comp_i is a timed, UNSYNCHRONIZED path. Do not add a synchronizer: conv_cycles_i is what must cover comparator regeneration at the worst corner.</text>
+</svg>

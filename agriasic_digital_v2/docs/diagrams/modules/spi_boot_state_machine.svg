@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2950" viewBox="0 0 5000 2950" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_spi_boot state machine</title>
+  <desc id="d">Boot loader state machine. From S_DELAY the latched strap chooses: strap 0 goes straight to S_ROM, which copies USED_WORDS from the constant table to the bus; strap 1 waits out the flash power-up delay then runs S_CMD, S_HDR, S_CHECK, S_DATA and S_WRITE. Both paths converge on S_VERIFY, which ends in S_DONE, S_FAIL or S_SKIP. BOOT_CTRL retry and boot_rom return to S_DELAY.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2950" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_spi_boot state machine</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.18 - the ROM path and the flash path converge on S_VERIFY</text>
+  <rect x="80" y="180" width="4840" height="2650" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="1560" y="330" width="780" height="170" rx="10" fill="#fff" stroke="#212121" stroke-width="2.5"/>
+  <text x="1950.0" y="424.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_DELAY</text>
+  <text x="1950.0" y="532" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">the strap is sampled here</text>
+  <path d="M1950,500 L1950,600 L1000,600 L1000,720" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <text x="1180" y="570" font-family="Arial" font-size="21" font-weight="700" text-anchor="middle" fill="#1B5E20" xml:space="preserve">strap = 0   (golden ROM)</text>
+  <path d="M1950,600 L3300,600 L3300,720" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <text x="2950" y="570" font-family="Arial" font-size="21" font-weight="700" text-anchor="middle" fill="#E65100" xml:space="preserve">strap = 1:  wait BOOT_DELAY_CYCLES for flash power-up</text>
+  <rect x="620" y="720" width="760" height="180" rx="10" fill="#C8E6C9" stroke="#212121" stroke-width="2.5"/>
+  <text x="1000.0" y="819.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_ROM</text>
+  <text x="1000.0" y="932" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">word -&gt; bus, repeated USED_WORDS times</text>
+  <rect x="2920" y="720" width="760" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3300.0" y="819.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_CMD</text>
+  <text x="3300.0" y="932" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">READ 0x03 + 24-bit address</text>
+  <rect x="2920" y="990" width="760" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3300.0" y="1089.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_HDR</text>
+  <text x="3300.0" y="1202" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">16 header bytes</text>
+  <rect x="2920" y="1260" width="760" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3300.0" y="1359.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_CHECK</text>
+  <text x="3300.0" y="1472" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">magic?  length?  alignment?</text>
+  <rect x="2920" y="1530" width="760" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3300.0" y="1629.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_DATA</text>
+  <text x="3300.0" y="1742" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">byte -&gt; CRC, word staging</text>
+  <rect x="2920" y="1800" width="760" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3300.0" y="1899.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_WRITE</text>
+  <text x="3300.0" y="2012" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">word -&gt; bus</text>
+  <path d="M3300,900 L3300,990" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <path d="M3300,1170 L3300,1260" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <path d="M3300,1440 L3300,1530" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <path d="M3300,1710 L3300,1800" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <path d="M3680,1890 L3920,1890 L3920,1620 L3680,1620" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <text x="3950" y="1770" font-family="Arial" font-size="20" font-weight="700" fill="#E65100" xml:space="preserve">more</text>
+  <path d="M3680,1350 L4300,1350 L4300,2505 L3980,2505" fill="none" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <text x="4330" y="1320" font-family="Arial" font-size="20" font-weight="700" fill="#B71C1C" xml:space="preserve">bad magic / length</text>
+  <path d="M1000,900 L1000,2170 L1560,2170" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <path d="M3300,1980 L3300,2170 L2340,2170" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="1560" y="2080" width="780" height="180" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="1950.0" y="2179.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_VERIFY</text>
+  <text x="1950.0" y="2292" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">CRC match?   bus error?</text>
+  <text x="700" y="1500" font-family="Arial" font-size="22" font-weight="700" fill="#1B5E20" xml:space="preserve">ROM path</text>
+  <text x="3760" y="1060" font-family="Arial" font-size="22" font-weight="700" fill="#E65100" xml:space="preserve">flash path</text>
+  <rect x="500" y="2420" width="700" height="170" rx="10" fill="#C8E6C9" stroke="#212121" stroke-width="2.5"/>
+  <text x="850.0" y="2514.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_DONE</text>
+  <text x="850.0" y="2622" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">fw_valid = 1, core released</text>
+  <rect x="1600" y="2420" width="700" height="170" rx="10" fill="#BDBDBD" stroke="#212121" stroke-width="2.5"/>
+  <text x="1950.0" y="2514.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_SKIP</text>
+  <text x="1950.0" y="2622" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">IMEM_PRELOADED, or the debugger loaded IMEM</text>
+  <rect x="3280" y="2420" width="700" height="170" rx="10" fill="#FFCDD2" stroke="#212121" stroke-width="2.5"/>
+  <text x="3630.0" y="2514.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_FAIL</text>
+  <text x="3630.0" y="2622" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">core held in reset, BOOT_FAIL high</text>
+  <path d="M1950,2260 L1950,2350" fill="none" stroke="#1565C0" stroke-width="3"/>
+  <path d="M1950,2350 L850,2350 L850,2420" fill="none" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <path d="M1950,2350 L1950,2420" fill="none" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <path d="M1950,2350 L3630,2350 L3630,2420" fill="none" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <path d="M850,2590 L850,2700 L400,2700 L400,415 L1560,415" fill="none" stroke="#616161" stroke-width="2.5" marker-end="url(#my)"/>
+  <text x="420" y="2670" font-family="Arial" font-size="20" font-weight="700" fill="#616161" xml:space="preserve">BOOT_CTRL.retry  /  BOOT_CTRL.boot_rom</text>
+  <text x="120" y="2800" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">A ROM copy can only ever report error 4 (bus error): there is no CRC to fail and no magic to mismatch, because the source is gates.</text>
+</svg>

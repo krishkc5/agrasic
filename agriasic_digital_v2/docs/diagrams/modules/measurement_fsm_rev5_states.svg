@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="3100" viewBox="0 0 5000 3100" role="img" aria-labelledby="t d">
+  <title id="t">measurement_fsm - Rev 5 two-channel sequencing</title>
+  <desc id="d">Rev 5 measurement FSM. S_IDLE waits for start. S_SETTLE counts settle_cycles_i excitation periods. S_WAIT watches phase_index for a match and issues one sample-and-hold strobe that freezes both channels. S_CONV_DV converts the voltage channel with mux 0 and S_CONV_CUR the current channel with mux 1, with no new strobe between them. S_ACCUM adds the terms, S_LOOP advances the phase point or the pair, and S_DONE snapshots all four accumulators into their shadows on the single cycle busy drops.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="3100" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">measurement_fsm - Rev 5 two-channel sequencing</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.21 - one S/H strobe per phase point, then two conversions</text>
+  <rect x="80" y="180" width="4840" height="2800" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="300" y="400" width="640" height="180" rx="10" fill="#fff" stroke="#212121" stroke-width="2.5"/>
+  <text x="620.0" y="499.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_IDLE</text>
+  <line x1="940" y1="490" x2="1180" y2="490" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <text x="1060" y="460" font-family="Arial" font-size="21" font-weight="700" text-anchor="middle" fill="#1565C0" xml:space="preserve">start</text>
+  <rect x="1180" y="400" width="760" height="180" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="1560.0" y="499.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_SETTLE</text>
+  <text x="1560.0" y="612" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">counts settle_cycles_i EXCITATION PERIODS</text>
+  <line x1="1940" y1="490" x2="2200" y2="490" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2200" y="400" width="800" height="180" rx="10" fill="#BBDEFB" stroke="#212121" stroke-width="2.5"/>
+  <text x="2600.0" y="499.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_WAIT</text>
+  <text x="2600.0" y="612" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">watch phase_index for the target phase point</text>
+  <path d="M2600,580 L2600,760" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <text x="2680" y="690" font-family="Arial" font-size="21" font-weight="700" fill="#E65100" xml:space="preserve">phase match  +  ONE S/H strobe  (freezes BOTH channels)</text>
+  <rect x="2200" y="760" width="800" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="2600.0" y="859.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_CONV_DV</text>
+  <text x="2600.0" y="972" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">mux_sel = 0 (PGA),  8 bit trials</text>
+  <path d="M2600,940 L2600,1120" fill="none" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="2200" y="1120" width="800" height="180" rx="10" fill="#FFE0B2" stroke="#212121" stroke-width="2.5"/>
+  <text x="2600.0" y="1219.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_CONV_CUR</text>
+  <text x="2600.0" y="1332" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">mux_sel = 1 (TIA),  8 bit trials, NO new strobe</text>
+  <path d="M2600,1300 L2600,1480" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="2200" y="1480" width="800" height="180" rx="10" fill="#C8E6C9" stroke="#212121" stroke-width="2.5"/>
+  <text x="2600.0" y="1579.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_ACCUM</text>
+  <text x="2600.0" y="1692" font-family="Arial" font-size="18" text-anchor="middle" fill="#616161" xml:space="preserve">add this phase point into the four accumulators</text>
+  <path d="M2600,1660 L2600,1840" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="2200" y="1840" width="800" height="180" rx="10" fill="#C8E6C9" stroke="#212121" stroke-width="2.5"/>
+  <text x="2600.0" y="1939.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_LOOP</text>
+  <path d="M3000,1930 L3450,1930 L3450,490 L3000,490" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <text x="3520" y="1170" font-family="Arial" font-size="20" fill="#1B5E20" xml:space="preserve">PT_0 / PT_180 / PT_90  -&gt;  next phase point</text>
+  <text x="3520" y="1215" font-family="Arial" font-size="20" fill="#1B5E20" xml:space="preserve">pairs remaining       -&gt;  back to S_WAIT</text>
+  <path d="M2200,1930 L1500,1930" fill="none" stroke="#7B1FA2" stroke-width="3" marker-end="url(#mp)"/>
+  <text x="1560" y="1900" font-family="Arial" font-size="21" font-weight="700" fill="#7B1FA2" xml:space="preserve">all pairs done</text>
+  <rect x="700" y="1840" width="800" height="180" rx="10" fill="#E1BEE7" stroke="#212121" stroke-width="2.5"/>
+  <text x="1100.0" y="1939.0" font-family="Arial" font-size="24" font-weight="700" text-anchor="middle" fill="#212121" xml:space="preserve">S_DONE</text>
+  <path d="M1100,1840 L1100,640 L620,640 L620,580" fill="none" stroke="#616161" stroke-width="2.5" marker-end="url(#my)"/>
+  <rect x="300" y="2160" width="4500" height="290" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="326" y="2202" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">S_DONE snapshots all four accumulators into their shadows</text>
+  <text x="326" y="2242" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">on the SINGLE cycle busy_o drops - so a read that lands mid-run returns the previous COMPLETE result, never</text>
+  <text x="326" y="2278" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">a partial sum, and dV and I always come from the same run. That matters because they are divided against each other.</text>
+  <rect x="300" y="2500" width="4500" height="400" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="326" y="2542" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">Four accumulators, eight conversions per accumulation pair</text>
+  <text x="326" y="2582" font-family="Arial" font-size="21" fill="#fff" xml:space="preserve">dv_i  = sum( dV(0deg) - dV(180deg) )            cur_i = sum( I(0deg) - I(180deg) )</text>
+  <text x="326" y="2624" font-family="Arial" font-size="21" fill="#fff" xml:space="preserve">dv_q  = sum( dV(90deg) - dV(270deg) )           cur_q = sum( I(90deg) - I(270deg) )</text>
+  <text x="326" y="2666" font-family="Arial" font-size="21" fill="#fff" xml:space="preserve">Z(f) = (dv_i + j dv_q) / (cur_i + j cur_q)          &lt;-  computed HOST-side, never on die</text>
+  <text x="120" y="2970" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">point_q walks PT_0 -&gt; PT_180 -&gt; PT_90 -&gt; PT_270; 4 phase points x 2 channels = 8 conversions per accumulation pair.</text>
+</svg>

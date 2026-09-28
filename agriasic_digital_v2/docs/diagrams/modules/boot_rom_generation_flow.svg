@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_boot_rom - how the golden image gets into gates</title>
+  <desc id="d">Generation flow for the golden boot ROM. The firmware build produces a hex image. Running gen_boot_rom.py with promote copies that image to fw/golden and records date, word count and SHA-256 in GOLDEN.md, then regenerates rtl/rv32i/agriasic_boot_rom.sv as a constant case table. Ordinary synthesis maps that table into about 1,000 gates. build.sh deliberately does not regenerate it.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2400" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_boot_rom - how the golden image gets into gates</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.19 - promotion is explicit and never a side effect of a build</text>
+  <rect x="80" y="180" width="4840" height="2100" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="260" y="340" width="1120" height="300" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="286" y="382" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">fw/build.sh</text>
+  <text x="286" y="422" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">riscv32 gcc -Os</text>
+  <text x="286" y="456" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">-march=rv32imc_zicsr</text>
+  <text x="286" y="490" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">-&gt; agriasic_fw.hex</text>
+  <line x1="1380" y1="490" x2="1720" y2="490" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="1720" y="340" width="1500" height="300" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="1746" y="382" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">gen_boot_rom.py --promote</text>
+  <text x="1746" y="422" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">an explicit, deliberate act -</text>
+  <text x="1746" y="456" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">never run by build.sh</text>
+  <line x1="3220" y1="490" x2="3560" y2="490" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="3560" y="340" width="1180" height="300" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="3586" y="382" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">fw/golden/</text>
+  <text x="3586" y="422" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">agriasic_fw_golden.hex</text>
+  <text x="3586" y="456" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">GOLDEN.md: date, words,</text>
+  <text x="3586" y="490" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">SHA-256</text>
+  <path d="M4150,640 L4150,800 L2600,800 L2600,940" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="1720" y="940" width="1760" height="280" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="1746" y="982" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">gen_boot_rom.py</text>
+  <text x="1746" y="1022" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">regenerates the RTL from fw/golden/ only</text>
+  <line x1="2600" y1="1220" x2="2600" y2="1380" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="1400" y="1380" width="2400" height="320" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1426" y="1422" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">rtl/rv32i/agriasic_boot_rom.sv   (GENERATED)</text>
+  <text x="1426" y="1462" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">256-word case table, 148 used</text>
+  <text x="1426" y="1496" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">default: 32'h0000_0013  (NOP)</text>
+  <line x1="2600" y1="1700" x2="2600" y2="1860" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <rect x="1400" y="1860" width="2400" height="300" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="1426" y="1902" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">synthesis</text>
+  <text x="1426" y="1942" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">a constant table maps to gates, not storage:</text>
+  <text x="1426" y="1976" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">+1,027 combinational primitives,  +6 flops</text>
+  <rect x="4000" y="940" width="740" height="1220" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="4026" y="982" font-family="Arial" font-size="22" font-weight="700" fill="#fff" xml:space="preserve">Why no ROM compiler</text>
+  <text x="4026" y="1022" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">148 words is small</text>
+  <text x="4026" y="1052" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">enough that ordinary</text>
+  <text x="4026" y="1082" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">synthesis beats a</text>
+  <text x="4026" y="1112" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">foundry ROM macro.</text>
+  <text x="4026" y="1142" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="4026" y="1172" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">A writable array of</text>
+  <text x="4026" y="1202" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">the same depth would</text>
+  <text x="4026" y="1232" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">need 4,736 storage</text>
+  <text x="4026" y="1262" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">bits.</text>
+  <text x="4026" y="1292" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve"></text>
+  <text x="4026" y="1322" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">Past roughly 1 KiB</text>
+  <text x="4026" y="1352" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">this trade inverts</text>
+  <text x="4026" y="1382" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">and a ROM macro</text>
+  <text x="4026" y="1412" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">becomes the right</text>
+  <text x="4026" y="1442" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">call.</text>
+  <text x="120" y="2230" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Only promote an image that has passed the full regression: GOLDEN.md is what makes the thing in silicon reviewable in version control.</text>
+</svg>

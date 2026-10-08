@@ -16,7 +16,9 @@
   - agriasic_digital_timing_checklist.md
   - interface_contract.md
 - **Post-v0.14 note — Ibex core swap.** The Penn CIS 5710 RV32IM core described in sections 8.1/DR-023 (`core_clk_en`) and the Phase 2.2 rows below has been replaced by lowRISC Ibex (RV32IMC+Zicsr, 3-stage). `core_clk_en` no longer exists: the core sleeps in `wfi` during a measurement and is woken by the DONE latch on `irq_fast[0]` with no trap taken; `core_sleep_o` is exported and the clock is still not gated, so DR-023's intent (no gated clock) holds. `ecall` is replaced by `CTRL.FW_DONE` (bit 8); `CTRL.TRAP_SEEN` (bit 9) and STATUS bits 5/6 (`trap_seen`, `fw_done`) are new; the MMIO bridge now fully decodes addresses and returns a bus error (trap) outside RAM/MMIO. Reset vector is `0x80` with a 32-entry vector table at `0x0`. The debug-module window `0x1A11_0000` is reserved. See `agriasic_digital_v2/README.md`, "Processor provenance", and `rtl/ibex/VENDOR.md`. Sections referring to `DatapathPipelined`, `core_clk_en` or the 77-test cocotb ISA regression describe the retired core.
-- **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (4 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (firmware `SP = 0x0001_0800`, results at `0x0001_0100..0x0001_0143` — section 7.1's scratch-RAM offsets are unchanged relative to the RAM base), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets core + peripheral bridge only. GAP-11 (host-visible results) now has a bench-level answer: results are readable over JTAG (`fw/openocd_agriasic.cfg`); the deployed SPI path remains open. Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
+- **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (1 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (512 B; firmware `SP = 0x0001_0200`, results at `0x0001_0100..0x0001_016B` — section 7.1's scratch-RAM offsets are unchanged relative to the RAM base), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets core + peripheral bridge only. GAP-11 (host-visible results) had a bench-level answer here — results are readable over JTAG (`fw/openocd_agriasic.cfg`) — and the deployed SPI path is now built too (section 6.24). Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
+- **Post-v0.14 note — host SPI port, GAP-11 CLOSED.** `agriasic_spi_host.sv` gives an external host its own bus master port (**M4**) behind four pads (`gpio_spi_sclk_i/cs_n_i/mosi_i`, `gpio_spi_miso_o/miso_oe_o`), kept separate from the flash port because the two run opposite directions on every wire. The host reads a finished sweep straight out of DMEM **while the core is parked in `wfi`** — no firmware cooperation, no mailbox protocol. Permissions are enforced in the interconnect decode: M4 reaches DMEM and the peripheral window only, never IMEM (so a field host cannot overwrite firmware) and never the debug module (so it cannot take debug control). Arbitration is `M1 > M2 > M4 > M3 > M0`. Cost, measured: **+218 flops and +1,242 combinational primitives**, about 1.4% of the design. Digital pads go 14 → 18. Section 6.24 has the protocol; verified by `tb_agriasic_spi_host.sv` (stage 15 of `verify_all.sh`), which reads real measurement results over SPI and confirms both refusals raise a visible sticky error.
+- **Post-v0.14 note — no SRAM compiler: memories shrunk and built from flops.** The project has no SRAM compiler available, so `agriasic_imem` and `agriasic_dmem` are standard-cell flop arrays rather than macros. Two measurements drove a resize. First, both the flops *and* the read mux scale with depth: with the memories inferred as flops, IMEM 4 KiB + DMEM 2 KiB cost **52,941 flops and 85,448 combinational cells** (138,391 total), against 3,726 + 28,565 with them blackboxed. Second, the read mux is now in the instruction-fetch critical path, where an SRAM macro would have had a specified access time — so depth costs timing as well as area. **IMEM is therefore 256 x 32 (1 KiB) and DMEM 128 x 32 (512 B)**, sized to the measured 592 B image and 100 B data footprint rather than to round numbers, with the firmware stack pointer moved to `0x0001_0200`. 512 B is the DMEM floor without relocating the result block, which occupies `0x100..0x16B`. The wrappers keep the `AGRIASIC_USE_SRAM_MACRO` hook and the one-cycle timing contract of section 6.16 unchanged, so a macro can still drop in if one becomes available. The golden ROM was re-promoted because the image now carries the new stack pointer. The boot ROM was always a synthesized constant table and never needed a compiler.
 - **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && gpio_start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
 - **Post-v0.14 note — golden boot ROM (default boot source).** The IMEM SRAM is shadow-loaded at reset from one of two sources selected by the `BOOT_SEL` strap (latched on the first cycle out of reset): **0 = on-die synthesized golden ROM** (`agriasic_boot_rom.sv`, generated from `fw/golden/agriasic_fw_golden.hex`, ~150 cycles), 1 = external SPI flash (~80k cycles, header + CRC-32). The core always fetches from the SRAM, never from the ROM: nothing is added to the fetch path's timing, firmware is linked once for both sources, and **IMEM stays writable after a ROM boot** so a debugger can patch constants over JTAG without a rebuild or reflash — the reason this is a shadow-load rather than a fetch-path mux. `BOOT_CTRL[2]` re-boots from ROM, `[1]` from flash; `BOOT_STATUS[13:12]` reports the source actually used. ROM cost: +1,027 combinational primitives, +6 flops (a writable array of the same depth would be 4,736 storage bits). The golden image is promoted explicitly (`gen_boot_rom.py --promote`), never by `build.sh`, and its provenance is recorded in `fw/golden/GOLDEN.md`. Option A of the memory recommendation (fixed firmware in ROM) and Option C (flash boot) therefore both exist, strap-selectable.
 - **Post-v0.14 note — Rev 5 tetrapolar analog interface.** The measurement engine was adapted to the four-electrode front end. Excitation: `excitation_ctrl` emits `sine_code_o[7:0]` from a 16-point COSINE table to the sine DAC on E1, replacing `exc_drive_p_o`/`exc_drive_n_o`; peaks land on the I sample points (phase 0/8) and mid-code on the Q points (4/12), and `code[k]+code[k+8]=256` preserves the +/- chop. There is no dead time any more, so **GAP-6 (break-before-make sizing) is retired**. Sensing: two channels (diff PGA on E2/E3, TIA on E4) share one SAR ADC through `mux_sel_o`; one `adc_sample_o` strobe freezes both S/H at each phase point and two conversions follow, so V/I phase is preserved by construction. Four accumulators (`dv_i/dv_q/cur_i/cur_q`, same +/-16320 bound each) replace the single I/Q pair; `RESULT_I`/`RESULT_Q` now carry dV and `RESULT_CUR_I`/`RESULT_CUR_Q` (`0x34`/`0x38`) the current, with `AFE_CTRL` (`0x3C`) carrying pga_gain/tia_rf/amplitude/mux_settle. Section 3.1's I/Q definition applies per channel; impedance Z(f)=dV/I stays host-side. Verified by the rewritten `tb_excitation_drive.sv` and by two-channel ADC models in every measurement testbench (distinct per-channel targets, so a swapped mux fails). Open: simultaneous vs alternating S/H (RTL assumes simultaneous).
@@ -590,11 +592,13 @@ agriasic_digital_rv32i_top                      chip top (RV32I variant)
 │   │
 │   ├── agriasic_rv32i_bus : u_bus              4-master / 4-slave interconnect
 │   │
-│   ├── agriasic_imem : u_imem                  program memory, 1024 x 32, writable
+│   ├── agriasic_imem : u_imem                  program memory, 256 x 32, writable
 │   ├── agriasic_rv32i_mmio : u_mmio            peripheral bridge
-│   │   └── agriasic_dmem : u_dmem              scratch RAM, 512 x 32
+│   │   └── agriasic_dmem : u_dmem              scratch RAM, 128 x 32
 │   │
 │   ├── agriasic_spi_boot : u_boot              boot loader + post-boot SPI master
+│   ├── agriasic_spi_host : u_spi_host          host SPI port, bus master M4
+│   │   └── spi_slave : u_spi_slave             mode-0 byte serializer + CDC
 │   ├── agriasic_boot_rom : u_boot_rom          golden image, constant table
 │   │
 │   ├── dmi_jtag : u_dtm                        JTAG TAP + Debug Transport Module
@@ -618,7 +622,7 @@ agriasic_digital_spi_top
 ```
 
 Composing these two — giving the RV32I variant a host-facing SPI port — is
-**GAP-11**, still open. Section 6.13 says what that costs.
+**GAP-11**, now **closed** by `agriasic_spi_host` (section 6.24): rather than merging the two tops, the host SPI port was added to the RV32I shell as bus master M4.
 
 #### Port naming convention
 
@@ -677,10 +681,10 @@ Address map the bus decodes (section 6.15 for the full rules):
 
 | Region | Base | Size | Reached by |
 |---|---|---|---|
-| Program memory (IMEM) | `0x0000_0000` | 4 KiB | fetch, data, SBA, boot loader |
-| Data memory (DMEM) | `0x0001_0000` | 2 KiB | data, SBA |
+| Program memory (IMEM) | `0x0000_0000` | 1 KiB | fetch, data, SBA, boot loader |
+| Data memory (DMEM) | `0x0001_0000` | 512 B | data, SBA, host SPI |
 | Debug module | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data (data0/1) |
-| Peripheral registers | `0x8000_0000` | 64 B | data, SBA |
+| Peripheral registers | `0x8000_0000` | 64 B | data, SBA, host SPI |
 | anything else | — | — | bus error → trap / `sberror` |
 
 #### Where the gates are
@@ -691,13 +695,30 @@ register file (`power/run_synthesis.py`). Register bits by block:
 | Block | Register bits | Note |
 |---|---:|---|
 | Debug module + DTM | 1,076 | abstract data, 8-word program buffer, SBA, DTM CDC |
+| Host SPI port (M4) | 218 | spi_slave, framing FSM, bus-master front end |
 | Ibex register file | 992 | 31 × 32; `AGRIASIC_LATCH_REGFILE` halves this for ASIC |
 | Ibex pipeline | 898 | 3-stage + CSRs |
 | Boot loader | 347 | header, CRC, SPI engine, strap/override state |
 | Measurement engine | 235 | four accumulators + shadows, phase/pair counters |
 | Shell / MMIO / bus | 103 | config registers, response routing |
 | Ibex mul/div | 75 | iterative divider |
-| **Total** | **3,726** | plus 28,565 combinational primitives |
+| **Total** | **3,944** | plus 29,807 combinational primitives |
+
+Those figures blackbox the two memories. With no SRAM compiler available they
+are standard-cell flop arrays, so the number that matters for silicon is the
+one with them included:
+
+| Configuration | Flops | Combinational | Total cells |
+|---|---:|---:|---:|
+| Memories blackboxed (an ideal macro) | 3,944 | 29,807 | — |
+| **As built**: IMEM 1 KiB + DMEM 512 B as flops | **16,296** | **43,967** | **60,264** |
+| For comparison: the old 4 KiB + 2 KiB as flops | 52,941 | 85,448 | 138,391 |
+
+Shrinking the memories to the measured firmware footprint cut total cells
+**2.3x** and flop count **3.2x**, while *adding* the host SPI port. Note the mux
+count moves almost as much as the flop count: a flop array needs an N:1 read
+mux, and that mux is in the instruction-fetch path, so depth costs timing as
+well as area.
 
 The golden boot ROM contributes ~1,027 of those combinational primitives and
 almost no registers — it is a constant table, not storage (section 6.21).
@@ -1332,7 +1353,7 @@ debug mode — a genuinely nasty bring-up bug.
 vector table at `boot_addr_i`. `boot_addr_i = 0`, so:
 
 ![ibex_boot_image_map](diagrams/modules/ibex_boot_image_map.svg)
-*(Where the 592-byte image sits in the 4 KiB IMEM, and why _start is at 0x80. Generated by `docs/diagrams/gen_module_diagrams.py`.)*
+*(Where the 592-byte image sits in the 1 KiB IMEM, and why _start is at 0x80. Generated by `docs/diagrams/gen_module_diagrams.py`.)*
 
 **Verilator note.** Ibex gates its own core clock while idle, so its
 async-reset flops only reset on a real falling edge of `rst_ni`. Under
@@ -1392,7 +1413,7 @@ so a compiler macro can be dropped in without touching anything else:
 
 | | IMEM | DMEM |
 |---|---|---|
-| Depth | 1024 × 32 (4 KiB) | 512 × 32 (2 KiB) |
+| Depth | 256 × 32 (1 KiB) | 128 × 32 (512 B) |
 | Base | `0x0000_0000` | `0x0001_0000` |
 | Write port | **yes** — boot loader, debug SBA, core data port | yes — core data port, SBA |
 | Simulation init | `$readmemh(INIT_FILE)`; `INIT_FILE=""` fills with NOP | none (firmware writes before it reads — verified) |
@@ -1772,6 +1793,70 @@ a mux change between the settle wait and the last bit trial would digitise a
 mixture of the two channels, which is exactly the kind of bug a single-target
 ADC model would never catch.
 
+
+---
+
+### 6.24 agriasic_spi_host **[IMPL]** — the host SPI port (closes GAP-11)
+
+![spi_host_block_diagram](diagrams/modules/spi_host_block_diagram.svg)
+*(Four pads to a mode-0 SPI slave, a framing state machine, and a bus master
+port. Generated by `docs/diagrams/gen_module_diagrams.py`.)*
+
+GAP-11 was that the RV32I chip had no host-facing path to its own swept
+results. This closes it by giving an external host **its own bus master port**
+rather than a mailbox.
+
+**Why a master and not a mailbox.** The debug module already proves the shape:
+an external agent gets a master port (M2, system bus access) and reads memory
+while the core runs. M4 is the same thing on SPI. The host can therefore read a
+finished sweep straight out of DMEM while the core is parked in `wfi`, with no
+firmware cooperation and no handshake protocol to get wrong. A mailbox would
+have needed firmware alive to publish results, plus a bespoke race-free handoff
+invented from scratch.
+
+**Why separate pads from the flash port.** The two have opposite roles, so every
+wire runs the opposite direction: SCK, CS_N and MOSI are inputs here and outputs
+on the flash master, MISO the reverse. Sharing them would need bidirectional
+pads, a mode bit that can strand both paths, and a host whose SPI master
+tri-states SCK when idle — which most do not. Per the analog/package review
+these stay on their own four pads, bringing the digital side to 18.
+
+**Permissions, enforced in the interconnect.** M4 reaches DMEM and the
+peripheral window and nothing else. Not IMEM, so a field host cannot overwrite
+firmware — that stays JTAG's job. Not the debug module, so a field host cannot
+take debug control of the core. These live in `agriasic_rv32i_bus`'s decode
+(section 6.15), not in this block, so a bug here or a bad address from the host
+still cannot reach either.
+
+**Arbitration.** `M1 > M2 > M4 > M3 > M0`. The host sits below the core's data
+port and the debugger because its traffic is polled and latency-insensitive, and
+above the boot loader, which only runs at reset when nothing else is active.
+
+**Protocol.** One transaction per CS_N assertion: a command byte (`0x03` read,
+`0x02` write, `0x05` status), a big-endian 32-bit address, then data bytes
+little-endian within each word with the address auto-incrementing. Releasing
+CS_N resets the framing, so a host that loses sync simply starts again. Writes
+commit whole words only; a transaction cut short mid-word commits nothing
+partial.
+
+**Timing.** `spi_slave` oversamples SCK/CS_N/MOSI into `clk`, so this is not a
+second clock domain and the `f_clk/16` SCK ceiling of section 6.7 applies
+unchanged. One byte is therefore at least 128 core clocks and a bus access is 2,
+so the access always completes inside the inter-byte gap — no flow control is
+needed on the wire. An assertion checks that invariant in simulation.
+
+**Status and errors.** A refused or errored access sets a sticky error bit,
+readable with `0x05`. It clears at the **end** of the status transaction, not
+when the command byte lands — clearing on the command would wipe the bit before
+the host had clocked out the byte reporting it, so the host could never observe
+an error. A set always beats a simultaneous clear.
+
+Verified by `tb_agriasic_spi_host.sv` (stage 15 of `verify_all.sh`): the host
+writes and reads DMEM **while the core is mid-sweep**, reads the peripheral
+window, is refused on both IMEM and the debug module with the refusal visible as
+a sticky error, finds memory undisturbed by the refusals, and finally reads real
+measurement results (`OUT_COUNT`, `OUT_NUM_POINTS`, `OUT_DV_I[0]`,
+`OUT_CUR_I[0]`) out of DMEM once firmware completes.
 
 ---
 

@@ -60,7 +60,15 @@ module agriasic_digital_rv32i_top #(
   output logic                 gpio_flash_cs_n_o,
   output logic                 gpio_flash_mosi_o,
   input  logic                 gpio_flash_miso_i,
-  output logic                 gpio_boot_fail_o
+  output logic                 gpio_boot_fail_o,
+
+  // Host SPI port (chip is the slave). Separate pads from the flash port
+  // above: the two run opposite directions on every wire.
+  input  logic                 gpio_spi_sclk_i,
+  input  logic                 gpio_spi_cs_n_i,
+  input  logic                 gpio_spi_mosi_i,
+  output logic                 gpio_spi_miso_o,
+  output logic                 gpio_spi_miso_oe_o
 );
 
   // Rev 4.3 Phase 2.1: rst_n is the raw, possibly-asynchronous chip pin.
@@ -123,7 +131,12 @@ module agriasic_digital_rv32i_top #(
     .gpio_flash_cs_n_o            (gpio_flash_cs_n_o),
     .gpio_flash_mosi_o            (gpio_flash_mosi_o),
     .gpio_flash_miso_i            (gpio_flash_miso_i),
-    .gpio_boot_fail_o             (gpio_boot_fail_o)
+    .gpio_boot_fail_o             (gpio_boot_fail_o),
+    .gpio_spi_sclk_i              (gpio_spi_sclk_i),
+    .gpio_spi_cs_n_i              (gpio_spi_cs_n_i),
+    .gpio_spi_mosi_i              (gpio_spi_mosi_i),
+    .gpio_spi_miso_o              (gpio_spi_miso_o),
+    .gpio_spi_miso_oe_o           (gpio_spi_miso_oe_o)
   );
 
   agriasic_digital_top #(

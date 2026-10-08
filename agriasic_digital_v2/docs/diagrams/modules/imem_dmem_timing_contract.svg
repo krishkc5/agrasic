@@ -53,5 +53,6 @@
   <text x="3100" y="1880" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">HOLDS</text>
   <rect x="260" y="2130" width="4480" height="190" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="286" y="2172" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Instantiated vs used</text>
-  <text x="286" y="2212" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IMEM  4 KiB (1024 x 32), writable       592 B used        DMEM  2 KiB (512 x 32)       100 B used</text>
+  <text x="286" y="2212" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  512 B (128 x 32)     100 B used</text>
+  <text x="120" y="2350" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">No SRAM compiler is available, so these are standard-cell flop arrays: both the flops and the NUM_WORDS:1 read mux scale with depth, and that mux sits in the fetch path.</text>
 </svg>

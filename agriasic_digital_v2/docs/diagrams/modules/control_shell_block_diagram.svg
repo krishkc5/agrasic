@@ -45,14 +45,14 @@
   <text x="1216" y="882" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">priority   M1 core-data  &gt;  M2 debug-SBA  &gt;  M3 boot-loader  &gt;  M0 core-fetch</text>
   <rect x="1190" y="1120" width="780" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="1216" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_imem</text>
-  <text x="1216" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">4 KiB, 1024 x 32</text>
+  <text x="1216" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">1 KiB, 256 x 32</text>
   <text x="1216" y="1236" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">writable: shadow-load target</text>
   <text x="1216" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">and JTAG patch target</text>
   <rect x="2030" y="1120" width="820" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="2056" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_mmio</text>
   <text x="2056" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">64 B peripheral window</text>
   <text x="2056" y="1236" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">instantiates agriasic_dmem</text>
-  <text x="2056" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">2 KiB, 512 x 32</text>
+  <text x="2056" y="1270" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">512 B, 128 x 32</text>
   <rect x="2910" y="1120" width="810" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="2936" y="1162" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_spi_boot</text>
   <text x="2936" y="1202" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">golden ROM or SPI flash</text>

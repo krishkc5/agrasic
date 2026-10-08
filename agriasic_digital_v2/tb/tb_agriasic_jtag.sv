@@ -371,17 +371,19 @@ module tb_agriasic_jtag;
     end else $display("[TB]   sp  = 0x%08x (inside DMEM @0x10000) OK", sp);
 
     // ---- 5. System bus access ---------------------------------------------
-    sba_write32(DMEM_BASE + 32'h400, 32'hA5A5_1234);
-    expect_eq("ram_array[0x100] after SBA write",
-              dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h100], 32'hA5A5_1234);
-    sba_read32(DMEM_BASE + 32'h400, v, sberr);
+    // DMEM is 512 B: 0x000-0x1FF. Results occupy 0x100-0x16B and the stack the
+    // top 32 B, so 0x080 is the scratch hole both leave free.
+    sba_write32(DMEM_BASE + 32'h080, 32'hA5A5_1234);
+    expect_eq("ram_array[0x20] after SBA write",
+              dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h20], 32'hA5A5_1234);
+    sba_read32(DMEM_BASE + 32'h080, v, sberr);
     expect_eq("SBA read-back RAM", v, 32'hA5A5_1234);
     expect_eq("sberror (RAM)", {29'd0, sberr}, 32'd0);
 
-    sba_write32(32'h0000_0FFC, 32'h0000_0013);      // NOP into the last IMEM word
-    expect_eq("imem mem_array[1023] after SBA write",
-              dut.u_control_shell.u_imem.mem_array[1023], 32'h0000_0013);
-    sba_read32(32'h0000_0FFC, v, sberr);
+    sba_write32(32'h0000_03FC, 32'h0000_0013);      // NOP into the last IMEM word
+    expect_eq("imem mem_array[255] after SBA write",
+              dut.u_control_shell.u_imem.mem_array[255], 32'h0000_0013);
+    sba_read32(32'h0000_03FC, v, sberr);
     expect_eq("SBA read-back IMEM", v, 32'h0000_0013);
     expect_eq("sberror (IMEM)", {29'd0, sberr}, 32'd0);
 

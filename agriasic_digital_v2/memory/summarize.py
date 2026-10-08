@@ -8,7 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 BASE = ROOT.parent
 DMEM_BASE  = 0x00010000   # agriasic_rv32i_bus.sv / control shell (Phase 2 flat map)
-DMEM_BYTES = 0x800
+DMEM_BYTES = 0x200
+# The stack lives at the top of DMEM and grows down; everything below it in
+# this region is the result block. Derived rather than hardcoded so a resize
+# of DMEM does not silently reclassify every stack access as a result.
+STACK_BASE = DMEM_BYTES - 0x20
 
 def bounds(values):
     values = set(values)
@@ -37,7 +41,7 @@ def main():
         accessed = {addr + lane for lane in range(4) if mask & (1 << lane)}
         if kind == "fetch":
             fetch_bytes |= accessed
-            if max(accessed) >= 4096 or addr % 4: invalid.append(event)
+            if max(accessed) >= 1024 or addr % 4: invalid.append(event)
             if max(accessed) >= image["vma_end_exclusive"]: fetch_beyond_image.add(addr)
         elif addr & 0x80000000:
             mmio[kind, addr] += 1
@@ -48,7 +52,7 @@ def main():
             if addr < DMEM_BASE or max(accessed) >= DMEM_BASE + DMEM_BYTES or addr % 4: invalid.append(event)
             accessed = {a - DMEM_BASE for a in accessed}
             ram_bytes |= accessed
-            if (addr - DMEM_BASE) >= 0x7e0: stack_bytes |= accessed
+            if (addr - DMEM_BASE) >= STACK_BASE: stack_bytes |= accessed
             else: result_bytes |= accessed
             if kind == "store": initialized |= accessed
             elif not accessed <= initialized: uninitialized_reads.append(event)

@@ -81,7 +81,7 @@
  * Phase 2 flat map: RAM lives at DMEM_BASE = 0x0001_0000 (2 KiB), so the
  * debugger's single address space has program memory at 0 and RAM at
  * 0x10000 with no overlap. Results sit at DMEM_BASE + 0x100, well below the
- * stack top at DMEM_BASE + 0x800.
+ * stack top at DMEM_BASE + 0x200.
  *
  * Rev 4.3 Phase 7 layout (supersedes the Phase 1-6 single-frequency-demo
  * layout: OUT_AVERAGE/OUT_AVERAGE_Q/OUT_SAMPLES/OUT_SAMPLES_Q are retired --

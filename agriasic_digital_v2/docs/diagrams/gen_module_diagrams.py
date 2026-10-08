@@ -137,10 +137,10 @@ def control_shell_block():
         "priority   M1 core-data  >  M2 debug-SBA  >  M3 boot-loader  >  M0 core-fetch"],
         fill=GREEN, tfill=INK)
     c.box(1190, 1120, 780, 300, "agriasic_imem", [
-        "4 KiB, 1024 x 32", "writable: shadow-load target", "and JTAG patch target"],
+        "1 KiB, 256 x 32", "writable: shadow-load target", "and JTAG patch target"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2030, 1120, 820, 300, "agriasic_rv32i_mmio", [
-        "64 B peripheral window", "instantiates agriasic_dmem", "2 KiB, 512 x 32"],
+        "64 B peripheral window", "instantiates agriasic_dmem", "512 B, 128 x 32"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2910, 1120, 810, 300, "agriasic_spi_boot", [
         "golden ROM or SPI flash", "header + CRC-32 check", "then a firmware peripheral"],
@@ -218,15 +218,15 @@ def ibex_boot_image_map():
                "the 32-entry trap vector table, 128 bytes: entry 0 is exceptions, entry i is "
                "interrupt i, entry 31 is the NMI. 0x080 is _start, which sets the stack pointer, "
                "enables mie fast interrupt 0 and calls main. The image ends at 0x250. The rest of "
-               "the 4 KiB IMEM is unused and filled with NOPs.", h=2400)
+               "the 1 KiB IMEM is unused and filled with NOPs.", h=2400)
     rows = [(0x000, 0x080, ".vectors    32 x  j trap", 300, PURPLE,
              "128 B - entry 0 = exceptions, entry i = interrupt i, entry 31 = NMI"),
             (0x080, 0x0C0, "_start", 260, BLUE,
              "li sp, 0x0001_0800   csrw mie, 1<<16 (fast0)   call main"),
             (0x0C0, 0x250, "main,  run_sweep_point,  store_point", 300, GREEN,
              "the three-frequency sweep; ends parked in wfi after writing CTRL.FW_DONE"),
-            (0x250, 0x1000, "unused IMEM", 360, WHITE,
-             "filled with 0x0000_0013 (NOP) - 4 KiB instantiated, 592 B used")]
+            (0x250, 0x400, "unused IMEM", 360, WHITE,
+             "filled with 0x0000_0013 (NOP) - 1 KiB instantiated, 592 B used")]
     y = 330
     for lo, hi, name, h, col, note in rows:
         c.box(780, y, 2880, h, name, [note], fill=col, tfill=INK,
@@ -234,7 +234,7 @@ def ibex_boot_image_map():
         c.text(740, y + 46, "0x%03X" % lo, 26, INK, "700", "end")
         c.text(3700, y + 46, "%d B" % (hi - lo), 22, GREY)
         y += h + 40
-    c.text(740, y + 10, "0x1000", 26, INK, "700", "end")
+    c.text(740, y + 10, "0x400", 26, INK, "700", "end")
     c.box(3900, 330, 900, 700, "Why 0x80", [
         "Ibex sets mtvec from", "boot_addr_i and begins", "execution at",
         "boot_addr_i + 0x80.", "", "boot_addr_i = 0, so the", "vector table lands at 0",
@@ -273,8 +273,8 @@ def rv32i_bus_block():
         "permissions are enforced in", "the decode, not merely", "documented: a master that",
         "reaches outside its own set", "gets a bus error, never a", "silent wrong access"],
         fill=INK, head_size=28, line_size=19, lead=30)
-    targets = [("IMEM", "0x0000_0000", "4 KiB", ORANGE),
-               ("DMEM  +  MMIO", "0x0001_0000  /  0x8000_0000", "2 KiB  +  64 B", ORANGE),
+    targets = [("IMEM", "0x0000_0000", "1 KiB", ORANGE),
+               ("DMEM  +  MMIO", "0x0001_0000  /  0x8000_0000", "512 B  +  64 B", ORANGE),
                ("Debug module", "0x1A11_0000", "4 KiB", PURPLE),
                ("error   (no target)", "anything else", "bus error -> precise trap", RED)]
     y = 440
@@ -359,8 +359,11 @@ def imem_dmem_timing():
         for x, v in zip(xs, r):
             c.text(x, 1620 + i * 130, v, 20, GREY)
     c.box(260, 2130, 4480, 190, "Instantiated vs used", [
-        "IMEM  4 KiB (1024 x 32), writable       592 B used        DMEM  2 KiB (512 x 32)       "
+        "IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  512 B (128 x 32)     "
         "100 B used"], fill=ORANGE, tfill=INK, head_size=24, line_size=19)
+    c.note(2350, "No SRAM compiler is available, so these are standard-cell flop arrays: "
+                 "both the flops and the NUM_WORDS:1 read mux scale with depth, and that mux "
+                 "sits in the fetch path.")
     c.save("imem_dmem_timing_contract.svg")
 
 
@@ -875,12 +878,68 @@ def rst_sync_timing():
     c.save("rst_sync_timing.svg")
 
 
+# -------------------------------------------------------- 6.24 host SPI port
+def spi_host_block():
+    c = Canvas("agriasic_spi_host - the host SPI port (bus master M4)",
+               "Section 6.24 - an external host reads results out of DMEM while the core sleeps",
+               "Host SPI port. Four pads carry a mode-0 SPI slave: the host drives SCK, CS_N and "
+               "MOSI and reads MISO. spi_slave oversamples them into the core clock and hands up "
+               "bytes; a framing state machine turns command plus address plus data into bus "
+               "transactions on master port M4. Permissions are enforced in the interconnect: M4 "
+               "reaches DMEM and the peripheral window only, never IMEM and never the debug "
+               "module.", h=2700)
+    c.box(200, 320, 820, 420, "Host SPI pads", [
+        "gpio_spi_sclk_i     in", "gpio_spi_cs_n_i     in", "gpio_spi_mosi_i     in",
+        "gpio_spi_miso_o     out", "gpio_spi_miso_oe_o  out"], fill=INK, lead=38)
+    c.text(220, 790, "Chip is the SLAVE here.", 20, GREY)
+    c.text(220, 825, "Every wire runs the OPPOSITE", 20, GREY)
+    c.text(220, 860, "direction on the flash port,", 20, GREY)
+    c.text(220, 895, "which is why the pads cannot", 20, GREY)
+    c.text(220, 930, "be shared.", 20, GREY)
+    c.arrow(1020, 530, 1320, 530, INK)
+    c.box(1320, 320, 980, 420, "spi_slave", [
+        "2FF oversampling into clk -", "not a second clock domain", "",
+        "max SCK = f_clk / 16", "", "byte in / byte out"], fill=BLUE, tfill=INK, lead=36)
+    c.arrow(2300, 530, 2600, 530, BLUE_S)
+    c.box(2600, 320, 1060, 420, "framing FSM", [
+        "S_CMD   -> S_ADDR", "S_ADDR  -> S_READ / S_WRITE", "S_STATUS", "",
+        "CS_N release resets framing,", "so a lost host just retries"], fill=GREEN, tfill=INK, lead=36)
+    c.arrow(3660, 530, 3960, 530, GREEN_S)
+    c.box(3960, 320, 840, 420, "bus master M4", [
+        "req / gnt / rvalid", "whole 32-bit words", "", "sticky error bit on", "any refusal"],
+        fill=PURPLE, tfill=INK, lead=38)
+    c.path([(4380, 740), (4380, 900), (2500, 900), (2500, 1040)], PURPLE_S)
+    c.box(1500, 1040, 2000, 200, "agriasic_rv32i_bus", ["priority  M1 > M2 > M4 > M3 > M0"],
+          fill=GREEN, tfill=INK, head_size=28, line_size=20)
+    c.path([(2000, 1240), (2000, 1380)], GREEN_S)
+    c.path([(3000, 1240), (3000, 1380)], RED_S)
+    c.box(1200, 1380, 1600, 230, "DMEM  +  peripheral window", ["ALLOWED"],
+          fill=ORANGE, tfill=INK, head_size=24, line_size=20)
+    c.box(2900, 1380, 1900, 230, "IMEM  and  debug module", ["REFUSED -> bus error"],
+          fill=RED, tfill=INK, head_size=24, line_size=20)
+    c.box(200, 1720, 4600, 340, "Why the permissions are in the decode, not in this block", [
+        "Not IMEM: a field host cannot overwrite firmware - that stays JTAG's job.   "
+        "Not the DM: a field host cannot take debug control.",
+        "Enforcing it in the interconnect means a bug in this block, or a host that sends a bad "
+        "address, still cannot reach either."],
+        fill=WHITE, stroke=INK, tfill=INK, head_size=26, line_size=20, line_fill=GREY, lead=38)
+    c.box(200, 2110, 4600, 380, "Wire protocol (one transaction per CS_N assertion)", [
+        "byte 0       command    0x03 READ   0x02 WRITE   0x05 RDSR (status)",
+        "bytes 1..4   32-bit address, BIG endian, as SPI NOR does it",
+        "then         data bytes, LITTLE endian within each word, address auto-incrementing by 4",
+        "status byte  [0] busy   [1] sticky error, cleared at the END of the status read"],
+        fill=INK, head_size=26, line_size=20, lead=36)
+    c.note(2600, "A byte is at least 128 core clocks and a bus access is 2, so the access always "
+                 "finishes inside the inter-byte gap - no flow control is needed on the wire.")
+    c.save("spi_host_block_diagram.svg")
+
+
 ALL = [control_shell_block, control_shell_reset_domains, ibex_boot_image_map,
        rv32i_bus_block, rv32i_bus_handshake, imem_dmem_timing, mmio_register_map,
        spi_boot_source_select, spi_boot_state_machine, flash_image_format,
        boot_rom_generation, debug_module_integration, measurement_fsm_rev5_states,
        simultaneous_sample_hold, excitation_cosine_table, sar_controller_rev5_states,
-       rst_sync_timing]
+       rst_sync_timing, spi_host_block]
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)

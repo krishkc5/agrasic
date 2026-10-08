@@ -73,7 +73,7 @@
 // A ROM boot can only ever report 4.
 // -----------------------------------------------------------------------------
 module agriasic_spi_boot #(
-  parameter int unsigned IMEM_BYTES        = 4096,
+  parameter int unsigned IMEM_BYTES        = 1024,
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // ~5 ms at 160 MHz (flash tVSL)
   parameter logic [7:0]  BOOT_CLK_DIV      = 8'd7,
   parameter bit          IMEM_PRELOADED    = 1'b0,

@@ -20,8 +20,8 @@
 
 MEMORY
 {
-    ROM : ORIGIN = 0x00000000, LENGTH = 4K   /* agriasic_imem, 1024 words   */
-    RAM : ORIGIN = 0x00010000, LENGTH = 2K   /* agriasic_dmem, 512 words    */
+    ROM : ORIGIN = 0x00000000, LENGTH = 1K   /* agriasic_imem, 256 words    */
+    RAM : ORIGIN = 0x00010000, LENGTH = 512  /* agriasic_dmem, 128 words    */
     /* Phase 2 flat map (agriasic_rv32i_bus.sv). RAM is documented here so a
        debugger and future .data/.bss placement see one consistent picture;
        nothing is placed in it by this script today (Harvard ASSERTs below).

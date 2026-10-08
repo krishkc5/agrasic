@@ -451,3 +451,61 @@ chip to start. Note the ROM is sized 256 words (1 KiB) independently of IMEM's
 
 What this buys over a fetch-path ROM mux: **IMEM stays writable after a ROM
 boot**, so bench-time config changes are a JTAG poke rather than a rebuild.
+
+---
+
+### Decision addendum: no SRAM compiler, memories built from flops
+
+The gating question this document kept flagging -- *"availability of the TSMC
+180 SRAM compiler to the project"* -- has been answered: **there is no SRAM
+compiler.** Both memories are therefore standard-cell flop arrays, and the
+sizing recommendations above were acted on.
+
+**What was built**
+
+| | Instantiated | Measured use | Headroom |
+|---|---|---|---|
+| IMEM | 256 x 32 (**1 KiB**) | 592 B | 432 B |
+| DMEM | 128 x 32 (**512 B**) | 100 B | ~400 B |
+| Boot ROM | 256 x 32, 148 used | 592 B | constant table, not storage |
+
+Firmware `SP` moved to `0x0001_0200`. **512 B is the DMEM floor** without
+relocating firmware: the result block occupies `0x100..0x16B`, so a 256 B RAM
+would put every result register out of range.
+
+**Measured cost** (yosys generic synthesis, `-noabc`; ratios are meaningful,
+absolute area is not):
+
+| Configuration | Flops | Combinational | Total cells |
+|---|---:|---:|---:|
+| Memories blackboxed (an ideal macro) | 3,944 | 29,807 | -- |
+| **As built**: 1 KiB + 512 B as flops | **16,296** | **43,967** | **60,264** |
+| The old 4 KiB + 2 KiB as flops | 52,941 | 85,448 | 138,391 |
+
+Shrinking to the measured footprint cut total cells **2.3x** and flops **3.2x**
+-- while also adding the host SPI port.
+
+**The finding this document did not anticipate.** The read mux moves almost as
+much as the storage: MUX cells went 60,377 -> 31,702 -> 23,854 across 1024,
+512 and 256-word IMEM. A flop array needs an N:1 read mux, that mux is *larger*
+than the flops it reads from at 1024 deep, and **it sits in the instruction
+fetch path** -- where an SRAM macro would have had a specified access time. So
+depth costs timing as well as area, and the shrink buys both. This is now an
+open STA item at 160 MHz.
+
+It also explains the ROM's efficiency quantitatively: a constant table folds
+into the mux tree at roughly **0.22 cells per bit**, against **~2.2 cells per
+bit** for a writable flop array -- about **10x**. Worth noting the earlier
+figure in this file compared the ROM only against raw storage bits and so
+understated the gap.
+
+**Why IMEM stayed writable.** Fetching from the ROM would have saved most of
+the IMEM cost, but flash boot (post-tapeout firmware change) and JTAG patching
+both require writing into IMEM. 8,192 bits is a cheap premium against every
+firmware bug becoming a respin.
+
+**Still available if area gets tight:** a latch-based array roughly halves the
+flop area, and the pattern already exists in-tree (`AGRIASIC_LATCH_REGFILE`
+selects lowRISC's latch register file). The `AGRIASIC_USE_SRAM_MACRO` hook and
+the one-cycle timing contract are untouched, so a macro can still drop in.
+

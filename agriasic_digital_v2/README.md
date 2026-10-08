@@ -159,8 +159,8 @@ address space:
 
 | Region | Address | Who reaches it |
 |---|---|---|
-| IMEM (4 KiB, **loadable**) | `0x0000_0000` | core fetch; core data port; debug SBA (`load`) |
-| DMEM (2 KiB) | `0x0001_0000` | core data port; debug SBA |
+| IMEM (1 KiB, **loadable**) | `0x0000_0000` | core fetch; core data port; debug SBA (`load`) |
+| DMEM (512 B) | `0x0001_0000` | core data port; debug SBA |
 | Debug module | `0x1A11_0000` | core fetch (debug ROM / program buffer); core data port (data0/1, flags) |
 | MMIO | `0x8000_0000` | core data port; debug SBA |
 | anything else | | bus error: access-fault trap on the core, `sberror` on SBA |
@@ -243,6 +243,34 @@ host hands it a new image.
 
 `fw/build.sh` produces the image (`agriasic_fw_flash.bin` for the flash,
 `.hex` for simulation). Boot takes ~65.7k core cycles for the 484 B image at
+## Host SPI port (bus master M4, closes GAP-11)
+
+Four pads let an external host read results and write config: `gpio_spi_sclk_i`,
+`gpio_spi_cs_n_i`, `gpio_spi_mosi_i`, `gpio_spi_miso_o` (+ `_miso_oe_o`). The
+chip is the **slave**. These are deliberately **not** shared with the flash port
+— the two have opposite roles, so every wire runs the opposite direction.
+
+The host gets its own **bus master port**, shaped like the debug module's system
+bus access, rather than a mailbox. It therefore reads a finished sweep straight
+out of DMEM **while the core is parked in `wfi`**, with no firmware cooperation
+and no handshake to get wrong.
+
+| Phase | Bytes | Content |
+|---|---|---|
+| command | 1 | `0x03` READ, `0x02` WRITE, `0x05` status |
+| address | 4 | 32-bit, big endian |
+| data | n x 4 | little endian per word, auto-incrementing |
+
+**Reach: DMEM and the peripheral window only.** IMEM is refused so a field host
+cannot overwrite firmware (that stays JTAG's job), and the debug module is
+refused so it cannot take debug control. Both refusals are enforced in the
+interconnect decode and surface as a sticky error bit, not as silent garbage.
+
+Cost: **+218 flops, +1,242 combinational primitives**. Verified by
+`tb_agriasic_spi_host.sv` (regression stage 15).
+
+## Boot from SPI flash (details, continued)
+
 SCK = clk/16 (0.41 ms at 160 MHz). New chip pins: `gpio_boot_sel_i`,
 `gpio_flash_sck_o / _cs_n_o / _mosi_o / _miso_i`, `gpio_boot_fail_o`. The boot loader resets
 only with the chip, never with `ndmreset`, so a debugger reset cannot restart

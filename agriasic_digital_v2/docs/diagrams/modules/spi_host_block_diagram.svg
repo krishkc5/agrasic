@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2700" viewBox="0 0 5000 2700" role="img" aria-labelledby="t d">
+  <title id="t">agriasic_spi_host - the host SPI port (bus master M4)</title>
+  <desc id="d">Host SPI port. Four pads carry a mode-0 SPI slave: the host drives SCK, CS_N and MOSI and reads MISO. spi_slave oversamples them into the core clock and hands up bytes; a framing state machine turns command plus address plus data into bus transactions on master port M4. Permissions are enforced in the interconnect: M4 reaches DMEM and the peripheral window only, never IMEM and never the debug module.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2700" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_spi_host - the host SPI port (bus master M4)</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.24 - an external host reads results out of DMEM while the core sleeps</text>
+  <rect x="80" y="180" width="4840" height="2400" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="200" y="320" width="820" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="226" y="362" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Host SPI pads</text>
+  <text x="226" y="402" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_sclk_i     in</text>
+  <text x="226" y="440" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_cs_n_i     in</text>
+  <text x="226" y="478" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_mosi_i     in</text>
+  <text x="226" y="516" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_miso_o     out</text>
+  <text x="226" y="554" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_miso_oe_o  out</text>
+  <text x="220" y="790" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">Chip is the SLAVE here.</text>
+  <text x="220" y="825" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">Every wire runs the OPPOSITE</text>
+  <text x="220" y="860" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">direction on the flash port,</text>
+  <text x="220" y="895" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">which is why the pads cannot</text>
+  <text x="220" y="930" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">be shared.</text>
+  <line x1="1020" y1="530" x2="1320" y2="530" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <rect x="1320" y="320" width="980" height="420" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="1346" y="362" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">spi_slave</text>
+  <text x="1346" y="402" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">2FF oversampling into clk -</text>
+  <text x="1346" y="438" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">not a second clock domain</text>
+  <text x="1346" y="474" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="1346" y="510" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">max SCK = f_clk / 16</text>
+  <text x="1346" y="546" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="1346" y="582" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">byte in / byte out</text>
+  <line x1="2300" y1="530" x2="2600" y2="530" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>
+  <rect x="2600" y="320" width="1060" height="420" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="2626" y="362" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">framing FSM</text>
+  <text x="2626" y="402" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">S_CMD   -&gt; S_ADDR</text>
+  <text x="2626" y="438" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">S_ADDR  -&gt; S_READ / S_WRITE</text>
+  <text x="2626" y="474" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">S_STATUS</text>
+  <text x="2626" y="510" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="2626" y="546" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">CS_N release resets framing,</text>
+  <text x="2626" y="582" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">so a lost host just retries</text>
+  <line x1="3660" y1="530" x2="3960" y2="530" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <rect x="3960" y="320" width="840" height="420" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="3986" y="362" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">bus master M4</text>
+  <text x="3986" y="402" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">req / gnt / rvalid</text>
+  <text x="3986" y="440" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">whole 32-bit words</text>
+  <text x="3986" y="478" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve"></text>
+  <text x="3986" y="516" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">sticky error bit on</text>
+  <text x="3986" y="554" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">any refusal</text>
+  <path d="M4380,740 L4380,900 L2500,900 L2500,1040" fill="none" stroke="#7B1FA2" stroke-width="3" marker-end="url(#mp)"/>
+  <rect x="1500" y="1040" width="2000" height="200" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="1526" y="1082" font-family="Arial" font-size="28" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_bus</text>
+  <text x="1526" y="1122" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">priority  M1 &gt; M2 &gt; M4 &gt; M3 &gt; M0</text>
+  <path d="M2000,1240 L2000,1380" fill="none" stroke="#1B5E20" stroke-width="3" marker-end="url(#mg)"/>
+  <path d="M3000,1240 L3000,1380" fill="none" stroke="#B71C1C" stroke-width="3" marker-end="url(#mr)"/>
+  <rect x="1200" y="1380" width="1600" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1226" y="1422" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">DMEM  +  peripheral window</text>
+  <text x="1226" y="1462" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">ALLOWED</text>
+  <rect x="2900" y="1380" width="1900" height="230" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="2926" y="1422" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">IMEM  and  debug module</text>
+  <text x="2926" y="1462" font-family="Arial" font-size="20" fill="#212121" xml:space="preserve">REFUSED -&gt; bus error</text>
+  <rect x="200" y="1720" width="4600" height="340" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="226" y="1762" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Why the permissions are in the decode, not in this block</text>
+  <text x="226" y="1802" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">Not IMEM: a field host cannot overwrite firmware - that stays JTAG's job.   Not the DM: a field host cannot take debug control.</text>
+  <text x="226" y="1840" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">Enforcing it in the interconnect means a bug in this block, or a host that sends a bad address, still cannot reach either.</text>
+  <rect x="200" y="2110" width="4600" height="380" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="226" y="2152" font-family="Arial" font-size="26" font-weight="700" fill="#fff" xml:space="preserve">Wire protocol (one transaction per CS_N assertion)</text>
+  <text x="226" y="2192" font-family="Arial" font-size="20" fill="#fff" xml:space="preserve">byte 0       command    0x03 READ   0x02 WRITE   0x05 RDSR (status)</text>
+  <text x="226" y="2228" font-family="Arial" font-size="20" fill="#fff" xml:space="preserve">bytes 1..4   32-bit address, BIG endian, as SPI NOR does it</text>
+  <text x="226" y="2264" font-family="Arial" font-size="20" fill="#fff" xml:space="preserve">then         data bytes, LITTLE endian within each word, address auto-incrementing by 4</text>
+  <text x="226" y="2300" font-family="Arial" font-size="20" fill="#fff" xml:space="preserve">status byte  [0] busy   [1] sticky error, cleared at the END of the status read</text>
+  <text x="120" y="2600" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">A byte is at least 128 core clocks and a bus access is 2, so the access always finishes inside the inter-byte gap - no flow control is needed on the wire.</text>
+</svg>

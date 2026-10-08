@@ -36,7 +36,7 @@ _start:
        Phase 2 flat map: RAM is at 0x0001_0000-0x0001_07FF (it moved from 0 so
        the debugger's single address space does not overlap the program
        memory at 0). See agriasic_rv32i_bus.sv. */
-    li      sp, 0x00010800
+    li      sp, 0x00010200
 
     /* Enable fast interrupt 0 (measurement DONE) as a wfi wake source. */
     li      t0, (1 << 16)

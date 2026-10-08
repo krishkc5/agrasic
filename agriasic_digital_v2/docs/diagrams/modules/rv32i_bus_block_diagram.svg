@@ -42,11 +42,11 @@
   <line x1="2760" y1="555" x2="3120" y2="555" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
   <rect x="3120" y="440" width="1640" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="3146" y="482" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">IMEM</text>
-  <text x="3146" y="522" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0000_0000          4 KiB</text>
+  <text x="3146" y="522" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0000_0000          1 KiB</text>
   <line x1="2760" y1="855" x2="3120" y2="855" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
   <rect x="3120" y="740" width="1640" height="230" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="3146" y="782" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">DMEM  +  MMIO</text>
-  <text x="3146" y="822" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0001_0000  /  0x8000_0000          2 KiB  +  64 B</text>
+  <text x="3146" y="822" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">0x0001_0000  /  0x8000_0000          512 B  +  64 B</text>
   <line x1="2760" y1="1155" x2="3120" y2="1155" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
   <rect x="3120" y="1040" width="1640" height="230" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
   <text x="3146" y="1082" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">Debug module</text>

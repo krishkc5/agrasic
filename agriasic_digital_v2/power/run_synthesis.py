@@ -30,7 +30,7 @@ sources = " ".join(dbg_files + ibex_files + [
     "agriasic_digital_rv32i_top.sv", "agriasic_rv32i_control_shell.sv",
     "agriasic_digital_top.sv", "rst_sync.sv", "measurement_fsm.sv",
     "excitation_ctrl.sv", "sar_controller.sv",
-    "agriasic_imem.sv", "agriasic_dmem.sv", "agriasic_rv32i_mmio.sv", "agriasic_rv32i_bus.sv", "agriasic_spi_boot.sv", "agriasic_boot_rom.sv"])
+    "agriasic_imem.sv", "agriasic_dmem.sv", "agriasic_rv32i_mmio.sv", "agriasic_rv32i_bus.sv", "agriasic_spi_boot.sv", "agriasic_boot_rom.sv", "agriasic_spi_host.sv", "spi_slave.sv"])
 # SYNTHESIS disables prim_assert. AGRIASIC_LATCH_REGFILE is intentionally NOT set:
 # this run must match the simulated hierarchy (FF register file) so that
 # analyze_activity.py can pair every netlist register bit with a VCD signal.

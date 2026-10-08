@@ -30,7 +30,7 @@
 //   memory-compiler output is available. Nothing outside this file changes.
 // -----------------------------------------------------------------------------
 module agriasic_imem #(
-  parameter int unsigned NUM_WORDS = 1024,
+  parameter int unsigned NUM_WORDS = 256,
   parameter string       INIT_FILE = "agriasic_fw.hex"
 ) (
   input  logic        clk,
@@ -54,31 +54,57 @@ module agriasic_imem #(
   // PLACEHOLDER: no macro instance yet. dout_o is intentionally undriven so
   // that elaboration fails loudly if this define is set prematurely.
 `else
-  // Behavioral model with the identical timing contract.
+  // Behavioural model with the identical timing contract. With no SRAM compiler
+  // available this is what actually goes on the die, so it is written for
+  // synthesis quality rather than brevity:
+  //
+  //   1. The array sits in its OWN always_ff with NO reset. A memory has no
+  //      meaningful reset state -- the boot loader fills IMEM before the core
+  //      is ever released -- and resetting NUM_WORDS*32 flops would put a reset
+  //      input on every one of them plus a reset net spanning the whole array.
+  //      This is the single largest saving available here.
+  //   2. Each byte lane carries its own enable, so a sub-word write clock-gates
+  //      the three lanes it does not touch instead of reading them back through
+  //      a feedback mux, which would roughly double the mux count.
+  //   3. The enable is ce_i & we_i[n] directly. we_i[n] already implies |we_i,
+  //      so carrying the extra term would just be redundant logic.
+  //   4. dout_o is a separate register that DOES reset: 32 flops, not
+  //      NUM_WORDS*32.
+  //
+  // After the flops themselves the dominant cost is the NUM_WORDS:1 read mux,
+  // which is also in the fetch critical path. That is why depth is kept to what
+  // the image actually needs rather than to a round number.
   logic [31:0] mem_array [0:NUM_WORDS-1];
 
   wire [AddrMsb-AddrLsb:0] word_addr = addr_i[AddrMsb:AddrLsb];
 
+  // Deliberately NOT guarded by `ifndef SYNTHESIS. That looks like the obvious
+  // thing to do -- flops cannot be initialised on silicon, and on the real chip
+  // the boot loader is what puts an image here -- but power/run_sim.sh compiles
+  // a SIMULATION with -DSYNTHESIS on purpose, so the hierarchy it traces matches
+  // the synthesized one. Guarding this on SYNTHESIS silently leaves IMEM empty
+  // in that build and the core fetches nothing. The init is harmless in
+  // synthesis: it becomes an init attribute, not logic.
   initial begin
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
     else for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP: empty part
   end
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      dout_o <= 32'd0;
-    end else if (ce_i) begin
-      if (|we_i) begin
-        // Write cycle: no-change output policy, dout_o holds.
-        if (we_i[0]) mem_array[word_addr][7:0]   <= din_i[7:0];
-        if (we_i[1]) mem_array[word_addr][15:8]  <= din_i[15:8];
-        if (we_i[2]) mem_array[word_addr][23:16] <= din_i[23:16];
-        if (we_i[3]) mem_array[word_addr][31:24] <= din_i[31:24];
-      end else begin
-        dout_o <= mem_array[word_addr];
-      end
+  // Storage: no reset, one enable per byte lane.
+  always_ff @(posedge clk) begin
+    if (ce_i) begin
+      if (we_i[0]) mem_array[word_addr][7:0]   <= din_i[7:0];
+      if (we_i[1]) mem_array[word_addr][15:8]  <= din_i[15:8];
+      if (we_i[2]) mem_array[word_addr][23:16] <= din_i[23:16];
+      if (we_i[3]) mem_array[word_addr][31:24] <= din_i[31:24];
     end
-    // ce_i low: output register holds, matching macro behavior.
+  end
+
+  // Output register: resettable, 32 flops. Holds while ce_i is low and through
+  // a write -- the no-change output policy a compiler macro would have given.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                 dout_o <= 32'd0;
+    else if (ce_i && !(|we_i))  dout_o <= mem_array[word_addr];
   end
 `endif
 

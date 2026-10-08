@@ -38,9 +38,9 @@
   "retired_addresses_beyond_linked_image": [],
   "data_memory": {
     "lowest_byte": "0x00000100",
-    "highest_byte": "0x000007FF",
+    "highest_byte": "0x000001FF",
     "distinct_bytes": 100,
-    "span_bytes": 1792
+    "span_bytes": 256
   },
   "result_buffers": {
     "lowest_byte": "0x00000100",
@@ -49,22 +49,22 @@
     "span_bytes": 108
   },
   "stack_accesses": {
-    "lowest_byte": "0x000007E0",
-    "highest_byte": "0x000007FF",
+    "lowest_byte": "0x000001E0",
+    "highest_byte": "0x000001FF",
     "distinct_bytes": 28,
     "span_bytes": 32
   },
   "stack_pointer_values_in_order": [
-    "0x00011000",
+    "0x00010000",
     "0x00000000",
-    "0x00011000",
-    "0x00010800",
-    "0x000107E0",
-    "0x00010800"
+    "0x00010000",
+    "0x00010200",
+    "0x000101E0",
+    "0x00010200"
   ],
   "stack_frame_bytes_static": 32,
   "dmem_base": "0x00010000",
-  "data_memory_address_span_from_dmem_base_bytes": 2048,
+  "data_memory_address_span_from_dmem_base_bytes": 512,
   "mmio_accesses": [
     {
       "kind": "store",
@@ -131,5 +131,5 @@
     "store": 48,
     "load": 45
   },
-  "hex_sha256": "cc5208d52509a0880d346a4c1fafa1c9788f21f3605ad46c2ea3887135e86ab3"
+  "hex_sha256": "47c0ce42d1cc4e1314c514d3a4ff24fbba89b3769fa146e1db755b3cfc56de64"
 }

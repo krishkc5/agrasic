@@ -106,7 +106,10 @@ def generate(num_words):
 // defined rather than undriven.
 // -----------------------------------------------------------------------------
 module agriasic_boot_rom #(
-  parameter int unsigned NUM_WORDS = {num_words}
+  parameter int unsigned NUM_WORDS  = {num_words},
+  // What the instantiator believes the image length is. Checked below against
+  // the table actually generated into this file.
+  parameter int unsigned USED_WORDS = {len(words)}
 ) (
   input  logic [31:0] addr_i,   // byte address; [1:0] ignored (4B aligned)
   output logic [31:0] data_o
@@ -115,9 +118,18 @@ module agriasic_boot_rom #(
   localparam int unsigned AddrLsb = 2;
   localparam int unsigned AddrMsb = $clog2(NUM_WORDS) + AddrLsb - 1;
 
-  // Number of words the golden image actually occupies; the copier uses this
-  // so a short image does not cost a full-ROM copy.
-  localparam int unsigned USED_WORDS = {len(words)};
+  // Ground truth, rewritten on every regeneration alongside the table below.
+  // The shell carries its own ROM_USED_WORDS; if the two ever drift, the copier
+  // would load a truncated or over-long image and the chip would silently run
+  // something that is not the golden image. Fail loudly instead.
+  localparam int unsigned GENERATED_USED_WORDS = {len(words)};
+
+`ifndef SYNTHESIS
+  initial
+    if (USED_WORDS != GENERATED_USED_WORDS)
+      $fatal(1, "agriasic_boot_rom: USED_WORDS (%0d) does not match the generated table (%0d) -- regenerate with fw/gen_boot_rom.py",
+             USED_WORDS, GENERATED_USED_WORDS);
+`endif
 
   wire [AddrMsb-AddrLsb:0] word_addr = addr_i[AddrMsb:AddrLsb];
 

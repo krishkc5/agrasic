@@ -148,14 +148,43 @@ module agriasic_rv32i_control_shell #(
   output logic                 gpio_flash_cs_n_o,
   output logic                 gpio_flash_mosi_o,
   input  logic                 gpio_flash_miso_i,
+  // Host SPI port (closes GAP-11). Chip is the SLAVE: an external host drives
+  // SCK/CS_N/MOSI and reads MISO. Deliberately NOT shared with the flash pins
+  // above -- every wire runs the opposite direction there.
+  input  logic                 gpio_spi_sclk_i,
+  input  logic                 gpio_spi_cs_n_i,
+  input  logic                 gpio_spi_mosi_i,
+  output logic                 gpio_spi_miso_o,
+  output logic                 gpio_spi_miso_oe_o,
+
   output logic                 gpio_boot_fail_o
 );
 
   // ADC_WIDTH is retained for interface compatibility; the control core does
   // not touch ADC samples directly, only the accumulated result.
-  localparam int unsigned IMEM_WORDS = 1024;  // 4 KB program memory
-  localparam int unsigned DMEM_WORDS = 512;   // 2 KB scratch RAM
+  // Sized to the measured firmware, not to a round number: with no SRAM
+  // compiler these are flop arrays, and both the flops and the read mux
+  // scale with depth (see agriasic_imem.sv). The image is 592 B and the
+  // data footprint 100 B, measured by the memory audit flow.
+  localparam int unsigned IMEM_WORDS = 256;   // 1 KB program memory
+  localparam int unsigned DMEM_WORDS = 128;   // 512 B scratch RAM
   localparam int unsigned IMEM_BYTES = IMEM_WORDS * 4;
+
+  // Size consistency. Both failure modes below are silent in hardware -- the
+  // chip boots a truncated image and behaves oddly rather than reporting
+  // anything -- so check them where a human will see it. agriasic_boot_rom
+  // carries the matching check against its own generated table, and
+  // fw/build.sh enforces the image bound at build time.
+`ifndef SYNTHESIS
+  initial begin
+    if (ROM_USED_WORDS > ROM_WORDS)
+      $fatal(1, "control_shell: ROM_USED_WORDS (%0d) exceeds ROM_WORDS (%0d)",
+             ROM_USED_WORDS, ROM_WORDS);
+    if (ROM_USED_WORDS > IMEM_WORDS)
+      $fatal(1, "control_shell: golden image (%0d words) does not fit IMEM (%0d words)",
+             ROM_USED_WORDS, IMEM_WORDS);
+  end
+`endif
   localparam int unsigned DMEM_BYTES = DMEM_WORDS * 4;
   localparam logic [31:0] DMEM_BASE   = 32'h0001_0000;
   localparam logic [31:0] PERIPH_BASE = 32'h8000_0000;
@@ -263,6 +292,9 @@ module agriasic_rv32i_control_shell #(
 
   // Boot loader bus master
   logic        boot_req, boot_gnt, boot_rvalid, boot_we, boot_err;
+  logic        host_req, host_gnt, host_rvalid, host_we, host_err;
+  logic [3:0]  host_be;
+  logic [31:0] host_addr, host_wdata, host_rdata;
   logic [3:0]  boot_be;
   logic [31:0] boot_addr, boot_wdata, boot_rdata;
 
@@ -437,6 +469,15 @@ module agriasic_rv32i_control_shell #(
     .boot_rvalid_o  (boot_rvalid),
     .boot_rdata_o   (boot_rdata),
     .boot_err_o     (boot_err),
+    .host_req_i     (host_req),
+    .host_we_i      (host_we),
+    .host_be_i      (host_be),
+    .host_addr_i    (host_addr),
+    .host_wdata_i   (host_wdata),
+    .host_gnt_o     (host_gnt),
+    .host_rvalid_o  (host_rvalid),
+    .host_rdata_o   (host_rdata),
+    .host_err_o     (host_err),
     .imem_ce_o      (imem_ce),
     .imem_we_o      (imem_we),
     .imem_addr_o    (imem_addr),
@@ -538,8 +579,35 @@ module agriasic_rv32i_control_shell #(
   // Golden image, synthesized as a constant table (generated from
   // fw/golden/agriasic_fw_golden.hex by fw/gen_boot_rom.py). Combinational:
   // the copier registers the data on its way into the SRAM.
+  // ---------------------------------------------------------------------------
+  // Host SPI port: bus master M4. Shaped like the debug SBA -- an external
+  // agent with its own master port, reading results out of DMEM while the core
+  // sleeps. Permissions (DMEM + MMIO only) are enforced in the interconnect.
+  // Runs off sys_rst_n so a debugger's ndmreset also resets the host port,
+  // matching the peripheral bridge it talks to.
+  // ---------------------------------------------------------------------------
+  agriasic_spi_host u_spi_host (
+    .clk          (clk),
+    .rst_n        (sys_rst_n),
+    .sclk_i       (gpio_spi_sclk_i),
+    .cs_n_i       (gpio_spi_cs_n_i),
+    .mosi_i       (gpio_spi_mosi_i),
+    .miso_o       (gpio_spi_miso_o),
+    .miso_oe_o    (gpio_spi_miso_oe_o),
+    .bus_req_o    (host_req),
+    .bus_we_o     (host_we),
+    .bus_be_o     (host_be),
+    .bus_addr_o   (host_addr),
+    .bus_wdata_o  (host_wdata),
+    .bus_gnt_i    (host_gnt),
+    .bus_rvalid_i (host_rvalid),
+    .bus_rdata_i  (host_rdata),
+    .bus_err_i    (host_err)
+  );
+
   agriasic_boot_rom #(
-    .NUM_WORDS (ROM_WORDS)
+    .NUM_WORDS  (ROM_WORDS),
+    .USED_WORDS (ROM_USED_WORDS)
   ) u_boot_rom (
     .addr_i (rom_addr),
     .data_o (rom_data)

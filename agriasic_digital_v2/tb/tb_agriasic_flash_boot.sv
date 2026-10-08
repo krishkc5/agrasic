@@ -28,7 +28,7 @@
 module tb_agriasic_flash_boot;
 
   localparam int unsigned ADC_WIDTH = 8;
-  localparam int unsigned IMAGE_WORDS = 1024;
+  localparam int unsigned IMAGE_WORDS = 256;
 
   logic clk = 1'b0;
   logic rst_n;

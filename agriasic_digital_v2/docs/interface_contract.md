@@ -82,6 +82,37 @@ top the same signals appear as `gpio_start_i` (in) and `dbg_busy_o` /
   run's result, never a partial sum in progress (see the register map below
   for how these are exposed over each host interface)
 
+## Host SPI port (closes GAP-11, `agriasic_digital_rv32i_top`)
+
+Four pads, **separate from the flash port** because the two run opposite
+directions on every wire. The chip is the slave.
+
+| Pin | Dir | Meaning |
+|---|---|---|
+| `gpio_spi_sclk_i` | in | Host-driven clock, mode 0. **Max f_clk/16**, as for the SPI-host variant: oversampled, not a real clock. |
+| `gpio_spi_cs_n_i` | in | Active low. One transaction per assertion; releasing it resets the framing. |
+| `gpio_spi_mosi_i` | in | Command, address and write data. |
+| `gpio_spi_miso_o` | out | Read data and status. |
+| `gpio_spi_miso_oe_o` | out | Output enable; high only while selected. |
+
+Protocol, one transaction per CS_N assertion:
+
+| Phase | Bytes | Content |
+|---|---|---|
+| command | 1 | `0x03` READ, `0x02` WRITE, `0x05` RDSR |
+| address | 4 | 32-bit, **big endian** (MSB first) |
+| data | n x 4 | **little endian** within each word, address auto-increments by 4 |
+
+`RDSR` returns one status byte: `[0]` busy, `[1]` sticky error. The sticky bit
+clears at the **end** of the status transaction, so the byte the host reads
+still carries it.
+
+**Reach:** DMEM and the peripheral window only. IMEM and the debug module are
+refused by the interconnect and raise the sticky error. Writes commit whole
+32-bit words; a transaction cut short mid-word commits nothing.
+
+---
+
 ## Analog front-end interface (Rev 4.3 Phases 1 and 4) — SUPERSEDED
 
 > **Superseded by "Analog front-end interface (Rev 5, tetrapolar)" below.**
@@ -304,8 +335,8 @@ IDCODE `0x14341001` (version 1, part `0x4341`). IR length 5: `0x01` IDCODE,
 `0x10` DTMCS, `0x11` DMI (abits = 7). DM base `0x1A11_0000`; halt / resume /
 exception entries at `+0x800 / +0x808 / +0x810`.
 
-Debugger-visible address map: IMEM `0x0000_0000` (4 KiB, writable: `load`
-works), DMEM `0x0001_0000` (2 KiB), DM `0x1A11_0000`, MMIO `0x8000_0000`
+Debugger-visible address map: IMEM `0x0000_0000` (1 KiB, writable: `load`
+works), DMEM `0x0001_0000` (512 B), DM `0x1A11_0000`, MMIO `0x8000_0000`
 (register map in section 7.1 / `agriasic_rv32i_mmio.sv`). Any other address
 is a bus error. `dmcontrol.ndmreset` resets the core and the MMIO bridge
 (config registers, sticky flags) but not IMEM, the DM or the TAP.

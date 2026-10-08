@@ -30,8 +30,8 @@ with open('agriasic_fw.hex','w') as f:
     for w in words:
         f.write('%08x\n' % w)
 print(f"wrote agriasic_fw.hex: {len(words)} words ({len(words)*4} bytes)")
-if len(words) > 1024:
-    raise SystemExit("ERROR: image exceeds the 1024-word instruction ROM")
+if len(words) > 256:
+    raise SystemExit(f"ERROR: image is {len(words)} words, exceeds the 256-word IMEM")
 PY
 
 echo "=== generating SPI-flash boot image (Phase 3, agriasic_spi_boot) ==="

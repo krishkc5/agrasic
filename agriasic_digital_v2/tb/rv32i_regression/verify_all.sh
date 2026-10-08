@@ -86,3 +86,9 @@ echo "=================================================="
 echo "14. BOOT: GOLDEN ROM + SPI FLASH (header/CRC into IMEM, fail-hold, retry, strap override)"
 echo "=================================================="
 bash "$R/flash_boot.sh" 2>&1 | grep -E "^\[TB\] [A-G]:|FLASH_BOOT_" | tail -12
+
+echo ""
+echo "=================================================="
+echo "15. HOST SPI PORT (bus master M4: read/write while the core runs, permissions)"
+echo "=================================================="
+bash "$R/spi_host.sh" 2>&1 | grep -E "^\[TB\]   [A-E]:|SPI_HOST_" | tail -16

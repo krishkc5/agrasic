@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
   <title id="t">Firmware image layout in IMEM</title>
-  <desc id="d">Memory map of the 592-byte firmware image in instruction memory. 0x000 to 0x07F is the 32-entry trap vector table, 128 bytes: entry 0 is exceptions, entry i is interrupt i, entry 31 is the NMI. 0x080 is _start, which sets the stack pointer, enables mie fast interrupt 0 and calls main. The image ends at 0x250. The rest of the 4 KiB IMEM is unused and filled with NOPs.</desc>
+  <desc id="d">Memory map of the 592-byte firmware image in instruction memory. 0x000 to 0x07F is the 32-entry trap vector table, 128 bytes: entry 0 is exceptions, entry i is interrupt i, entry 31 is the NMI. 0x080 is _start, which sets the stack pointer, enables mie fast interrupt 0 and calls main. The image ends at 0x250. The rest of the 1 KiB IMEM is unused and filled with NOPs.</desc>
   <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
   <rect width="5000" height="2400" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">Firmware image layout in IMEM</text>
@@ -24,10 +24,10 @@
   <text x="3700" y="1016" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">400 B</text>
   <rect x="780" y="1310" width="2880" height="360" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
   <text x="806" y="1352" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">unused IMEM</text>
-  <text x="806" y="1392" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">filled with 0x0000_0013 (NOP) - 4 KiB instantiated, 592 B used</text>
+  <text x="806" y="1392" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">filled with 0x0000_0013 (NOP) - 1 KiB instantiated, 592 B used</text>
   <text x="740" y="1356" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x250</text>
-  <text x="3700" y="1356" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">3504 B</text>
-  <text x="740" y="1720" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x1000</text>
+  <text x="3700" y="1356" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">432 B</text>
+  <text x="740" y="1720" font-family="Arial" font-size="26" font-weight="700" text-anchor="end" fill="#212121" xml:space="preserve">0x400</text>
   <rect x="3900" y="330" width="900" height="700" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="3926" y="372" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Why 0x80</text>
   <text x="3926" y="412" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">Ibex sets mtvec from</text>

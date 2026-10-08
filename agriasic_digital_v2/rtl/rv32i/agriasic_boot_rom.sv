@@ -7,7 +7,7 @@
 //
 //   GENERATED FILE -- do not edit by hand.
 //     source : fw/golden/agriasic_fw_golden.hex (148 words, 592 bytes)
-//     sha256 : cc5208d52509a0880d346a4c1fafa1c9788f21f3605ad46c2ea3887135e86ab3
+//     sha256 : 47c0ce42d1cc4e1314c514d3a4ff24fbba89b3769fa146e1db755b3cfc56de64
 //     regen  : python3 fw/gen_boot_rom.py
 //
 // Why a table and not a memory array:
@@ -27,7 +27,10 @@
 // defined rather than undriven.
 // -----------------------------------------------------------------------------
 module agriasic_boot_rom #(
-  parameter int unsigned NUM_WORDS = 256
+  parameter int unsigned NUM_WORDS  = 256,
+  // What the instantiator believes the image length is. Checked below against
+  // the table actually generated into this file.
+  parameter int unsigned USED_WORDS = 148
 ) (
   input  logic [31:0] addr_i,   // byte address; [1:0] ignored (4B aligned)
   output logic [31:0] data_o
@@ -36,9 +39,18 @@ module agriasic_boot_rom #(
   localparam int unsigned AddrLsb = 2;
   localparam int unsigned AddrMsb = $clog2(NUM_WORDS) + AddrLsb - 1;
 
-  // Number of words the golden image actually occupies; the copier uses this
-  // so a short image does not cost a full-ROM copy.
-  localparam int unsigned USED_WORDS = 148;
+  // Ground truth, rewritten on every regeneration alongside the table below.
+  // The shell carries its own ROM_USED_WORDS; if the two ever drift, the copier
+  // would load a truncated or over-long image and the chip would silently run
+  // something that is not the golden image. Fail loudly instead.
+  localparam int unsigned GENERATED_USED_WORDS = 148;
+
+`ifndef SYNTHESIS
+  initial
+    if (USED_WORDS != GENERATED_USED_WORDS)
+      $fatal(1, "agriasic_boot_rom: USED_WORDS (%0d) does not match the generated table (%0d) -- regenerate with fw/gen_boot_rom.py",
+             USED_WORDS, GENERATED_USED_WORDS);
+`endif
 
   wire [AddrMsb-AddrLsb:0] word_addr = addr_i[AddrMsb:AddrLsb];
 
@@ -76,8 +88,8 @@ module agriasic_boot_rom #(
       8'd29: data_o = 32'h02E0006F;
       8'd30: data_o = 32'h02A0006F;
       8'd31: data_o = 32'h0260006F;
-      8'd32: data_o = 32'h00011137;
-      8'd33: data_o = 32'h80010113;
+      8'd32: data_o = 32'h00010137;
+      8'd33: data_o = 32'h20010113;
       8'd34: data_o = 32'h907362C1;
       8'd35: data_o = 32'h286D3042;
       8'd36: data_o = 32'h800002B7;

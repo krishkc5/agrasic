@@ -38,7 +38,9 @@
 //   0x8000_000C  DIVIDER    RW  [13:0] raw N (see the Rev 4.3 Phase 4.2/6 note
 //                                       in the MAS on why MMIO and SPI differ)
 //   0x8000_0010  CONV       RW  [7:0]
-//   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done, bit4 = overrange,
+//   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done,
+//                                bit2 = ADC overrange on dV, bit3 = on current,
+//                                bit4 = pair-count guard (NOT an ADC rail),
 //                                bit5 = trap_seen, bit6 = fw_done
 //   0x8000_0018  RESULT_I   R   [15:0] signed dV in-phase accumulator
 //   0x8000_001C  RESULT_Q   R   [15:0] signed dV quadrature accumulator
@@ -48,8 +50,10 @@
 // second complex pair, and a host computes Z(f) = dV(f) / I(f):
 //   0x8000_0034  RESULT_CUR_I R  [15:0] signed current in-phase accumulator
 //   0x8000_0038  RESULT_CUR_Q R  [15:0] signed current quadrature accumulator
-//   0x8000_003C  AFE_CTRL    RW  [1:0]  pga_gain   (1 / 4 / 16)
-//                                [3:2]  tia_rf     (10k / 100k / 1M)
+//   0x8000_003C  AFE_CTRL    RW  [1:0]  pga_gain   2-bit code -> 3 switch wires
+//                                [3:2]  tia_rf     2-bit code -> 3 switch wires
+//                                       (see gain_decode below; the register
+//                                        reads back the code, not the wires)
 //                                [5:4]  amplitude  (sine excursion: full/half/quarter/eighth)
 //                                [15:8] mux_settle_cycles (analog mux + S/H settling)
 //
@@ -110,8 +114,10 @@ module agriasic_rv32i_mmio #(
   // Rev 5 analog front-end configuration.
   output logic [7:0]  cfg_mux_settle_o,
   output logic [1:0]  cfg_amplitude_o,
-  output logic [1:0]  cfg_pga_gain_o,
-  output logic [1:0]  cfg_tia_rf_o,
+  input  logic        overrange_dv_i,   // ADC rails on the dV channel
+  input  logic        overrange_cur_i,  // ADC rails on the current channel
+  output logic [2:0]  cfg_pga_gain_o,   // 3 switch wires, decoded below
+  output logic [2:0]  cfg_tia_rf_o,     // 3 switch wires, decoded below
 
   // Firmware-state outputs to the shell.
   output logic        fw_done_o,        // firmware wrote CTRL.FW_DONE
@@ -221,8 +227,46 @@ module agriasic_rv32i_mmio #(
   assign cfg_conv_cycles_o   = cfg_conv_q;
   assign cfg_mux_settle_o    = cfg_mux_settle_q;
   assign cfg_amplitude_o     = cfg_amplitude_q;
-  assign cfg_pga_gain_o      = cfg_pga_gain_q;
-  assign cfg_tia_rf_o        = cfg_tia_rf_q;
+  // ---------------------------------------------------------------------------
+  // Analog gain decode: a 2-bit register code becomes 3 switch wires
+  //
+  // The analog side takes three wires per gain control and closes switches
+  // directly, with no decoder of its own. The REGISTER stays 2 bits so the
+  // firmware and host interface remains a compact code and AFE_CTRL reads back
+  // what was written; the decode lives here, at the boundary, which also makes
+  // illegal switch combinations structurally unreachable rather than merely
+  // discouraged.
+  //
+  // >>> ENCODING NOT YET CONFIRMED BY ANALOG. This table is the single place to
+  // change it, and nothing outside this function depends on the mapping. <<<
+  //
+  // The default deliberately has NO all-open state. For a transimpedance amp an
+  // open feedback network leaves no DC path and the output rails, and the reset
+  // code is 0 -- so an encoding where code 0 means "all switches open" would
+  // make railing the power-on condition. Every code below closes at least one
+  // switch:
+  //
+  //   code 0 -> 3'b001   switch 0 alone
+  //   code 1 -> 3'b010   switch 1 alone
+  //   code 2 -> 3'b100   switch 2 alone
+  //   code 3 -> 3'b111   all three in parallel
+  //
+  // That also gives the documented 10k / 100k / 1M a sensible fourth state (the
+  // three in parallel) rather than leaving one code undefined. If analog wants
+  // thermometer coding instead (001 / 011 / 111), change the four returns here
+  // and nothing else moves.
+  // ---------------------------------------------------------------------------
+  function automatic logic [2:0] gain_decode(input logic [1:0] code);
+    unique case (code)
+      2'd0: return 3'b001;
+      2'd1: return 3'b010;
+      2'd2: return 3'b100;
+      2'd3: return 3'b111;
+    endcase
+  endfunction
+
+  assign cfg_pga_gain_o      = gain_decode(cfg_pga_gain_q);
+  assign cfg_tia_rf_o        = gain_decode(cfg_tia_rf_q);
   assign fw_done_o           = fw_done_q;
   assign trap_seen_o         = trap_seen_q;
 
@@ -345,8 +389,12 @@ module agriasic_rv32i_mmio #(
       REG_SETTLE:    periph_rdata = {24'd0, cfg_settle_q};
       REG_DIVIDER:   periph_rdata = {18'd0, cfg_divider_q};
       REG_CONV:      periph_rdata = {24'd0, cfg_conv_q};
+      // [3:2] are the real ADC overrange bits, one per channel, held by the
+      // measurement FSM until the next run starts. Bit 4 is a different
+      // thing despite the name: a static guard on the configured pair count.
       REG_STATUS:    periph_rdata = {25'd0, fw_done_q, trap_seen_q, status_overrange_w,
-                                     2'b00, meas_done_q, meas_busy_q};
+                                     overrange_cur_i, overrange_dv_i,
+                                     meas_done_q, meas_busy_q};
       REG_RESULT_I:  periph_rdata = {{16{result_dv_i_i[15]}}, result_dv_i_i};
       REG_RESULT_Q:  periph_rdata = {{16{result_dv_q_i[15]}}, result_dv_q_i};
       REG_RESULT_CUR_I: periph_rdata = {{16{result_cur_i_i[15]}}, result_cur_i_i};

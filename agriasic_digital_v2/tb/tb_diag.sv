@@ -2,12 +2,13 @@
 module tb_diag;
   logic clk = 1'b0;
   logic rst_n, start_i;
-  logic conv_start_o, exc_drive_p_o, exc_drive_n_o, busy_o, done_o;
+  logic conv_start_o, busy_o, done_o;
+  logic [7:0] sine_code_o;
+  logic [1:0] mux_sel_o;
   logic adc_enable_o, adc_sample_o;
   logic [7:0] adc_dac_o;
   logic adc_comp_i;
-  logic signed [15:0] result_i_o;
-  logic signed [15:0] result_q_o;
+  logic signed [15:0] result_dv_i_o, result_dv_q_o, result_cur_i_o, result_cur_q_o;
   logic [3:0] cfg_pair_log2_o;
   logic [7:0] cfg_settle_cycles_o;
   logic [13:0] cfg_exc_divider_o;  // Rev 4.3 Phase 4.2 width; was left at [7:0] here, fixed
@@ -38,10 +39,15 @@ module tb_diag;
 
   agriasic_digital_rv32i_top #(.BOOT_DELAY_CYCLES(64), .IMEM_PRELOADED(1'b1)) dut (
     .clk(clk), .rst_n(rst_n), .gpio_start_i(start_i),
-    .afe_conv_start_o(conv_start_o), .exc_drive_p_o(exc_drive_p_o), .exc_drive_n_o(exc_drive_n_o),
+    .afe_conv_start_o(conv_start_o), .afe_sine_code_o(sine_code_o), .afe_mux_sel_o(mux_sel_o),
     .afe_adc_enable_o(adc_enable_o), .afe_sample_o(adc_sample_o),
     .afe_adc_dac_o(adc_dac_o), .afe_adc_comp_i(adc_comp_i),
-    .dbg_busy_o(busy_o), .dbg_done_o(done_o), .result_i_o(result_i_o), .result_q_o(result_q_o),
+    .dbg_busy_o(busy_o), .dbg_done_o(done_o),
+    .dbg_result_dv_i_o(result_dv_i_o), .dbg_result_dv_q_o(result_dv_q_o),
+    .dbg_result_cur_i_o(result_cur_i_o), .dbg_result_cur_q_o(result_cur_q_o),
+    .dbg_cfg_mux_settle_o(), .dbg_cfg_amplitude_o(), .afe_pga_gain_o(), .afe_tia_rf_o(),
+    .gpio_spi_sclk_i(1'b0), .gpio_spi_cs_n_i(1'b1), .gpio_spi_mosi_i(1'b0),
+    .gpio_spi_miso_o(), .gpio_spi_miso_oe_o(),
     .dbg_cfg_pair_log2_o(cfg_pair_log2_o), .dbg_cfg_settle_cycles_o(cfg_settle_cycles_o),
     .dbg_cfg_exc_divider_o(cfg_exc_divider_o), .dbg_cfg_conv_cycles_o(cfg_conv_cycles_o),
     .gpio_jtag_tck_i(1'b0), .gpio_jtag_tms_i(1'b1), .gpio_jtag_trst_ni(rst_n), .gpio_jtag_tdi_i(1'b0), .gpio_jtag_tdo_o(),

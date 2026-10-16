@@ -107,7 +107,12 @@ module tb_agriasic_flash_boot;
   localparam logic [1:0] SRC_ROM = 2'd1, SRC_FLASH = 2'd2;
 
   // Golden ROM image, read from the same file the ROM was generated from.
-  localparam int unsigned ROM_USED = 148;
+  // Read the image length from the DUT rather than keeping a copy here.
+  // There were three copies of this number (shell parameter, chip-top
+  // parameter, and this one); the generator now maintains the first two
+  // from the golden hex, and this reference removes the third. A hardcoded
+  // copy silently compares past the end of the image after any promotion.
+  `define ROM_USED int'(dut.ROM_USED_WORDS)
   logic [31:0] golden_img [0:IMAGE_WORDS-1];
   initial $readmemh("agriasic_fw_golden.hex", golden_img);
 
@@ -240,14 +245,14 @@ module tb_agriasic_flash_boot;
     // The ROM copy must reproduce the golden image exactly.
     begin
       int bad = 0;
-      for (int i = 0; i < ROM_USED; i++)
+      for (int i = 0; i < `ROM_USED; i++)
         if (dut.u_control_shell.u_imem.mem_array[i] !== golden_img[i]) begin
           if (bad < 4) $error("ROM copy: IMEM[%0d] = 0x%08x, golden 0x%08x",
                               i, dut.u_control_shell.u_imem.mem_array[i], golden_img[i]);
           bad++;
         end
       if (bad) errors++;
-      else $display("[TB]   IMEM matches the golden ROM image, %0d words OK", ROM_USED);
+      else $display("[TB]   IMEM matches the golden ROM image, %0d words OK", `ROM_USED);
     end
     cycles = 0;
     while (!fw_halted && cycles < 8000000) begin @(posedge clk); cycles++; end

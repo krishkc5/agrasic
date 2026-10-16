@@ -54,6 +54,7 @@ module tb_settle_timing;
   logic signed [15:0] result_dv_q_o;
   logic signed [15:0] result_cur_i_o;
   logic signed [15:0] result_cur_q_o;
+  logic overrange_dv_o, overrange_cur_o;
 
   int errors = 0;
 
@@ -81,7 +82,9 @@ module tb_settle_timing;
     .result_dv_i_o(result_dv_i_o),
     .result_dv_q_o(result_dv_q_o),
     .result_cur_i_o(result_cur_i_o),
-    .result_cur_q_o(result_cur_q_o)
+    .result_cur_q_o(result_cur_q_o),
+    .overrange_dv_o(overrange_dv_o),
+    .overrange_cur_o(overrange_cur_o)
   );
 
   // Behavioral comparator model for the Rev 4.3 SAR bit-trial interface. See

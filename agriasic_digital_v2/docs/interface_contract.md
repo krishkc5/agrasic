@@ -392,8 +392,26 @@ except where the AFE is off-chip in a test configuration.
 | `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. |
 | `afe_adc_comp_i` | in | One comparator decision: 1 = input >= trial code. Timed, unsynchronized — `REG_CONV` must cover regeneration at the worst corner. |
 | `afe_conv_start_o` | out | One-cycle pulse at the start of each conversion. |
-| `afe_pga_gain_o[1:0]` | out | Differential PGA gain select (1 / 4 / 16). |
-| `afe_tia_rf_o[1:0]` | out | TIA feedback resistor select (10k / 100k / 1M). |
+| `afe_pga_gain_o[2:0]` | out | Differential PGA gain: **three switch wires**, decoded on die from a 2-bit register code. |
+| `afe_tia_rf_o[2:0]` | out | TIA feedback resistor: **three switch wires**, same decode. |
+
+**Gain encoding.** Both controls are 2-bit codes in `AFE_CTRL` decoded to three
+switch wires by `gain_decode` in `agriasic_rv32i_mmio.sv`, so the analog side
+needs no decoder and illegal switch combinations are unreachable. The register
+reads back the **code**, not the wires. Current mapping, *pending analog
+confirmation* -- that function is the only place to change it:
+
+| Code | Wires | Meaning |
+|---|---|---|
+| 0 | `001` | switch 0 alone |
+| 1 | `010` | switch 1 alone |
+| 2 | `100` | switch 2 alone |
+| 3 | `111` | all three in parallel |
+
+No code leaves a network fully open. That is deliberate: for the TIA an open
+feedback network has no DC path and the output rails, and the reset code is 0,
+so an encoding where 0 meant "all switches open" would make railing the
+power-on condition.
 
 Per sample point the sequence is: strobe both S/H at the target phase ->
 `mux_sel = 0`, wait `AFE_CTRL.mux_settle`, 8 bit trials -> `mux_sel = 1`,

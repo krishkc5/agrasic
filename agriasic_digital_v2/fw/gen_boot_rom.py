@@ -20,6 +20,7 @@ defined rather than whatever the array happened to hold.
 import argparse
 import datetime
 import hashlib
+import re
 import shutil
 from pathlib import Path
 
@@ -143,6 +144,21 @@ module agriasic_boot_rom #(
 endmodule
 """)
     print(f"wrote {ROM_SV.relative_to(HERE.parent)}: {len(words)} words used of {num_words}")
+
+    # Keep ROM_USED_WORDS in step everywhere it is declared. The golden hex is
+    # the single source of truth; the RTL parameters are derived from it. Doing
+    # this by hand is a step that gets forgotten, and agriasic_boot_rom asserts
+    # the two agree -- so forgetting it stops the regression rather than
+    # shipping a truncated boot, but there is no reason to rely on that.
+    for rel in ("rtl/agriasic_rv32i_control_shell.sv",
+                "rtl/agriasic_digital_rv32i_top.sv"):
+        path = HERE.parent / rel
+        text = path.read_text(encoding="utf-8")
+        new, n = re.subn(r"(parameter int unsigned ROM_USED_WORDS\s*=\s*)\d+",
+                         lambda m: m.group(1) + str(len(words)), text)
+        if n and new != text:
+            path.write_text(new, encoding="utf-8", newline="\n")
+            print(f"  updated ROM_USED_WORDS = {len(words)} in {rel}")
 
 
 def _idx(i, num_words):

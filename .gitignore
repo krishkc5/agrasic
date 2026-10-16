@@ -14,3 +14,10 @@ __pycache__/
 # Simulator/waveform output
 *.vcd
 *.fst
+
+# Timing flow build output (40 MB netlist; regenerate with timing/path_depth.py --build)
+agriasic_digital_v2/timing/build/
+
+# Scratch regression logs
+vlog.txt
+*.log.txt

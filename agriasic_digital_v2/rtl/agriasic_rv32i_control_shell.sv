@@ -102,7 +102,7 @@ module agriasic_rv32i_control_shell #(
   parameter int unsigned ADC_WIDTH         = 8,
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait (~5 ms at 160 MHz)
   parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
-  parameter int unsigned ROM_USED_WORDS    = 148,      // words the golden image occupies
+  parameter int unsigned ROM_USED_WORDS    = 141,      // words the golden image occupies
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation: IMEM filled by $readmemh
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation preload ("" = none)
 ) (
@@ -110,6 +110,8 @@ module agriasic_rv32i_control_shell #(
   input  logic                 rst_n,
   input  logic                 gpio_start_i,
   input  logic                 measurement_done_i,
+  input  logic                 measurement_overrange_dv_i,
+  input  logic                 measurement_overrange_cur_i,
   // Rev 5: two channels. dV = differential voltage (PGA on E2/E3),
   // cur = return current (TIA on E4). Z(f) = dV(f) / I(f), computed host-side.
   input  logic signed [15:0]   measurement_result_dv_i_i,
@@ -128,8 +130,8 @@ module agriasic_rv32i_control_shell #(
   output logic [7:0]           cfg_conv_cycles_o,
   output logic [7:0]           cfg_mux_settle_o,   // Rev 5
   output logic [1:0]           cfg_amplitude_o,    // Rev 5
-  output logic [1:0]           afe_pga_gain_o,     // Rev 5 (analog control)
-  output logic [1:0]           afe_tia_rf_o,       // Rev 5 (analog control)
+  output logic [2:0]           afe_pga_gain_o,     // 3 switch wires (see mmio gain_decode)
+  output logic [2:0]           afe_tia_rf_o,       // 3 switch wires (see mmio gain_decode)
   output logic signed [15:0]   result_dv_i_o,
   output logic signed [15:0]   result_dv_q_o,
   output logic signed [15:0]   result_cur_i_o,
@@ -554,6 +556,8 @@ module agriasic_rv32i_control_shell #(
     .trap_seen_o         (trap_seen),
     .meas_done_irq_o     (meas_done_irq),
     .done_i              (measurement_done_i),
+    .overrange_dv_i      (measurement_overrange_dv_i),
+    .overrange_cur_i     (measurement_overrange_cur_i),
     .result_dv_i_i       (measurement_result_dv_i_i),
     .result_dv_q_i       (measurement_result_dv_q_i),
     .result_cur_i_i      (measurement_result_cur_i_i),

@@ -76,6 +76,11 @@ module sar_controller #(
   output logic                 sample_done_o,
   output logic                 busy_o,
   output logic [ADC_WIDTH-1:0] code_o,          // converged code for this conversion
+  // Rails on the converged code. A successive-approximation search that ends
+  // at all-zeros or all-ones did not actually bracket the input -- it ran out
+  // of range. Valid with sample_done_o. The gain controls exist to fix this,
+  // so firmware needs to be told it happened.
+  output logic                 overrange_o,
   output logic [1:0]           mux_sel_o,
 
   // Rev 4.3 SAR bit-trial interface. adc_comp_i is a timed, unsynchronized
@@ -127,6 +132,7 @@ module sar_controller #(
       dac_reg_q     <= '0;
       regen_cnt_q   <= 8'd0;
       code_o        <= '0;
+      overrange_o   <= 1'b0;
       mux_sel_o     <= 2'd0;
     end else begin
       conv_start_o  <= 1'b0;
@@ -187,6 +193,7 @@ module sar_controller #(
           if (bit_idx_q == '0) begin
             // Last bit decided: eval_code is the converged result.
             code_o        <= eval_code;
+            overrange_o   <= (eval_code == '0) || (&eval_code);
             busy_o        <= 1'b0;
             adc_enable_o  <= 1'b0;
             sample_done_o <= 1'b1;

@@ -33,6 +33,7 @@ module tb_sar_bit_trial;
   logic adc_enable_o, adc_sample_o;
   logic [ADC_WIDTH-1:0] adc_dac_o;
   logic adc_comp_i;
+  logic overrange_o;
 
   logic [ADC_WIDTH-1:0] target_code;
   int errors = 0;
@@ -53,6 +54,7 @@ module tb_sar_bit_trial;
     .sample_done_o  (sample_done_o),
     .busy_o         (busy_o),
     .code_o         (code_o),
+    .overrange_o    (overrange_o),
     .mux_sel_o      (mux_sel_o),
     .adc_enable_o   (adc_enable_o),
     .adc_sample_o   (adc_sample_o),
@@ -98,7 +100,15 @@ module tb_sar_bit_trial;
           $error("SAR_MISMATCH: target=%0d phase=%0d got=%0d", target, phase, got);
           errors++;
         end else begin
-          $display("[TB]   target=%0d channel=%0d -> converged=%0d OK (%0d cycles)", target, phase, got, n);
+          $display("[TB]   target=%0d channel=%0d -> converged=%0d OK (%0d cycles)%s",
+                   target, phase, got, n, overrange_o ? "  [OVERRANGE]" : "");
+        end
+        // Overrange must be set for, and only for, a converged code sitting on
+        // a rail. The gain controls exist to fix that, so firmware has to be
+        // able to see it happen.
+        if (overrange_o !== ((got == '0) || (&got))) begin
+          $error("OVERRANGE_FAIL: code=%0d but overrange_o=%0b", got, overrange_o);
+          errors++;
         end
       end
       sample_req_i = 1'b0;

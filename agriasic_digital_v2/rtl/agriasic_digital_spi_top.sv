@@ -329,7 +329,9 @@ module agriasic_digital_spi_top #(
     .result_dv_i_o      (dbg_result_dv_i_o),
     .result_dv_q_o      (dbg_result_dv_q_o),
     .result_cur_i_o     (dbg_result_cur_i_o),
-    .result_cur_q_o     (dbg_result_cur_q_o)
+    .result_cur_q_o     (dbg_result_cur_q_o),
+    .overrange_dv_o     (),
+    .overrange_cur_o    ()
   );
 
   // Continuous status mirror write into regfile for SPI visibility. This is

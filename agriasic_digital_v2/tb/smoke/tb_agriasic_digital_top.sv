@@ -52,6 +52,7 @@ module tb_agriasic_digital_top;
   logic signed [15:0] result_dv_q_o;
   logic signed [15:0] result_cur_i_o;
   logic signed [15:0] result_cur_q_o;
+  logic overrange_dv_o, overrange_cur_o;
 
   agriasic_digital_top #(
     .ADC_WIDTH(ADC_WIDTH)
@@ -77,7 +78,9 @@ module tb_agriasic_digital_top;
     .result_dv_i_o(result_dv_i_o),
     .result_dv_q_o(result_dv_q_o),
     .result_cur_i_o(result_cur_i_o),
-    .result_cur_q_o(result_cur_q_o)
+    .result_cur_q_o(result_cur_q_o),
+    .overrange_dv_o(overrange_dv_o),
+    .overrange_cur_o(overrange_cur_o)
   );
 
   // 100 MHz equivalent simulation clock.

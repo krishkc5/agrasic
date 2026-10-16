@@ -61,7 +61,8 @@
 #define REG_SETTLE    REG(0x08)   /* RW */
 #define REG_DIVIDER   REG(0x0C)   /* RW  raw N, unlike SPI's selector-based REG_FREQ_SEL */
 #define REG_CONV      REG(0x10)   /* RW */
-#define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done, bit4 = overrange, bit5 = trap_seen, bit6 = fw_done */
+#define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done, bit2/3 = ADC overrange dV/current,
+                                   *     bit4 = pair-count guard, bit5 = trap_seen, bit6 = fw_done */
 #define REG_RESULT_I  REG(0x18)   /* R   sign-extended dV in-phase accumulator */
 #define REG_RESULT_Q  REG(0x1C)   /* R   sign-extended dV quadrature accumulator */
 /* Rev 5 tetrapolar front end: the return-current channel is a second complex
@@ -95,6 +96,13 @@
 #define OUT_DV_Q       ((volatile int *)(DMEM_BASE + 0x130))   /* [3]: dV quadrature average per point */
 #define OUT_CUR_I      ((volatile int *)(DMEM_BASE + 0x150))   /* [3]: current in-phase average per point */
 #define OUT_CUR_Q      ((volatile int *)(DMEM_BASE + 0x160))   /* [3]: current quadrature average per point */
+/* [3]: the analog conditions each point was measured under.
+ *   [15:0]  AFE_CTRL as it stood (pga_gain, tia_rf, amplitude, mux_settle)
+ *   [17:16] ADC overrange, bit16 = dV channel, bit17 = current channel
+ * A host CANNOT compute Z = dV / I without this: the two channels have
+ * independent gains, so the gains do not cancel in the ratio. Storing it
+ * per point also keeps auto-ranging honest if gain ever varies by point. */
+#define OUT_AFE        ((volatile int *)(DMEM_BASE + 0x170))
 #define OUT_TEMP       (*(volatile int *)(DMEM_BASE + 0x140))  /* sentinel -1: not implemented, see header (GAP-11) */
 
 #define NUM_FREQ_POINTS  3
@@ -167,6 +175,8 @@ static void run_sweep_point(int divider_n, struct iq_pair *out)
 static void store_point(int point, int divider_n, const struct iq_pair *r)
 {
     OUT_DIV[point]    = divider_n;
+    OUT_AFE[point]    = (int)(REG_AFE_CTRL & 0xFFFF) |
+                        (int)((REG_STATUS & 0x0000000C) << 14);
     OUT_DV_I[point]   = r->dv_i;
     OUT_DV_Q[point]   = r->dv_q;
     OUT_CUR_I[point]  = r->cur_i;

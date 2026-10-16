@@ -57,10 +57,15 @@ module agriasic_digital_top #(
   output logic signed [15:0]     result_dv_i_o,      // sum( dV(0)  - dV(180) )
   output logic signed [15:0]     result_dv_q_o,      // sum( dV(90) - dV(270) )
   output logic signed [15:0]     result_cur_i_o,     // sum(  I(0)  -  I(180) )
-  output logic signed [15:0]     result_cur_q_o      // sum(  I(90) -  I(270) )
+  output logic signed [15:0]     result_cur_q_o,     // sum(  I(90) -  I(270) )
+  // ADC rails, per channel. The two channels have independent gain
+  // controls, so firmware needs to know which one ran out of range.
+  output logic                   overrange_dv_o,
+  output logic                   overrange_cur_o
 );
 
   logic [ADC_WIDTH-1:0] sar_code;
+  logic                 sar_overrange;
   logic [3:0]           exc_phase_index;
   logic                 exc_period_tick;
   logic                 sample_req;
@@ -98,6 +103,7 @@ module agriasic_digital_top #(
     .sample_done_o       (sample_done),
     .busy_o              (),  // not consumed: measurement_fsm tracks its own busy state via sample_done_i
     .code_o              (sar_code),
+    .overrange_o         (sar_overrange),
     .mux_sel_o           (afe_mux_sel_o),
     .adc_enable_o        (afe_adc_enable_o),
     .adc_sample_o        (afe_sample_o),
@@ -118,6 +124,9 @@ module agriasic_digital_top #(
     .phase_index_i   (exc_phase_index),
     .period_tick_i   (exc_period_tick),
     .sar_done_i      (sample_done),
+    .sar_overrange_i (sar_overrange),
+    .overrange_dv_o  (overrange_dv_o),
+    .overrange_cur_o (overrange_cur_o),
     .code_i          (sar_code),
     .exc_enable_o    (exc_enable),
     .sample_req_o    (sample_req),

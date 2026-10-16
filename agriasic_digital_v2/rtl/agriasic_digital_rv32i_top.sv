@@ -15,7 +15,7 @@ module agriasic_digital_rv32i_top #(
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation only: skip-boot releases the core
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex", // simulation only ("" = start empty)
   parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
-  parameter int unsigned ROM_USED_WORDS    = 148       // words the golden image occupies
+  parameter int unsigned ROM_USED_WORDS    = 141       // words the golden image occupies
 ) (
   input  logic                 clk,
   input  logic                 rst_n,
@@ -41,8 +41,8 @@ module agriasic_digital_rv32i_top #(
   output logic [7:0]           dbg_cfg_conv_cycles_o,
   output logic [7:0]           dbg_cfg_mux_settle_o,   // Rev 5: analog mux + S/H settling
   output logic [1:0]           dbg_cfg_amplitude_o,    // Rev 5: sine excursion select
-  output logic [1:0]           afe_pga_gain_o,     // Rev 5: diff PGA gain (analog control)
-  output logic [1:0]           afe_tia_rf_o,       // Rev 5: TIA feedback resistor (analog control)
+  output logic [2:0]           afe_pga_gain_o,     // diff PGA: 3 switch wires
+  output logic [2:0]           afe_tia_rf_o,       // TIA Rf:   3 switch wires
 
   // JTAG debug port (Phase 2): 5-wire IEEE 1149.1 into the RISC-V debug
   // module inside the control shell. TRST_N is the TAP's own async reset;
@@ -80,6 +80,7 @@ module agriasic_digital_rv32i_top #(
     .rst_n_o (rst_n_sync)
   );
 
+  logic meas_overrange_dv, meas_overrange_cur;
   logic shell_busy;
   logic shell_done;
   logic shell_start_pulse;
@@ -101,6 +102,8 @@ module agriasic_digital_rv32i_top #(
     .rst_n                   (rst_n_sync),
     .gpio_start_i                 (gpio_start_i),
     .measurement_done_i      (dbg_done_o),
+    .measurement_overrange_dv_i  (meas_overrange_dv),
+    .measurement_overrange_cur_i (meas_overrange_cur),
     .measurement_result_dv_i_i  (dbg_result_dv_i_o),
     .measurement_result_dv_q_i  (dbg_result_dv_q_o),
     .measurement_result_cur_i_i (dbg_result_cur_i_o),
@@ -163,7 +166,9 @@ module agriasic_digital_rv32i_top #(
     .result_dv_i_o      (dbg_result_dv_i_o),
     .result_dv_q_o      (dbg_result_dv_q_o),
     .result_cur_i_o     (dbg_result_cur_i_o),
-    .result_cur_q_o     (dbg_result_cur_q_o)
+    .result_cur_q_o     (dbg_result_cur_q_o),
+    .overrange_dv_o     (meas_overrange_dv),
+    .overrange_cur_o    (meas_overrange_cur)
   );
 
 endmodule

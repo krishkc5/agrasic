@@ -82,7 +82,13 @@ module measurement_fsm #(
   output logic signed [ACC_WIDTH-1:0] result_dv_i_o,
   output logic signed [ACC_WIDTH-1:0] result_dv_q_o,
   output logic signed [ACC_WIDTH-1:0] result_cur_i_o,
-  output logic signed [ACC_WIDTH-1:0] result_cur_q_o
+  output logic signed [ACC_WIDTH-1:0] result_cur_q_o,
+  // Sticky per channel, cleared when a new run starts so each run reports
+  // its own result. Separate bits because the two channels have independent
+  // gain controls -- firmware needs to know WHICH one to step.
+  input  logic                    sar_overrange_i,
+  output logic                    overrange_dv_o,
+  output logic                    overrange_cur_o
 );
 
   // Phase indices this FSM samples at -- the four 90-degree-spaced points used
@@ -316,6 +322,22 @@ module measurement_fsm #(
   end
 
   // State and accumulator registers.
+  // Overrange stickies. Latched on the completion of each conversion, in the
+  // state that names the channel; cleared on the transition out of S_IDLE so
+  // a retry at a new gain reports cleanly.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      overrange_dv_o  <= 1'b0;
+      overrange_cur_o <= 1'b0;
+    end else if ((state_q == S_IDLE) && (state_d != S_IDLE)) begin
+      overrange_dv_o  <= 1'b0;
+      overrange_cur_o <= 1'b0;
+    end else if (sar_done_i) begin
+      if (state_q == S_CONV_DV)  overrange_dv_o  <= overrange_dv_o  | sar_overrange_i;
+      if (state_q == S_CONV_CUR) overrange_cur_o <= overrange_cur_o | sar_overrange_i;
+    end
+  end
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state_q        <= S_IDLE;

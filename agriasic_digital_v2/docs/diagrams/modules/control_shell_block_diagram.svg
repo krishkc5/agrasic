@@ -84,8 +84,8 @@
   <text x="3996" y="1414" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">measurement_result_cur_i/q_i</text>
   <rect x="3970" y="1740" width="850" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="3996" y="1782" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">To analog front end</text>
-  <text x="3996" y="1822" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_pga_gain_o[1:0]</text>
-  <text x="3996" y="1856" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_tia_rf_o[1:0]</text>
+  <text x="3996" y="1822" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_pga_gain_o[2:0]</text>
+  <text x="3996" y="1856" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">afe_tia_rf_o[2:0]</text>
   <line x1="950" y1="700" x2="1120" y2="700" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
   <line x1="950" y1="1650" x2="1120" y2="1650" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
   <line x1="3800" y1="700" x2="3970" y2="700" stroke="#1565C0" stroke-width="3" marker-end="url(#mb)"/>

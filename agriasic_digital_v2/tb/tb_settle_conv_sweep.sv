@@ -62,6 +62,7 @@ module tb_settle_conv_sweep;
   logic signed [15:0] result_dv_q_o;
   logic signed [15:0] result_cur_i_o;
   logic signed [15:0] result_cur_q_o;
+  logic overrange_dv_o, overrange_cur_o;
 
   agriasic_digital_top #(
     .ADC_WIDTH(ADC_WIDTH)
@@ -87,7 +88,9 @@ module tb_settle_conv_sweep;
     .result_dv_i_o(result_dv_i_o),
     .result_dv_q_o(result_dv_q_o),
     .result_cur_i_o(result_cur_i_o),
-    .result_cur_q_o(result_cur_q_o)
+    .result_cur_q_o(result_cur_q_o),
+    .overrange_dv_o(overrange_dv_o),
+    .overrange_cur_o(overrange_cur_o)
   );
 
   always #5 clk = ~clk;

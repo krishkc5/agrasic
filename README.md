@@ -415,13 +415,18 @@ practical regression budget. Temperature sensing (`OUT_TEMP`) stays an
 explicit `-1` sentinel; no temperature sensor interface exists anywhere in
 the digital RTL to wire it to (Phase 7.3, tracked as an open item below).
 
-Building this surfaced a real architectural gap, not a bug: **`agriasic_digital_rv32i_top`
-has zero SPI or other host-facing pins** (confirmed by grep — no matches at
-all). The firmware now genuinely computes a 3-point sweep, but there is no
-path for a real external host to read those results out of the RV32I chip
-top; only the SPI-controlled top (`agriasic_digital_spi_top`, which has no
-RV32I core) can talk to a host. See MAS GAP-11 for the three architectural
-options to reconcile this before Rev 4.3 is called integration-ready.
+Building this surfaced a real architectural gap, not a bug: the RV32I chip top
+had **zero host-facing pins**, so the firmware computed a 3-point sweep that no
+external host could read. That was GAP-11.
+
+**GAP-11 is now closed.** `agriasic_spi_host.sv` gives a host its own bus master
+port (**M4**) behind four pads, separate from the flash port because the two run
+opposite directions on every wire. The host reads a finished sweep straight out
+of DMEM **while the core is parked in `wfi`** — no firmware cooperation, no
+mailbox. The interconnect refuses M4 access to IMEM (a field host cannot
+overwrite firmware) and to the debug module (it cannot take debug control), and
+a refusal shows up as a sticky error rather than silent garbage. Measured cost:
+**+218 flops, +1,242 combinational primitives**. Digital pads go 14 to 18.
 
 **Phase 8 (verification and signoff) is also done.** All open items from the
 Rev 4.3 baseline's verification plan are now closed or confirmed moot:
@@ -491,13 +496,6 @@ where it had drifted. Findings:
 
 ## Known open items
 
-- **GAP-11: `agriasic_digital_rv32i_top` has no host-facing pins at all.**
-  The Phase 7 sweep firmware genuinely computes 3-frequency-point I/Q results,
-  but there is no SPI (or other) path out of the RV32I chip top for a real
-  external host to read them — only the separate, RV32I-free
-  `agriasic_digital_spi_top` talks to a host. This needs an explicit
-  architectural decision (see MAS section 10.3 GAP-11 for three options)
-  before Rev 4.3 is integration-ready, not just simulation-clean.
 - **Cocotb ISA regression needs an external checkout.** The scripts under
   `tb/rv32i_regression/` that drive the 77-test suite (`setup.sh`, `rerun.sh`,
   `build_riscv_tests.sh`) expect the CIS 5710 class repo and a `riscv-tests`

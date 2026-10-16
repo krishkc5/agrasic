@@ -1473,7 +1473,7 @@ Register map — the complete peripheral window (section 7.1 has the bit fields)
 | `0x8000_001C` | `RESULT_Q` | R | dV quadrature |
 | `0x8000_0034` | `RESULT_CUR_I` | R | current in-phase |
 | `0x8000_0038` | `RESULT_CUR_Q` | R | current quadrature |
-| `0x8000_003C` | `AFE_CTRL` | RW | pga_gain, tia_rf, amplitude, mux_settle |
+| `0x8000_003C` | `AFE_CTRL` | RW | pga_gain, tia_rf (2-bit codes -> 3 switch wires each), amplitude, mux_settle |
 | `0x8000_0020` | `BOOT_STATUS` | R | state, error, fw_valid, strap, source, version |
 | `0x8000_0024` | `BOOT_CTRL` | W | release / re-boot from flash / re-boot from ROM |
 | `0x8000_0028` | `SPI_CTRL` | RW | cs_n, clock divider |
@@ -2543,6 +2543,27 @@ Settle timing is unaffected either way: `settle_cycles_i` now counts
 excitation *periods* (section 6.1), so even a modest settle value is ample
 margin at any reachable N.
 
+**[GAP-7] — REVISED FOR REV 5. The concern inverted; the entry below is kept
+for history but describes a waveform that no longer exists.**
+
+Rev 5 replaced the square wave with a 16-point cosine, so there is no
+transition state to sit next to. Walking the actual table, the concern moves to
+the opposite sample points:
+
+- **I points (k = 0, 8)** land on the waveform extrema, where consecutive codes
+  differ by only 10 LSB (245 -> 255 -> 245). That is the *slowest-moving* part
+  of the drive — the best possible place to sample, not the worst.
+- **Q points (k = 4, 12)** land on mid-code, where consecutive codes differ by
+  49 LSB (177 -> 128 -> 79). That is **maximum slew**.
+
+So the DAC settling requirement now falls on the **Q channel**, which is the
+opposite of what the original entry warns about. Anyone budgeting analog
+settling from the text below will budget the wrong channel. The fix, if one is
+needed, is still cheap in RTL (sample a phase index or two later), but it must
+be decided once and deliberately because it moves every testbench target.
+
+*Original Rev 4.3 entry, superseded:*
+
 **[GAP-7] Sample points sit immediately adjacent to a dead-time/transition
 state, with no settle margin inside the sampled half-cycle itself.** Found
 during Phase 4 design, not resolved, and not silently assumed away. Phase
@@ -2572,6 +2593,14 @@ chip during bring-up with no respin. It is still **unknown**, and the current
 default (used throughout simulation: 1–2 cycles) is a placeholder with no
 basis in real comparator behavior. Get a real number from Vidhu before trusting
 any bring-up timing budget built on it.
+
+**[GAP-6] — CLOSED, RETIRED BY REV 5.** The cosine table drives a single-ended
+sine DAC; there are no complementary drive transistors, so there is nothing to
+shoot through and no dead time to size. `DEAD_CYCLES` no longer exists. This is
+**not** an open tapeout risk and should not be carried into signoff as one.
+Recorded as retired at MAS section 1 and section 6.22.
+
+*Original Rev 4.3 entry, superseded:*
 
 **[GAP-6] Break-before-make dead time is unspecified.** `excitation_ctrl`'s
 `DEAD_CYCLES` parameter (default 1 cycle at 160 MHz, 6.25 ns) is a placeholder

@@ -509,3 +509,32 @@ flop area, and the pattern already exists in-tree (`AGRIASIC_LATCH_REGFILE`
 selects lowRISC's latch register file). The `AGRIASIC_USE_SRAM_MACRO` hook and
 the one-cycle timing contract are untouched, so a macro can still drop in.
 
+### Follow-up: latch arrays adopted as the default
+
+The "still available if area gets tight" option above was taken. Measured, not
+estimated:
+
+| | Registers | Latches | Comb. | Gate-equiv |
+|---|---:|---:|---:|---:|
+| Flop array | 16,299 | -- | 44,078 | **181 kGE** |
+| **Latch array (now default)** | 4,083 | 12,675 | 44,783 | **153 kGE** |
+
+**28 kGE, roughly 0.24-0.41 mm^2 placed.** Against the 5 mm^2 die budget that
+is ~4.8-6.2 mm^2 down to ~4.5-5.7 mm^2.
+
+**The earlier "roughly halves the area" expectation in this file was wrong**,
+and the reason is worth recording: latches cut the *storage* from 74 kGE to
+44 kGE, but the **read mux stays at 28 kGE**. 12,152 mux cells is what reading
+384 words x 32 bits costs, synthesis already builds a balanced tree, and no
+cell choice changes it. The mux is ~27% of the memory cost, so the ceiling on
+this optimisation is ~27%, not 50%.
+
+That is also the sharpest argument for a memory compiler: a macro has internal
+sensing and no mux tree at all, so it removes both halves rather than one.
+Flops -> latches is 181 -> 153 kGE; a macro would be ~76 kGE plus ~0.1 mm^2 of
+hard IP.
+
+Functional equivalence is checked by `tb/rv32i_regression/flop_mem_e2e.sh`.
+`AGRIASIC_FLOP_MEM` restores the flop array if the back end cannot provide a
+real ICG cell or handle latch timing.
+

@@ -1,5 +1,5 @@
 [TB] releasing start, firmware begins
-[TB] firmware halted after 3155008 cycles
+[TB] firmware halted after 3155091 cycles
 [TB] measurements completed: 6
 [TB] config applied by firmware: pair_log2=2 settle=2 divider=10000 conv=1
 [TB] OUT_COUNT = 2  OK

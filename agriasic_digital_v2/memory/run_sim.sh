@@ -22,6 +22,7 @@ verilator --binary --timing --assert -j 4 -Wno-fatal \
  agriasic_rv32i_control_shell.sv agriasic_digital_top.sv rst_sync.sv \
  measurement_fsm.sv excitation_ctrl.sv sar_controller.sv \
  agriasic_imem.sv agriasic_dmem.sv agriasic_rv32i_mmio.sv agriasic_rv32i_bus.sv agriasic_spi_boot.sv agriasic_boot_rom.sv \
+ agriasic_spi_host.sv spi_slave.sv \
  > "$BASE/memory/build/build.log" 2>&1
 ./obj_dir/sim_memory > "$BASE/memory/results/simulation.log" 2>&1
 cp accesses.csv "$BASE/memory/results/"

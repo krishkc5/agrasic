@@ -76,9 +76,12 @@ failure rather than causing a visible one.
 
 ## Still needed for signoff
 
-1. **The PDK** — Liberty for the standard cells, and a decision on the latch
-   register file (`AGRIASIC_LATCH_REGFILE`), which STA must treat as latches
-   with time borrowing or it will report nonsense.
+1. **The PDK** — Liberty for the standard cells, and latch handling. STA must
+   treat latches as latches with time borrowing or it will report nonsense,
+   and there are now two sources of them: the Ibex register file
+   (`AGRIASIC_LATCH_REGFILE`) and **the memories themselves**, which are
+   latch arrays by default. `prim_clock_gating` must also map to a real ICG
+   cell. If the flow cannot do either, build with `AGRIASIC_FLOP_MEM`.
 2. **Real numbers for the `<<PLACEHOLDER>>` values** in the SDC: clock
    uncertainty and transition from the PDK, flash MISO timing from the chosen
    part's datasheet, and the comparator delay from analog (GAP-2).

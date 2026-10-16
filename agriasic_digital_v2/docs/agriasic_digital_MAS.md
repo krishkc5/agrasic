@@ -18,7 +18,7 @@
 - **Post-v0.14 note — Ibex core swap.** The Penn CIS 5710 RV32IM core described in sections 8.1/DR-023 (`core_clk_en`) and the Phase 2.2 rows below has been replaced by lowRISC Ibex (RV32IMC+Zicsr, 3-stage). `core_clk_en` no longer exists: the core sleeps in `wfi` during a measurement and is woken by the DONE latch on `irq_fast[0]` with no trap taken; `core_sleep_o` is exported and the clock is still not gated, so DR-023's intent (no gated clock) holds. `ecall` is replaced by `CTRL.FW_DONE` (bit 8); `CTRL.TRAP_SEEN` (bit 9) and STATUS bits 5/6 (`trap_seen`, `fw_done`) are new; the MMIO bridge now fully decodes addresses and returns a bus error (trap) outside RAM/MMIO. Reset vector is `0x80` with a 32-entry vector table at `0x0`. The debug-module window `0x1A11_0000` is reserved. See `agriasic_digital_v2/README.md`, "Processor provenance", and `rtl/ibex/VENDOR.md`. Sections referring to `DatapathPipelined`, `core_clk_en` or the 77-test cocotb ISA regression describe the retired core.
 - **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (1 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (512 B; firmware `SP = 0x0001_0200`, results at `0x0001_0100..0x0001_016B` — section 7.1's scratch-RAM offsets are unchanged relative to the RAM base), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets core + peripheral bridge only. GAP-11 (host-visible results) had a bench-level answer here — results are readable over JTAG (`fw/openocd_agriasic.cfg`) — and the deployed SPI path is now built too (section 6.24). Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
 - **Post-v0.14 note — host SPI port, GAP-11 CLOSED.** `agriasic_spi_host.sv` gives an external host its own bus master port (**M4**) behind four pads (`gpio_spi_sclk_i/cs_n_i/mosi_i`, `gpio_spi_miso_o/miso_oe_o`), kept separate from the flash port because the two run opposite directions on every wire. The host reads a finished sweep straight out of DMEM **while the core is parked in `wfi`** — no firmware cooperation, no mailbox protocol. Permissions are enforced in the interconnect decode: M4 reaches DMEM and the peripheral window only, never IMEM (so a field host cannot overwrite firmware) and never the debug module (so it cannot take debug control). Arbitration is `M1 > M2 > M4 > M3 > M0`. Cost, measured: **+218 flops and +1,242 combinational primitives**, about 1.4% of the design. Digital pads go 14 → 18. Section 6.24 has the protocol; verified by `tb_agriasic_spi_host.sv` (stage 15 of `verify_all.sh`), which reads real measurement results over SPI and confirms both refusals raise a visible sticky error.
-- **Post-v0.14 note — no SRAM compiler: memories shrunk and built from flops.** The project has no SRAM compiler available, so `agriasic_imem` and `agriasic_dmem` are standard-cell flop arrays rather than macros. Two measurements drove a resize. First, both the flops *and* the read mux scale with depth: with the memories inferred as flops, IMEM 4 KiB + DMEM 2 KiB cost **52,941 flops and 85,448 combinational cells** (138,391 total), against 3,726 + 28,565 with them blackboxed. Second, the read mux is now in the instruction-fetch critical path, where an SRAM macro would have had a specified access time — so depth costs timing as well as area. **IMEM is therefore 256 x 32 (1 KiB) and DMEM 128 x 32 (512 B)**, sized to the measured 592 B image and 100 B data footprint rather than to round numbers, with the firmware stack pointer moved to `0x0001_0200`. 512 B is the DMEM floor without relocating the result block, which occupies `0x100..0x16B`. The wrappers keep the `AGRIASIC_USE_SRAM_MACRO` hook and the one-cycle timing contract of section 6.16 unchanged, so a macro can still drop in if one becomes available. The golden ROM was re-promoted because the image now carries the new stack pointer. The boot ROM was always a synthesized constant table and never needed a compiler.
+- **Post-v0.14 note — no SRAM compiler: memories shrunk and built from flops.** The project has no SRAM compiler available, so `agriasic_imem` and `agriasic_dmem` are standard-cell flop arrays rather than macros. Two measurements drove a resize. First, both the flops *and* the read mux scale with depth: with the memories inferred as flops, IMEM 4 KiB + DMEM 2 KiB cost **52,941 flops and 85,448 combinational cells** (138,391 total), against 3,726 + 28,565 with them blackboxed. Second, the read mux is now in the instruction-fetch critical path, where an SRAM macro would have had a specified access time — so depth costs timing as well as area. **IMEM is therefore 256 x 32 (1 KiB) and DMEM 128 x 32 (512 B)**, built from **latches** rather than flops (section 6.16: 153 kGE against 181 kGE), sized to the measured 592 B image and 100 B data footprint rather than to round numbers, with the firmware stack pointer moved to `0x0001_0200`. 512 B is the DMEM floor without relocating the result block, which occupies `0x100..0x16B`. The wrappers keep the `AGRIASIC_USE_SRAM_MACRO` hook and the one-cycle timing contract of section 6.16 unchanged, so a macro can still drop in if one becomes available. The golden ROM was re-promoted because the image now carries the new stack pointer. The boot ROM was always a synthesized constant table and never needed a compiler.
 - **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && gpio_start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
 - **Post-v0.14 note — golden boot ROM (default boot source).** The IMEM SRAM is shadow-loaded at reset from one of two sources selected by the `BOOT_SEL` strap (latched on the first cycle out of reset): **0 = on-die synthesized golden ROM** (`agriasic_boot_rom.sv`, generated from `fw/golden/agriasic_fw_golden.hex`, ~150 cycles), 1 = external SPI flash (~80k cycles, header + CRC-32). The core always fetches from the SRAM, never from the ROM: nothing is added to the fetch path's timing, firmware is linked once for both sources, and **IMEM stays writable after a ROM boot** so a debugger can patch constants over JTAG without a rebuild or reflash — the reason this is a shadow-load rather than a fetch-path mux. `BOOT_CTRL[2]` re-boots from ROM, `[1]` from flash; `BOOT_STATUS[13:12]` reports the source actually used. ROM cost: +1,027 combinational primitives, +6 flops (a writable array of the same depth would be 4,736 storage bits). The golden image is promoted explicitly (`gen_boot_rom.py --promote`), never by `build.sh`, and its provenance is recorded in `fw/golden/GOLDEN.md`. Option A of the memory recommendation (fixed firmware in ROM) and Option C (flash boot) therefore both exist, strap-selectable.
 - **Post-v0.14 note — Rev 5 tetrapolar analog interface.** The measurement engine was adapted to the four-electrode front end. Excitation: `excitation_ctrl` emits `sine_code_o[7:0]` from a 16-point COSINE table to the sine DAC on E1, replacing `exc_drive_p_o`/`exc_drive_n_o`; peaks land on the I sample points (phase 0/8) and mid-code on the Q points (4/12), and `code[k]+code[k+8]=256` preserves the +/- chop. There is no dead time any more, so **GAP-6 (break-before-make sizing) is retired**. Sensing: two channels (diff PGA on E2/E3, TIA on E4) share one SAR ADC through `mux_sel_o`; one `adc_sample_o` strobe freezes both S/H at each phase point and two conversions follow, so V/I phase is preserved by construction. Four accumulators (`dv_i/dv_q/cur_i/cur_q`, same +/-16320 bound each) replace the single I/Q pair; `RESULT_I`/`RESULT_Q` now carry dV and `RESULT_CUR_I`/`RESULT_CUR_Q` (`0x34`/`0x38`) the current, with `AFE_CTRL` (`0x3C`) carrying pga_gain/tia_rf/amplitude/mux_settle. Section 3.1's I/Q definition applies per channel; impedance Z(f)=dV/I stays host-side. Verified by the rewritten `tb_excitation_drive.sv` and by two-channel ADC models in every measurement testbench (distinct per-channel targets, so a swapped mux fails). Open: simultaneous vs alternating S/H (RTL assumes simultaneous).
@@ -1414,6 +1414,65 @@ so a compiler macro can be dropped in without touching anything else:
 | | IMEM | DMEM |
 |---|---|---|
 | Depth | 256 × 32 (1 KiB) | 128 × 32 (512 B) |
+
+#### Storage: latches by default, flops as the fallback
+
+With no SRAM compiler, these are standard-cell arrays, and the cell choice is
+worth real die area. **Latches are the default**; `AGRIASIC_FLOP_MEM` selects
+the flop array instead.
+
+| | Registers | Latches | Comb. | Gate-equiv |
+|---|---:|---:|---:|---:|
+| Flop array | 16,299 | — | 44,078 | **181 kGE** |
+| **Latch array (default)** | 4,083 | 12,675 | 44,783 | **153 kGE** |
+
+**28 kGE saved, about 0.24–0.41 mm² placed.** Against a 5 mm² die budget that
+moves the estimate from roughly 4.8–6.2 mm² to 4.5–5.7 mm².
+
+Note what does *not* improve, because it is the more useful number:
+
+| | Flop | Latch |
+|---|---:|---:|
+| Memory storage | 74 kGE | **44 kGE** |
+| Memory read mux | 28 kGE | **28 kGE** |
+
+Latches cut the storage cells by ~40%, but the **read mux is untouched** —
+12,152 mux cells is simply what reading 384 words × 32 bits costs, and synthesis
+already builds a balanced tree, so it is irreducible at this depth. The mux is
+~27% of the memory cost. Anyone expecting latches to halve the memory is
+costing the storage and forgetting the mux. A real SRAM macro removes *both*
+halves, which is why a memory compiler remains the much larger lever.
+
+**Write safety.** The structure follows lowRISC's `ibex_register_file_latch.sv`
+(already used here for the Ibex register file), and the order matters:
+
+1. A global clock gate on "any write this cycle" produces `clk_int`.
+2. Write **data and byte enables** are registered on `clk_int`. The latches are
+   transparent during the `clk_int` high phase and these flops update on its
+   rising edge, so a latch sees stable data for its whole open window.
+3. A per-word clock gate, enabled by the **combinational** address.
+4. The latch, with the registered byte enables selecting lanes. A latch holds
+   when not written, so unwritten lanes need no feedback mux — which is exactly
+   why this is cheaper than flops.
+
+The address in step 3 is deliberately *not* registered. A clock-gating cell
+samples its enable while the clock is low, so a registered address arrives a
+cycle late and every write lands at the previous address. This was found the
+hard way: the firmware ran an entire sweep and then took a trap.
+
+**What it asks of the back end.** `prim_clock_gating` must map to a real
+technology ICG cell, and STA must treat these as latches and allow time
+borrowing. Both are already requirements because of the Ibex latch register
+file, so this adds no new burden — but if the flow cannot meet them, build with
+`AGRIASIC_FLOP_MEM` and accept the 28 kGE.
+
+The storage is inlined in each wrapper rather than factored into a shared
+module, deliberately: four testbenches reach into `u_imem.mem_array` and
+`u_dmem.ram_array` directly, and a submodule would move those paths. Keeping
+one array name per wrapper lets either build run the same regression.
+
+Verified by `tb/rv32i_regression/flop_mem_e2e.sh`, which runs the fallback and
+must produce identical results.
 | Base | `0x0000_0000` | `0x0001_0000` |
 | Write port | **yes** — boot loader, debug SBA, core data port | yes — core data port, SBA |
 | Simulation init | `$readmemh(INIT_FILE)`; `INIT_FILE=""` fills with NOP | none (firmware writes before it reads — verified) |

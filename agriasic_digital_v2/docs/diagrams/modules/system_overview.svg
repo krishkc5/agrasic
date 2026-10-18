@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2900" viewBox="0 0 5000 2900" role="img" aria-labelledby="t d">
+  <title id="t">AgriASIC digital subsystem - system overview</title>
+  <desc id="d">System overview. Off-chip on the left: an SPI host, an SPI NOR flash, a JTAG debugger, and clock plus boot straps. On the die: the Ibex core with its instruction and data memories behind a four-master interconnect, the boot loader and golden ROM, the debug module, and the host SPI port. The measurement engine runs the excitation and conversion sequence in hardware. On the right, the analog front end drives a four-electrode soil probe.</desc>
+  <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
+  <rect width="5000" height="2900" fill="#fff"/>
+  <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">AgriASIC digital subsystem - system overview</text>
+  <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">One picture of the whole die: what is off chip, what the processor owns, and where the analog boundary is</text>
+  <rect x="80" y="180" width="4840" height="2600" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="150" y="300" width="700" height="1900" rx="10" fill="#fff" stroke="#616161" stroke-width="2"/>
+  <text x="176" y="342" font-family="Arial" font-size="22" font-weight="700" fill="#616161" xml:space="preserve">OFF CHIP</text>
+  <rect x="210" y="380" width="580" height="240" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="236" y="422" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">SPI host</text>
+  <text x="236" y="462" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">4 pads</text>
+  <text x="236" y="496" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">reads results</text>
+  <rect x="210" y="700" width="580" height="240" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="236" y="742" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">SPI NOR flash</text>
+  <text x="236" y="782" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">4 pads</text>
+  <text x="236" y="816" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">firmware image</text>
+  <rect x="210" y="1020" width="580" height="240" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="236" y="1062" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">JTAG debugger</text>
+  <text x="236" y="1102" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">5 pads</text>
+  <text x="236" y="1136" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">J-Link + OpenOCD</text>
+  <rect x="210" y="1340" width="580" height="240" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="236" y="1382" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Clock / straps</text>
+  <text x="236" y="1422" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">4 pads</text>
+  <text x="236" y="1456" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">clk, rst_n, BOOT_SEL, BOOT_FAIL</text>
+  <text x="210" y="1790" font-family="Arial" font-size="20" font-weight="700" fill="#212121" xml:space="preserve">18 digital pads total.</text>
+  <text x="210" y="1830" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">The dbg_* ports are</text>
+  <text x="210" y="1865" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">observability only and</text>
+  <text x="210" y="1900" font-family="Arial" font-size="19" fill="#616161" xml:space="preserve">must NOT be bonded.</text>
+  <rect x="950" y="250" width="2600" height="2000" rx="10" fill="#fff" stroke="#212121" stroke-width="2"/>
+  <text x="976" y="292" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">ASIC DIE  -  digital</text>
+  <rect x="1020" y="360" width="1180" height="300" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="1046" y="402" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">ibex_top</text>
+  <text x="1046" y="442" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">RV32IMC + Zicsr, 3-stage</text>
+  <text x="1046" y="476" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">sleeps in wfi 99.98%</text>
+  <text x="1046" y="510" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">of a sweep</text>
+  <rect x="2280" y="360" width="1200" height="300" rx="10" fill="#E1BEE7" stroke="#E1BEE7" stroke-width="2"/>
+  <text x="2306" y="402" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">dmi_jtag + dm_top</text>
+  <text x="2306" y="442" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">RISC-V Debug 0.13</text>
+  <text x="2306" y="476" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">SBA is a bus master</text>
+  <text x="2306" y="510" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">halt / resume / patch</text>
+  <rect x="1020" y="730" width="2460" height="220" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="1046" y="772" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_bus   -   4 masters, permission-checked</text>
+  <text x="1046" y="812" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">priority  M1 core-data &gt; M2 debug-SBA &gt; M4 host-SPI &gt; M3 boot &gt; M0 core-fetch</text>
+  <rect x="1020" y="1020" width="760" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1046" y="1062" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_imem</text>
+  <text x="1046" y="1102" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">1 KiB, 256 x 32</text>
+  <text x="1046" y="1136" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">LATCH array</text>
+  <text x="1046" y="1170" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">writable: patchable</text>
+  <rect x="1870" y="1020" width="780" height="300" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1896" y="1062" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_rv32i_mmio</text>
+  <text x="1896" y="1102" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">64 B register window</text>
+  <text x="1896" y="1136" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">+ agriasic_dmem</text>
+  <text x="1896" y="1170" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">512 B, 128 x 32, latch</text>
+  <rect x="2740" y="1020" width="740" height="300" rx="10" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
+  <text x="2766" y="1062" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_spi_host</text>
+  <text x="2766" y="1102" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">bus master M4</text>
+  <text x="2766" y="1136" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">DMEM + MMIO only</text>
+  <text x="2766" y="1170" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">never IMEM or DM</text>
+  <rect x="1020" y="1390" width="1180" height="290" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="1046" y="1432" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_spi_boot</text>
+  <text x="1046" y="1472" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">strap picks the source:</text>
+  <text x="1046" y="1506" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">golden ROM ~150 cyc</text>
+  <text x="1046" y="1540" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">or flash ~0.5 ms + CRC</text>
+  <rect x="2280" y="1390" width="1200" height="290" rx="10" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
+  <text x="2306" y="1432" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">agriasic_boot_rom</text>
+  <text x="2306" y="1472" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">141-word golden image</text>
+  <text x="2306" y="1506" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">constant table -&gt; gates</text>
+  <text x="2306" y="1540" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">no ROM compiler needed</text>
+  <rect x="1020" y="1760" width="2460" height="410" rx="10" fill="#C8E6C9" stroke="#C8E6C9" stroke-width="2"/>
+  <text x="1046" y="1802" font-family="Arial" font-size="26" font-weight="700" fill="#212121" xml:space="preserve">agriasic_digital_top   -   the measurement engine</text>
+  <text x="1046" y="1842" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">excitation_ctrl   divider + 16-state phase counter + cosine table</text>
+  <text x="1046" y="1876" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">measurement_fsm   phase-locked sequencer, 4 accumulators + shadows</text>
+  <text x="1046" y="1910" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">sar_controller    8 bit trials, channel mux, settle</text>
+  <text x="1046" y="1944" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">Configured over MMIO, started by a pulse, reports done via irq_fast[0].</text>
+  <rect x="3650" y="250" width="1200" height="2000" rx="10" fill="#fff" stroke="#E65100" stroke-width="2"/>
+  <text x="3676" y="292" font-family="Arial" font-size="24" font-weight="700" fill="#E65100" xml:space="preserve">ANALOG FRONT END</text>
+  <rect x="3710" y="360" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="402" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Sine DAC + buffer</text>
+  <text x="3736" y="442" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">16 x f_exc    E1 drive</text>
+  <rect x="3710" y="660" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="702" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Diff PGA</text>
+  <text x="3736" y="742" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">E2 - E3    3 gain wires</text>
+  <rect x="3710" y="960" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="1002" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">TIA</text>
+  <text x="3736" y="1042" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">E4 return    3 Rf wires</text>
+  <rect x="3710" y="1260" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="1302" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">S/H x2</text>
+  <text x="3736" y="1342" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">ONE strobe    freezes both</text>
+  <rect x="3710" y="1560" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="1602" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Analog mux</text>
+  <text x="3736" y="1642" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">dV / I    one at a time</text>
+  <rect x="3710" y="1860" width="1080" height="260" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
+  <text x="3736" y="1902" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">8-bit SAR ADC</text>
+  <text x="3736" y="1942" font-family="Arial" font-size="18" fill="#616161" xml:space="preserve">digital runs    the bit trials</text>
+  <line x1="790" y1="500" x2="950" y2="500" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="790" y1="820" x2="950" y2="820" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="790" y1="1140" x2="950" y2="1140" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="790" y1="1460" x2="950" y2="1460" stroke="#212121" stroke-width="3" marker-end="url(#mk)"/>
+  <line x1="3480" y1="1960" x2="3650" y2="1960" stroke="#E65100" stroke-width="3" marker-end="url(#mo)"/>
+  <path d="M4190,2120 L4190,2250" fill="none" stroke="#E65100" stroke-width="3"/>
+  <rect x="3710" y="2250" width="1080" height="180" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
+  <text x="3736" y="2292" font-family="Arial" font-size="24" font-weight="700" fill="#fff" xml:space="preserve">Four-electrode soil probe</text>
+  <text x="3736" y="2332" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">E1 drive   E2/E3 sense   E4 return</text>
+  <text x="120" y="2400" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Z(f) = dV(f) / I(f) is computed host-side, never on die. The chip reports four accumulators per frequency point, plus the gain settings they were taken at.</text>
+  <text x="120" y="2450" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">With no SRAM compiler the memories are standard-cell latch arrays: 1.5 KB costs 77 kGE, about half the digital design.</text>
+</svg>

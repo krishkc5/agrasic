@@ -36,7 +36,7 @@ module tb_agriasic_spi_host;
   logic [1:0] mux_sel_o;
   logic adc_enable_o, adc_sample_o, adc_comp_i;
   logic signed [15:0] result_dv_i_o, result_dv_q_o, result_cur_i_o, result_cur_q_o;
-  logic [2:0] pga_gain, tia_rf;
+  logic [2:0] tia_rf;
 
   always #5 clk = ~clk;
 
@@ -72,7 +72,7 @@ module tb_agriasic_spi_host;
     .dbg_cfg_pair_log2_o (), .dbg_cfg_settle_cycles_o (),
     .dbg_cfg_exc_divider_o (), .dbg_cfg_conv_cycles_o (),
     .dbg_cfg_mux_settle_o (), .dbg_cfg_amplitude_o (),
-    .afe_pga_gain_o (pga_gain), .afe_tia_rf_o (tia_rf),
+    .afe_tia_rf_o (tia_rf),
     .gpio_jtag_tck_i (1'b0), .gpio_jtag_tms_i (1'b1), .gpio_jtag_trst_ni (rst_n),
     .gpio_jtag_tdi_i (1'b0), .gpio_jtag_tdo_o (),
     .gpio_boot_sel_i (1'b0), .gpio_flash_sck_o (), .gpio_flash_cs_n_o (),
@@ -232,7 +232,9 @@ module tb_agriasic_spi_host;
       expect_eq("E: OUT_CUR_I[0] read over SPI", v, 32'd240);
     end
 
-    // ---- F. gain control: a 2-bit code decodes to 3 switch wires -----------
+    // ---- F. TIA gain: a 2-bit code decodes to 3 switch wires ---------------
+    // The voltage sense has a FIXED gain in analog, so only the TIA is checked;
+    // AFE_CTRL[1:0] is reserved and must read back as zero.
     // Run last: writing AFE_CTRL also rewrites mux_settle, so doing this before
     // the sweep would perturb the measurement the earlier checks rely on.
     for (int code = 0; code < 4; code++) begin
@@ -241,21 +243,20 @@ module tb_agriasic_spi_host;
       expect_wires = (code == 0) ? 3'b001 : (code == 1) ? 3'b010 :
                      (code == 2) ? 3'b100 : 3'b111;
       // [15:8] mux_settle = 2 (its reset value), [5:4] amplitude = 0,
-      // [3:2] tia_rf = code, [1:0] pga_gain = code
-      afe_word = (32'd2 << 8) | (code << 2) | code;
+      // [3:2] tia_rf = code, [1:0] reserved -- written non-zero on purpose to
+      // confirm the retired field is ignored and reads back as zero.
+      afe_word = (32'd2 << 8) | (code << 2) | 2'b11;
       host_write32(32'h8000_003C, afe_word);
-      expect_eq($sformatf("F: pga wires for code %0d", code), {29'd0, pga_gain},
-                {29'd0, expect_wires});
       expect_eq($sformatf("F: tia wires for code %0d", code), {29'd0, tia_rf},
                 {29'd0, expect_wires});
       // AFE_CTRL must read back the CODE, not the decoded wires.
       host_read32(32'h8000_003C, v);
-      expect_eq($sformatf("F: AFE_CTRL reads back code %0d", code),
-                v & 32'h0000_000F, {28'd0, code[1:0], code[1:0]});
+      expect_eq($sformatf("F: AFE_CTRL reads back tia=%0d, [1:0] reserved=0", code),
+                v & 32'h0000_000F, {28'd0, code[1:0], 2'b00});
     end
-    // No code may ever leave a gain network fully open -- for the TIA that
-    // means no DC feedback path and a railed output.
-    if (pga_gain == 3'b000 || tia_rf == 3'b000) begin
+    // No code may ever leave the TIA network fully open -- that would mean no
+    // DC feedback path and a railed output.
+    if (tia_rf == 3'b000) begin
       $error("F: a gain code decoded to all-open"); errors++;
     end
 

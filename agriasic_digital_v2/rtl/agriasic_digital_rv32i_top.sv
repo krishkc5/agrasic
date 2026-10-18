@@ -41,8 +41,8 @@ module agriasic_digital_rv32i_top #(
   output logic [7:0]           dbg_cfg_conv_cycles_o,
   output logic [7:0]           dbg_cfg_mux_settle_o,   // Rev 5: analog mux + S/H settling
   output logic [1:0]           dbg_cfg_amplitude_o,    // Rev 5: sine excursion select
-  output logic [2:0]           afe_pga_gain_o,     // diff PGA: 3 switch wires
-  output logic [2:0]           afe_tia_rf_o,       // TIA Rf:   3 switch wires
+  output logic [2:0]           afe_tia_rf_o,       // TIA Rf: 3 switch wires
+                                                   // (the diff PGA gain is fixed)
 
   // JTAG debug port (Phase 2): 5-wire IEEE 1149.1 into the RISC-V debug
   // module inside the control shell. TRST_N is the TAP's own async reset;
@@ -118,7 +118,6 @@ module agriasic_digital_rv32i_top #(
     .cfg_conv_cycles_o       (dbg_cfg_conv_cycles_o),
     .cfg_mux_settle_o        (dbg_cfg_mux_settle_o),
     .cfg_amplitude_o         (dbg_cfg_amplitude_o),
-    .afe_pga_gain_o          (afe_pga_gain_o),
     .afe_tia_rf_o            (afe_tia_rf_o),
     .result_dv_i_o           (shell_result_dv_i),
     .result_dv_q_o           (shell_result_dv_q),

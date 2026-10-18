@@ -1,4 +1,4 @@
-# AgriASIC Digital — Design Reference
+# AGRASIC Digital — Design Reference
 
 **Current state only.** This is the short companion to
 [`agriasic_digital_MAS.md`](agriasic_digital_MAS.md), which is a living record
@@ -45,13 +45,13 @@ Three partitions:
 
 ### Address map
 
-| Region | Base | Size | Reachable by |
-|---|---|---|---|
-| IMEM | `0x0000_0000` | 1 KiB | fetch, data, debug SBA, boot loader |
-| DMEM | `0x0001_0000` | 512 B | data, debug SBA, host SPI |
-| Debug module | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data |
-| Peripheral registers | `0x8000_0000` | 64 B | data, debug SBA, host SPI |
-| anything else | — | — | bus error → precise trap |
+| Region               | Base            | Size  | Reachable by                        |
+| -------------------- | --------------- | ----- | ----------------------------------- |
+| IMEM                 | `0x0000_0000` | 1 KiB | fetch, data, debug SBA, boot loader |
+| DMEM                 | `0x0001_0000` | 512 B | data, debug SBA, host SPI           |
+| Debug module         | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data             |
+| Peripheral registers | `0x8000_0000` | 64 B  | data, debug SBA, host SPI           |
+| anything else        | —              | —    | bus error → precise trap           |
 
 ### Pads — 18 digital
 
@@ -71,21 +71,23 @@ Three partitions:
 ### Control subsystem
 
 #### `agriasic_rv32i_control_shell` — the MCU
+
 ![control_shell_block_diagram](diagrams/modules/control_shell_block_diagram.svg)
 
 Instantiates the core, interconnect, memories, boot loader, golden ROM and debug
 module, and owns **three reset domains**:
 
-| Domain | Resets | Formed from |
-|---|---|---|
-| `rst_n_sync` | debug module, TAP | `rst_sync` output |
-| `sys_rst_n` | MMIO bridge, result latches | `&& !ndmreset` |
-| `core_rst_n` | Ibex only | `&& !core_rst` |
+| Domain         | Resets                      | Formed from         |
+| -------------- | --------------------------- | ------------------- |
+| `rst_n_sync` | debug module, TAP           | `rst_sync` output |
+| `sys_rst_n`  | MMIO bridge, result latches | `&& !ndmreset`    |
+| `core_rst_n` | Ibex only                   | `&& !core_rst`    |
 
 The debug module deliberately survives `ndmreset` — otherwise a debugger would
 disconnect itself the moment it asked for a reset.
 
 #### `ibex_top` — the core
+
 RV32IMC + Zicsr, 3-stage, `RV32MFast`, branch-target ALU, writeback stage. Latch
 register file for ASIC. Vendored from lowRISC at `e9f5534`, **unmodified except
 one documented lint-sink patch**.
@@ -95,25 +97,27 @@ not Ibex's default `+0x808`; and Ibex gates its own clock while idle, so its
 async-reset flops need a genuine reset edge.
 
 #### `agriasic_rv32i_bus` — the interconnect
+
 ![rv32i_bus_block_diagram](diagrams/modules/rv32i_bus_block_diagram.svg)
 
 Five masters, fixed priority **M1 core-data > M2 debug-SBA > M4 host-SPI > M3
 boot > M0 core-fetch**. Permissions are enforced **in the decode**, not by
 convention:
 
-| Master | May reach |
-|---|---|
-| M0 core fetch | IMEM, debug module |
-| M1 core data | everything |
-| M2 debug SBA | IMEM, DMEM/MMIO |
-| M3 boot loader | IMEM only |
-| M4 host SPI | DMEM/MMIO only |
+| Master         | May reach          |
+| -------------- | ------------------ |
+| M0 core fetch  | IMEM, debug module |
+| M1 core data   | everything         |
+| M2 debug SBA   | IMEM, DMEM/MMIO    |
+| M3 boot loader | IMEM only          |
+| M4 host SPI    | DMEM/MMIO only     |
 
 M4 cannot reach IMEM (a field host must not overwrite firmware) or the debug
 module (it must not take debug control). Out-of-map access is a bus error, which
 Ibex takes as a precise fault — **not a segfault; there is no OS and no MMU.**
 
 #### `agriasic_imem` / `agriasic_dmem` — the memories
+
 ![imem_dmem_timing_contract](diagrams/modules/imem_dmem_timing_contract.svg)
 
 IMEM **1 KiB (256 × 32)**, DMEM **512 B (128 × 32)**, sized to measured use
@@ -131,6 +135,7 @@ Timing contract, unchanged by the storage choice: one-cycle synchronous read,
 no-change output policy.
 
 #### `agriasic_rv32i_mmio` — peripheral bridge
+
 ![mmio_register_map](diagrams/modules/mmio_register_map.svg)
 
 Decodes the data port into DMEM and a 64-byte register window. Decode is
@@ -141,23 +146,26 @@ A store to `CTRL` asserts write-enable for exactly one cycle, so `START` is a
 single-cycle pulse regardless of bus timing — a repeated write cannot restart a
 run in progress.
 
-Also decodes the two **2-bit gain codes into three switch wires each**. No code
-decodes to all-open: for the TIA that would be an open feedback network and a
-railed output, and the reset code is 0.
+Also decodes the **TIA's 2-bit gain code into three switch wires**. No code
+decodes to all-open — that would be an open feedback network and a railed
+output, and the reset code is 0. The **diff PGA has a fixed gain** and no
+digital control: ΔV is a fixed fraction of the drive set by electrode geometry,
+so the voltage channel has little dynamic range. `AFE_CTRL[1:0]` is reserved.
 
 ### Boot
 
 #### `agriasic_spi_boot` — boot loader and post-boot SPI master
+
 ![spi_boot_source_select](diagrams/modules/spi_boot_source_select.svg)
 ![spi_boot_state_machine](diagrams/modules/spi_boot_state_machine.svg)
 
 `BOOT_SEL` is latched on the first cycle out of reset — a strap, not a runtime
 control.
 
-| Strap | Source | Time | Integrity |
-|---|---|---|---|
-| **0** (default) | on-die golden ROM | ~150 cycles | none needed — it is gates |
-| 1 | external SPI flash | ~0.5 ms | 16-byte header + CRC-32 |
+| Strap                 | Source             | Time        | Integrity                  |
+| --------------------- | ------------------ | ----------- | -------------------------- |
+| **0** (default) | on-die golden ROM  | ~150 cycles | none needed — it is gates |
+| 1                     | external SPI flash | ~0.5 ms     | 16-byte header + CRC-32    |
 
 **Both shadow-load into the same writable IMEM.** The core always fetches from
 SRAM, never from ROM — so nothing is added to fetch timing, firmware links once
@@ -167,16 +175,17 @@ After boot the same engine becomes a firmware SPI peripheral, so the chip can
 rewrite its own flash.
 
 #### `agriasic_boot_rom` — the golden image
+
 ![boot_rom_generation_flow](diagrams/modules/boot_rom_generation_flow.svg)
 
 141 words emitted as a constant `case` table — **no ROM compiler needed**;
-synthesis maps it to ~1,000 gates. Promotion is explicit (`gen_boot_rom.py
---promote`), never a side effect of a build, and the generator keeps the word
+synthesis maps it to ~1,000 gates. Promotion is explicit (`gen_boot_rom.py --promote`), never a side effect of a build, and the generator keeps the word
 count in step everywhere it appears.
 
 ### Debug and host access
 
 #### `dmi_jtag` + `dm_top` — RISC-V debug
+
 ![debug_module_integration](diagrams/modules/debug_module_integration.svg)
 
 pulp-platform `riscv-dbg`, Debug Spec 0.13. Five pins, IDCODE `0x1434_1001`.
@@ -185,6 +194,7 @@ port is a **full bus master**, so a debugger reads and writes memory while the
 core runs; that is how firmware gets patched at the bench.
 
 #### `agriasic_spi_host` — host port
+
 ![spi_host_block_diagram](diagrams/modules/spi_host_block_diagram.svg)
 
 The chip is the **slave**. Gives an external host its own bus master (M4) rather
@@ -202,6 +212,7 @@ a second clock domain.
 ### Measurement engine
 
 #### `excitation_ctrl` — waveform and phase reference
+
 ![excitation_cosine_table](diagrams/modules/excitation_cosine_table.svg)
 
 A **16-point cosine table held in logic** — no memory read, no DMA — indexed by
@@ -213,6 +224,7 @@ peaks must land on the I points. A sine table would put a zero crossing at index
 which is what makes the ± chop cancel offset and drift.
 
 #### `measurement_fsm` — the sequencer
+
 ![measurement_fsm_rev5_states](diagrams/modules/measurement_fsm_rev5_states.svg)
 ![simultaneous_sample_hold](diagrams/modules/simultaneous_sample_hold.svg)
 
@@ -228,6 +240,7 @@ and I always come from the same run — which matters because they are divided
 against each other.
 
 #### `sar_controller` — the converter
+
 ![sar_controller_rev5_states](diagrams/modules/sar_controller_rev5_states.svg)
 
 Runs the successive-approximation search **in digital**: eight bit trials, one
@@ -239,6 +252,7 @@ gain controls exist to fix that, so firmware has to be able to see it.
 regeneration instead, because a synchronizer would cost a full bit trial.
 
 #### `rst_sync` — reset synchronizer
+
 ![rst_sync_timing](diagrams/modules/rst_sync_timing.svg)
 
 Asynchronous assert, synchronous release. One per chip top.
@@ -280,15 +294,16 @@ a die of **4.5–5.7 mm² against a 5 mm² budget**. See
 
 ### Open, and who owns it
 
-| Item | Owner |
-|---|---|
-| Six analog interface conventions — comparator polarity, DAC coding, simultaneous S/H, gain tables, settling, DAC rate | **analog** |
-| 160 MSa/s sine DAC at the 10 MHz point — may force fewer phase points or a lower top frequency | **analog** |
-| Temperature channel (external thermistor into ADC channel 2) | analog + digital |
-| Static timing analysis — needs a Liberty library | digital, blocked |
-| DFT decision — no scan exists anywhere | **decide before layout** |
-| `START` polarity (unbonded pin currently leaves the chip dead) | digital |
-| GAP-10 placeholder registers | digital |
+| Item                                                                                                                   | Owner                          |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Analog interface conventions — comparator polarity, DAC coding, simultaneous S/H, TIA gain table, settling, DAC rate | **analog** |
+| Fixed PGA gain value, and whether `AFE_CTRL.amplitude` will ever be reduced (the voltage channel has no gain to recover it) | **analog** |
+| 160 MSa/s sine DAC at the 10 MHz point — may force fewer phase points or a lower top frequency                        | **analog**               |
+| Temperature channel (external thermistor into ADC channel 2)                                                           | analog + digital               |
+| Static timing analysis — needs a Liberty library                                                                      | digital, blocked               |
+| DFT decision — no scan exists anywhere                                                                                | **decide before layout** |
+| `START` polarity (unbonded pin currently leaves the chip dead)                                                       | digital                        |
+| GAP-10 placeholder registers                                                                                           | digital                        |
 
 **Two things that would pass silently if wrong:** the analog conventions above,
 because the testbench models assume them; and the Ibex ISA, because no

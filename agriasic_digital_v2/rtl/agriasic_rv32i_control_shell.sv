@@ -130,7 +130,10 @@ module agriasic_rv32i_control_shell #(
   output logic [7:0]           cfg_conv_cycles_o,
   output logic [7:0]           cfg_mux_settle_o,   // Rev 5
   output logic [1:0]           cfg_amplitude_o,    // Rev 5
-  output logic [2:0]           afe_pga_gain_o,     // 3 switch wires (see mmio gain_decode)
+  // The voltage sense (diff PGA on E2/E3) has a FIXED gain: in a
+  // voltage-driven tetrapolar measurement dV is a fixed fraction of the
+  // drive set by electrode geometry, so that channel has little dynamic
+  // range. The current channel carries it, so only the TIA is programmable.
   output logic [2:0]           afe_tia_rf_o,       // 3 switch wires (see mmio gain_decode)
   output logic signed [15:0]   result_dv_i_o,
   output logic signed [15:0]   result_dv_q_o,
@@ -550,7 +553,6 @@ module agriasic_rv32i_control_shell #(
     .cfg_conv_cycles_o   (cfg_conv_cycles_o),
     .cfg_mux_settle_o    (cfg_mux_settle_o),
     .cfg_amplitude_o     (cfg_amplitude_o),
-    .cfg_pga_gain_o      (afe_pga_gain_o),
     .cfg_tia_rf_o        (afe_tia_rf_o),
     .fw_done_o           (fw_done),
     .trap_seen_o         (trap_seen),

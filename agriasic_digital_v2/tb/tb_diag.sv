@@ -45,7 +45,7 @@ module tb_diag;
     .dbg_busy_o(busy_o), .dbg_done_o(done_o),
     .dbg_result_dv_i_o(result_dv_i_o), .dbg_result_dv_q_o(result_dv_q_o),
     .dbg_result_cur_i_o(result_cur_i_o), .dbg_result_cur_q_o(result_cur_q_o),
-    .dbg_cfg_mux_settle_o(), .dbg_cfg_amplitude_o(), .afe_pga_gain_o(), .afe_tia_rf_o(),
+    .dbg_cfg_mux_settle_o(), .dbg_cfg_amplitude_o(), .afe_tia_rf_o(),
     .gpio_spi_sclk_i(1'b0), .gpio_spi_cs_n_i(1'b1), .gpio_spi_mosi_i(1'b0),
     .gpio_spi_miso_o(), .gpio_spi_miso_oe_o(),
     .dbg_cfg_pair_log2_o(cfg_pair_log2_o), .dbg_cfg_settle_cycles_o(cfg_settle_cycles_o),

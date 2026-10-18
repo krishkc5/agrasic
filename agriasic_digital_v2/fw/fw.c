@@ -70,7 +70,8 @@
    not here (no floating point, and the host already does magnitude/phase). */
 #define REG_RESULT_CUR_I REG(0x34) /* R   sign-extended current in-phase accumulator */
 #define REG_RESULT_CUR_Q REG(0x38) /* R   sign-extended current quadrature accumulator */
-#define REG_AFE_CTRL     REG(0x3C) /* RW  [1:0] pga_gain, [3:2] tia_rf, [5:4] amplitude, [15:8] mux_settle */
+#define REG_AFE_CTRL     REG(0x3C) /* RW  [1:0] reserved (PGA gain is fixed in analog),
+                                    *     [3:2] tia_rf, [5:4] amplitude, [15:8] mux_settle */
 
 #define CTRL_START      (1 << 0)
 #define CTRL_CLEAR_ERR  (1 << 7)
@@ -97,7 +98,7 @@
 #define OUT_CUR_I      ((volatile int *)(DMEM_BASE + 0x150))   /* [3]: current in-phase average per point */
 #define OUT_CUR_Q      ((volatile int *)(DMEM_BASE + 0x160))   /* [3]: current quadrature average per point */
 /* [3]: the analog conditions each point was measured under.
- *   [15:0]  AFE_CTRL as it stood (pga_gain, tia_rf, amplitude, mux_settle)
+ *   [15:0]  AFE_CTRL as it stood (tia_rf, amplitude, mux_settle)
  *   [17:16] ADC overrange, bit16 = dV channel, bit17 = current channel
  * A host CANNOT compute Z = dV / I without this: the two channels have
  * independent gains, so the gains do not cancel in the ratio. Storing it

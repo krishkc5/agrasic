@@ -96,7 +96,6 @@ module tb_agriasic_rv32i_e2e;
     .dbg_cfg_conv_cycles_o   (cfg_conv_cycles_o),
     .dbg_cfg_mux_settle_o    (),
     .dbg_cfg_amplitude_o     (),
-    .afe_pga_gain_o      (),
     .afe_tia_rf_o        (),
     // JTAG idle: TAP held in reset, no debugger attached in this test.
     .gpio_jtag_tck_i          (1'b0),

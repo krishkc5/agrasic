@@ -392,10 +392,14 @@ except where the AFE is off-chip in a test configuration.
 | `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. |
 | `afe_adc_comp_i` | in | One comparator decision: 1 = input >= trial code. Timed, unsynchronized — `REG_CONV` must cover regeneration at the worst corner. |
 | `afe_conv_start_o` | out | One-cycle pulse at the start of each conversion. |
-| `afe_pga_gain_o[2:0]` | out | Differential PGA gain: **three switch wires**, decoded on die from a 2-bit register code. |
 | `afe_tia_rf_o[2:0]` | out | TIA feedback resistor: **three switch wires**, same decode. |
 
-**Gain encoding.** Both controls are 2-bit codes in `AFE_CTRL` decoded to three
+**The differential PGA has a FIXED gain** and no digital control. In a
+voltage-driven tetrapolar measurement dV is a fixed fraction of the drive set by
+electrode geometry, so that channel has little dynamic range; the current channel
+carries it. `AFE_CTRL[1:0]` is reserved, reads 0.
+
+**Gain encoding.** The TIA control is a 2-bit code in `AFE_CTRL` decoded to three
 switch wires by `gain_decode` in `agriasic_rv32i_mmio.sv`, so the analog side
 needs no decoder and illegal switch combinations are unreachable. The register
 reads back the **code**, not the wires. Current mapping, *pending analog

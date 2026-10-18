@@ -161,7 +161,7 @@ def control_shell_block():
         "measurement_done_i", "measurement_result_dv_i/q_i", "measurement_result_cur_i/q_i"],
         fill=INK, head_size=24, lead=36)
     c.box(3970, 1740, 850, 300, "To analog front end", [
-        "afe_pga_gain_o[2:0]", "afe_tia_rf_o[2:0]"], fill=ORANGE, tfill=INK, head_size=24)
+        "afe_tia_rf_o[2:0]", "(PGA gain is fixed)"], fill=ORANGE, tfill=INK, head_size=24)
     c.arrow(950, 700, 1120, 700, INK)
     c.arrow(950, 1650, 1120, 1650, INK)
     c.arrow(3800, 700, 3970, 700, BLUE_S)
@@ -389,7 +389,7 @@ def mmio_register_map():
             ("0x8000_0034", "RESULT_CUR_I", "R", "current in-phase"),
             ("0x8000_0038", "RESULT_CUR_Q", "R", "current quadrature")]),
         ("analog front end", ORANGE, [
-            ("0x8000_003C", "AFE_CTRL", "RW", "pga_gain, tia_rf (2b code -> 3 wires), amplitude, mux_settle")]),
+            ("0x8000_003C", "AFE_CTRL", "RW", "[1:0] reserved, tia_rf (2b -> 3 wires), amplitude, mux_settle")]),
         ("boot", RED, [
             ("0x8000_0020", "BOOT_STATUS", "R", "state, error, fw_valid, strap, source, version"),
             ("0x8000_0024", "BOOT_CTRL", "W", "release / re-boot from flash / re-boot from ROM")]),

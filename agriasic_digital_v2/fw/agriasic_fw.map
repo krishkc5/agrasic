@@ -2,10 +2,10 @@
 Discarded input sections
 
  .riscv.attributes
-                0x00000000       0x3a /tmp/cc4iwU1L.o
- .comment       0x00000000       0x23 /tmp/ccbCHMo2.o
+                0x00000000       0x3a /tmp/cchw0tfn.o
+ .comment       0x00000000       0x23 /tmp/ccnYHkrg.o
  .riscv.attributes
-                0x00000000       0x3c /tmp/ccbCHMo2.o
+                0x00000000       0x3c /tmp/ccnYHkrg.o
 
 Memory Configuration
 
@@ -16,22 +16,22 @@ RAM              0x00010000         0x00000200
 
 Linker script and memory map
 
-LOAD /tmp/cc4iwU1L.o
-LOAD /tmp/ccbCHMo2.o
+LOAD /tmp/cchw0tfn.o
+LOAD /tmp/ccnYHkrg.o
 
 .text           0x00000000      0x234
  *(.vectors)
- .vectors       0x00000000       0x80 /tmp/cc4iwU1L.o
+ .vectors       0x00000000       0x80 /tmp/cchw0tfn.o
                 0x00000000                _vectors
                 0x00000080                        . = 0x80
  *(.start*)
- .start         0x00000080       0x34 /tmp/cc4iwU1L.o
+ .start         0x00000080       0x34 /tmp/cchw0tfn.o
                 0x00000080                _start
                 0x000000a2                trap_handler
  *(.text*)
- .text          0x000000b4        0x0 /tmp/cc4iwU1L.o
- .text          0x000000b4       0xf8 /tmp/ccbCHMo2.o
- .text.startup  0x000001ac       0x88 /tmp/ccbCHMo2.o
+ .text          0x000000b4        0x0 /tmp/cchw0tfn.o
+ .text          0x000000b4       0xf8 /tmp/ccnYHkrg.o
+ .text.startup  0x000001ac       0x88 /tmp/ccnYHkrg.o
                 0x000001ac                main
 
 .rodata
@@ -40,14 +40,14 @@ LOAD /tmp/ccbCHMo2.o
 
 .data           0x00000234        0x0
  *(.data*)
- .data          0x00000234        0x0 /tmp/cc4iwU1L.o
- .data          0x00000234        0x0 /tmp/ccbCHMo2.o
+ .data          0x00000234        0x0 /tmp/cchw0tfn.o
+ .data          0x00000234        0x0 /tmp/ccnYHkrg.o
  *(.sdata*)
 
 .bss            0x00000234        0x0
  *(.bss*)
- .bss           0x00000234        0x0 /tmp/cc4iwU1L.o
- .bss           0x00000234        0x0 /tmp/ccbCHMo2.o
+ .bss           0x00000234        0x0 /tmp/cchw0tfn.o
+ .bss           0x00000234        0x0 /tmp/ccnYHkrg.o
  *(.sbss*)
 
 /DISCARD/
@@ -64,8 +64,8 @@ OUTPUT(agriasic_fw.elf elf32-littleriscv)
 Cross Reference Table
 
 Symbol                                            File
-_start                                            /tmp/cc4iwU1L.o
-_vectors                                          /tmp/cc4iwU1L.o
-main                                              /tmp/ccbCHMo2.o
-                                                  /tmp/cc4iwU1L.o
-trap_handler                                      /tmp/cc4iwU1L.o
+_start                                            /tmp/cchw0tfn.o
+_vectors                                          /tmp/cchw0tfn.o
+main                                              /tmp/ccnYHkrg.o
+                                                  /tmp/cchw0tfn.o
+trap_handler                                      /tmp/cchw0tfn.o

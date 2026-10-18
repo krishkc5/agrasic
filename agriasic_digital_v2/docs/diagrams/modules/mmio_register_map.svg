@@ -56,7 +56,7 @@
   <text x="280" y="1538" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_003C</text>
   <text x="1000" y="1538" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">AFE_CTRL</text>
   <text x="1720" y="1538" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
-  <text x="1900" y="1538" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">pga_gain, tia_rf (2b code -&gt; 3 wires), amplitude, mux_settle</text>
+  <text x="1900" y="1538" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">[1:0] reserved, tia_rf (2b -&gt; 3 wires), amplitude, mux_settle</text>
   <rect x="220" y="1612" width="4560" height="244" rx="8" fill="#FFCDD2" stroke="#FFCDD2" stroke-width="2"/>
   <text x="246" y="1654" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">boot</text>
   <text x="280" y="1730" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0020</text>

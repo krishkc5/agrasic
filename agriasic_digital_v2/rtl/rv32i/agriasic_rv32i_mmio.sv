@@ -50,7 +50,10 @@
 // second complex pair, and a host computes Z(f) = dV(f) / I(f):
 //   0x8000_0034  RESULT_CUR_I R  [15:0] signed current in-phase accumulator
 //   0x8000_0038  RESULT_CUR_Q R  [15:0] signed current quadrature accumulator
-//   0x8000_003C  AFE_CTRL    RW  [1:0]  pga_gain   2-bit code -> 3 switch wires
+//   0x8000_003C  AFE_CTRL    RW  [1:0]  RESERVED, reads 0. Was pga_gain; the
+//                                       voltage sense has a FIXED gain, so the
+//                                       field went with the wires rather than
+//                                       being left inert.
 //                                [3:2]  tia_rf     2-bit code -> 3 switch wires
 //                                       (see gain_decode below; the register
 //                                        reads back the code, not the wires)
@@ -116,7 +119,6 @@ module agriasic_rv32i_mmio #(
   output logic [1:0]  cfg_amplitude_o,
   input  logic        overrange_dv_i,   // ADC rails on the dV channel
   input  logic        overrange_cur_i,  // ADC rails on the current channel
-  output logic [2:0]  cfg_pga_gain_o,   // 3 switch wires, decoded below
   output logic [2:0]  cfg_tia_rf_o,     // 3 switch wires, decoded below
 
   // Firmware-state outputs to the shell.
@@ -216,7 +218,6 @@ module agriasic_rv32i_mmio #(
   logic [7:0]  cfg_conv_q;
   logic [7:0]  cfg_mux_settle_q;
   logic [1:0]  cfg_amplitude_q;
-  logic [1:0]  cfg_pga_gain_q;
   logic [1:0]  cfg_tia_rf_q;
   logic        fw_done_q;
   logic        trap_seen_q;
@@ -265,7 +266,6 @@ module agriasic_rv32i_mmio #(
     endcase
   endfunction
 
-  assign cfg_pga_gain_o      = gain_decode(cfg_pga_gain_q);
   assign cfg_tia_rf_o        = gain_decode(cfg_tia_rf_q);
   assign fw_done_o           = fw_done_q;
   assign trap_seen_o         = trap_seen_q;
@@ -281,7 +281,6 @@ module agriasic_rv32i_mmio #(
       // bring-up, raised by firmware once signal levels are known.
       cfg_mux_settle_q <= 8'd2;
       cfg_amplitude_q  <= 2'd0;
-      cfg_pga_gain_q   <= 2'd0;
       cfg_tia_rf_q     <= 2'd0;
       start_pulse_o   <= 1'b0;
       clear_errors_o  <= 1'b0;
@@ -312,7 +311,7 @@ module agriasic_rv32i_mmio #(
           REG_DIVIDER:   cfg_divider_q   <= data_wdata_i[13:0];
           REG_CONV:      cfg_conv_q      <= data_wdata_i[7:0];
           REG_AFE_CTRL: begin
-            cfg_pga_gain_q   <= data_wdata_i[1:0];
+            // [1:0] reserved: the voltage sense gain is fixed in analog.
             cfg_tia_rf_q     <= data_wdata_i[3:2];
             cfg_amplitude_q  <= data_wdata_i[5:4];
             if (data_be_i[1]) cfg_mux_settle_q <= data_wdata_i[15:8];
@@ -400,7 +399,7 @@ module agriasic_rv32i_mmio #(
       REG_RESULT_CUR_I: periph_rdata = {{16{result_cur_i_i[15]}}, result_cur_i_i};
       REG_RESULT_CUR_Q: periph_rdata = {{16{result_cur_q_i[15]}}, result_cur_q_i};
       REG_AFE_CTRL:  periph_rdata = {16'd0, cfg_mux_settle_q, 2'd0,
-                                     cfg_amplitude_q, cfg_tia_rf_q, cfg_pga_gain_q};
+                                     cfg_amplitude_q, cfg_tia_rf_q, 2'd0};
       REG_BOOT_STATUS: periph_rdata = boot_status_i;
       REG_SPI_CTRL:    periph_rdata = spi_ctrl_i;
       REG_SPI_DATA:    periph_rdata = {24'd0, spi_rx_i};

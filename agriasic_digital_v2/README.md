@@ -1,5 +1,9 @@
 # AgriASIC Digital Subsystem
 
+**Start here:** [`docs/agriasic_digital_design_reference.md`](docs/agriasic_digital_design_reference.md) — the current design, module by
+module, in ~290 lines. [`docs/agriasic_digital_MAS.md`](docs/agriasic_digital_MAS.md)
+is the full living record including superseded decisions.
+
 Digital control for the single-die impedance sensing node. See the
 [repository README](../README.md) for architecture and reading order; this file
 covers the directory itself.

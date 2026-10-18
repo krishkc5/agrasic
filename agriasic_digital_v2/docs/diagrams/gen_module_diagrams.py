@@ -934,12 +934,106 @@ def spi_host_block():
     c.save("spi_host_block_diagram.svg")
 
 
+# ----------------------------------------------------- system overview (concise doc)
+def system_overview():
+    c = Canvas("AgriASIC digital subsystem - system overview",
+               "One picture of the whole die: what is off chip, what the processor owns, "
+               "and where the analog boundary is",
+               "System overview. Off-chip on the left: an SPI host, an SPI NOR flash, a JTAG "
+               "debugger, and clock plus boot straps. On the die: the Ibex core with its "
+               "instruction and data memories behind a four-master interconnect, the boot "
+               "loader and golden ROM, the debug module, and the host SPI port. The "
+               "measurement engine runs the excitation and conversion sequence in hardware. On "
+               "the right, the analog front end drives a four-electrode soil probe.",
+               h=2900)
+
+    # ---- off chip ----
+    c.box(150, 300, 700, 1900, "OFF CHIP", [], fill=WHITE, stroke=GREY, tfill=GREY, head_size=22)
+    off = [(380, "SPI host", "4 pads", "reads results", BLUE),
+           (700, "SPI NOR flash", "4 pads", "firmware image", ORANGE),
+           (1020, "JTAG debugger", "5 pads", "J-Link + OpenOCD", PURPLE),
+           (1340, "Clock / straps", "4 pads", "clk, rst_n, BOOT_SEL, BOOT_FAIL", GREEN)]
+    for y, name, pads, note, col in off:
+        c.box(210, y, 580, 240, name, [pads, note], fill=col, tfill=INK,
+              head_size=24, line_size=18, line_fill=GREY)
+    c.text(210, 1790, "18 digital pads total.", 20, INK, "700")
+    c.text(210, 1830, "The dbg_* ports are", 19, GREY)
+    c.text(210, 1865, "observability only and", 19, GREY)
+    c.text(210, 1900, "must NOT be bonded.", 19, GREY)
+
+    # ---- die ----
+    c.box(950, 250, 2600, 2000, "ASIC DIE  -  digital", [], fill=WHITE, stroke=INK,
+          tfill=INK, head_size=26)
+
+    c.box(1020, 360, 1180, 300, "ibex_top", [
+        "RV32IMC + Zicsr, 3-stage", "sleeps in wfi 99.98%", "of a sweep"],
+        fill=BLUE, tfill=INK, head_size=26)
+    c.box(2280, 360, 1200, 300, "dmi_jtag + dm_top", [
+        "RISC-V Debug 0.13", "SBA is a bus master", "halt / resume / patch"],
+        fill=PURPLE, tfill=INK, head_size=26)
+
+    c.box(1020, 730, 2460, 220, "agriasic_rv32i_bus   -   4 masters, permission-checked", [
+        "priority  M1 core-data > M2 debug-SBA > M4 host-SPI > M3 boot > M0 core-fetch"],
+        fill=GREEN, tfill=INK, head_size=26, line_size=19)
+
+    c.box(1020, 1020, 760, 300, "agriasic_imem", [
+        "1 KiB, 256 x 32", "LATCH array", "writable: patchable"],
+        fill=ORANGE, tfill=INK, head_size=24)
+    c.box(1870, 1020, 780, 300, "agriasic_rv32i_mmio", [
+        "64 B register window", "+ agriasic_dmem", "512 B, 128 x 32, latch"],
+        fill=ORANGE, tfill=INK, head_size=24)
+    c.box(2740, 1020, 740, 300, "agriasic_spi_host", [
+        "bus master M4", "DMEM + MMIO only", "never IMEM or DM"],
+        fill=BLUE, tfill=INK, head_size=24)
+
+    c.box(1020, 1390, 1180, 290, "agriasic_spi_boot", [
+        "strap picks the source:", "golden ROM ~150 cyc", "or flash ~0.5 ms + CRC"],
+        fill=ORANGE, tfill=INK, head_size=24)
+    c.box(2280, 1390, 1200, 290, "agriasic_boot_rom", [
+        "141-word golden image", "constant table -> gates", "no ROM compiler needed"],
+        fill=RED, tfill=INK, head_size=24)
+
+    c.box(1020, 1760, 2460, 410, "agriasic_digital_top   -   the measurement engine", [
+        "excitation_ctrl   divider + 16-state phase counter + cosine table",
+        "measurement_fsm   phase-locked sequencer, 4 accumulators + shadows",
+        "sar_controller    8 bit trials, channel mux, settle",
+        "Configured over MMIO, started by a pulse, reports done via irq_fast[0]."],
+        fill=GREEN, tfill=INK, head_size=26, line_size=19, lead=34)
+
+    # ---- analog ----
+    c.box(3650, 250, 1200, 2000, "ANALOG FRONT END", [], fill=WHITE, stroke=ORANGE_S,
+          tfill=ORANGE_S, head_size=24)
+    af = [(360, "Sine DAC + buffer", "16 x f_exc", "E1 drive"),
+          (660, "Diff PGA", "E2 - E3", "3 gain wires"),
+          (960, "TIA", "E4 return", "3 Rf wires"),
+          (1260, "S/H x2", "ONE strobe", "freezes both"),
+          (1560, "Analog mux", "dV / I", "one at a time"),
+          (1860, "8-bit SAR ADC", "digital runs", "the bit trials")]
+    for y, name, a, b in af:
+        c.box(3710, y, 1080, 260, name, [a + "    " + b], fill=ORANGE, tfill=INK,
+              head_size=24, line_size=18, line_fill=GREY)
+
+    # ---- arrows ----
+    for y in (500, 820, 1140, 1460):
+        c.arrow(790, y, 950, y, INK)
+    c.arrow(3480, 1960, 3650, 1960, ORANGE_S)
+    c.path([(4190, 2120), (4190, 2250)], ORANGE_S, arrow=False)
+    c.box(3710, 2250, 1080, 180, "Four-electrode soil probe", [
+        "E1 drive   E2/E3 sense   E4 return"], fill=INK, head_size=24, line_size=19)
+
+    c.note(2400, "Z(f) = dV(f) / I(f) is computed host-side, never on die. The chip reports four "
+                 "accumulators per frequency point, plus the gain settings they were taken at.")
+    c.note(2450, "With no SRAM compiler the memories are standard-cell latch arrays: 1.5 KB "
+                 "costs 77 kGE, about half the digital design.")
+    c.save("system_overview.svg")
+
+
 ALL = [control_shell_block, control_shell_reset_domains, ibex_boot_image_map,
        rv32i_bus_block, rv32i_bus_handshake, imem_dmem_timing, mmio_register_map,
        spi_boot_source_select, spi_boot_state_machine, flash_image_format,
        boot_rom_generation, debug_module_integration, measurement_fsm_rev5_states,
        simultaneous_sample_hold, excitation_cosine_table, sar_controller_rev5_states,
-       rst_sync_timing, spi_host_block]
+       rst_sync_timing, spi_host_block, system_overview]
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)

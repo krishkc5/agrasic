@@ -1,5 +1,5 @@
 @startuml agriasic_digital_v2_measurement_sequence
-title AgriASIC Digital v2 - Measurement Transaction Sequence (Rev 4.3 Phase 5)
+title AgriASIC Digital - Measurement Transaction Sequence (Rev 5, tetrapolar, Ibex)
 
 skinparam shadowing false
 skinparam sequenceMessageAlign center
@@ -8,90 +8,97 @@ skinparam ParticipantPadding 14
 skinparam BoxPadding 8
 skinparam defaultFontSize 14
 
-actor FW as "RV32I Firmware"
+actor FW as "Firmware on Ibex"
 participant MMIO as "agriasic_rv32i_mmio"
 participant SHELL as "agriasic_rv32i_control_shell"
-participant TOP as "agriasic_digital_top"
 participant FSM as "measurement_fsm"
 participant EXC as "excitation_ctrl"
 participant SAR as "sar_controller"
-participant AFE as "Analog Front End\n(comparator + excitation path)"
+participant AFE as "Analog front end\n(sine DAC, PGA, TIA, S/H, SAR ADC)"
 
 == Configuration and launch ==
-FW -> MMIO : write REG_PAIR_LOG2
-FW -> MMIO : write REG_SETTLE
-FW -> MMIO : write REG_DIVIDER
-FW -> MMIO : write REG_CONV
+FW -> MMIO : write PAIR_LOG2, SETTLE, DIVIDER, CONV
+FW -> MMIO : write AFE_CTRL (pga_gain, tia_rf, amplitude, mux_settle)
 MMIO -> SHELL : cfg_* updates
+MMIO -> AFE : afe_pga_gain_o[2:0], afe_tia_rf_o[2:0]\n(2-bit code decoded to 3 switch wires)
 
-FW -> MMIO : write REG_CTRL.start = 1
-MMIO -> SHELL : start_pulse_o
-SHELL -> TOP : start = shell_start_pulse
-TOP -> FSM : start_i = 1
+FW -> MMIO : write CTRL.START
+MMIO -> SHELL : start_pulse_o (one cycle, differentiated from the write)
+SHELL -> FSM : start
+FW -> FW : execute wfi -- core clock gates off
+note right of FW
+The core sleeps for the whole measurement.
+Measured: idle 99.98% of a three-point sweep.
+end note
+
 FSM -> EXC : exc_enable_o = 1
+EXC -> AFE : afe_sine_code_o[7:0]\n16-point COSINE, one code per phase state
 EXC --> FSM : phase_index_i, period_tick_i
 
 == Settling window ==
-FSM -> FSM : wait settle_cycles_i excitation periods
-FSM --> EXC : keep excitation enabled
-EXC --> FSM : phase_index_i advances through drive states
+FSM -> FSM : count settle_cycles_i EXCITATION PERIODS\n(not raw cycles)
 
-== Per-pair conversion loop ==
-loop until pair_count_q == pair_target
-  FSM -> EXC : wait for phase 0°
-  EXC --> FSM : phase_index_i == 0
-  FSM -> SAR : sample_req_o = 1, sample_phase_o = 1
-  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
-  AFE --> SAR : adc_comp_i
-  SAR --> FSM : sar_done_i, d_plus_i = D(0°)
+== Accumulation loop: 4 phase points x 2 channels = 8 conversions per pair ==
+loop pair_count_q < 2^pair_log2_i
+  loop point = PT_0, PT_180, PT_90, PT_270
+    FSM -> EXC : watch for the target phase index
+    EXC --> FSM : phase_index_i matches
 
-  FSM -> EXC : wait for phase 180°
-  EXC --> FSM : phase_index_i == 8
-  FSM -> SAR : sample_req_o = 1, sample_phase_o = 0
-  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
-  AFE --> SAR : adc_comp_i
-  SAR --> FSM : sar_done_i, d_minus_i = D(180°)
+    FSM -> SAR : sample_req_o, take_sample_o = 1, channel_o = CH_DV
+    SAR -> AFE : afe_sample_o -- ONE strobe, freezes BOTH S/H
+    note right of AFE
+      The voltage/current phase relationship is set by
+      THIS INSTANT. Skew between the two conversions
+      below therefore costs nothing.
+    end note
 
-  FSM -> FSM : i_acc += (D(0°) - D(180°))
+    SAR -> AFE : afe_mux_sel_o = 0 (dV), wait mux_settle
+    loop 8 bit trials, MSB first
+      SAR -> AFE : afe_adc_dac_o trial code
+      AFE --> SAR : afe_adc_comp_i (timed, unsynchronised)
+    end
+    SAR --> FSM : sample_done_o, code_o = dV, overrange_o
 
-  FSM -> EXC : wait for phase 90°
-  EXC --> FSM : phase_index_i == 4
-  FSM -> SAR : sample_req_o = 1, sample_phase_o = 1
-  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
-  AFE --> SAR : adc_comp_i
-  SAR --> FSM : sar_done_i, d_plus_i = D(90°)
+    FSM -> SAR : sample_req_o, take_sample_o = 0, channel_o = CH_CUR
+    SAR -> AFE : afe_mux_sel_o = 1 (I), no new strobe
+    loop 8 bit trials, MSB first
+      SAR -> AFE : afe_adc_dac_o trial code
+      AFE --> SAR : afe_adc_comp_i
+    end
+    SAR --> FSM : sample_done_o, code_o = I, overrange_o
 
-  FSM -> EXC : wait for phase 270°
-  EXC --> FSM : phase_index_i == 12
-  FSM -> SAR : sample_req_o = 1, sample_phase_o = 0
-  SAR -> AFE : adc_enable_o, adc_sample_o, adc_dac_o
-  AFE --> SAR : adc_comp_i
-  SAR --> FSM : sar_done_i, d_minus_i = D(270°)
-
-  FSM -> FSM : q_acc += (D(90°) - D(270°))
+    FSM -> FSM : accumulate into dv_i/dv_q/cur_i/cur_q\nby point sign, latch per-channel overrange
+  end
   FSM -> FSM : pair_count_q++
 end
 
 == Completion and result snapshot ==
-FSM --> TOP : done_o = 1
-TOP --> SHELL : measurement_done_i = 1
-SHELL --> MMIO : done_i / result_i_i + result_q_i captured
-FSM -> FSM : shadow result_i_o <= i_acc, result_q_o <= q_acc
+FSM -> FSM : snapshot all FOUR accumulators into shadows\non the single cycle busy_o drops
+note right of FSM
+A read landing mid-run returns the previous COMPLETE
+result, never a partial sum -- and dV and I always come
+from the same run, which matters because they are
+divided against each other.
+end note
+FSM --> SHELL : done_o (one cycle)
+SHELL --> MMIO : sticky DONE latch set
+MMIO --> FW : irq_fast[0] -- core leaves wfi
+note right of MMIO
+mie.fast0 is set but mstatus.MIE is not, so the core
+RESUMES at the next instruction rather than taking a
+trap. No handler, no context save.
+end note
 
-== Firmware resume ==
-SHELL -> SHELL : core_clk_en re-enabled after measurement_done_i
-FW -> MMIO : read REG_STATUS
-MMIO --> FW : busy/done status
-FW -> MMIO : read REG_RESULT_I
-FW -> MMIO : read REG_RESULT_Q
-MMIO --> FW : signed I/Q result values
-
-note right of SHELL
-This is the current Phase 5 behavior:
-- the measurement FSM owns the real-time sampling loop
-- excitation remains free-running while busy_o is high
-- result_i_o/result_q_o are shadow registers
-- the host sees the previous complete result until done_i
+== Firmware reads results ==
+FW -> MMIO : read STATUS (busy, done, overrange dV / I)
+FW -> MMIO : read RESULT_I, RESULT_Q, RESULT_CUR_I, RESULT_CUR_Q
+MMIO --> FW : four signed 16-bit accumulators
+FW -> FW : store per point, with AFE_CTRL and overrange flags
+note right of FW
+Z(f) = dV(f) / I(f) is computed HOST-side, never on die.
+The gain settings must be stored alongside the results:
+the two channels have independent gains, so they do not
+cancel in the ratio.
 end note
 
 @enduml

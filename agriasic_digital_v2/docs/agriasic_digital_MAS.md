@@ -1,6 +1,12 @@
 # AgriASIC Digital MAS (Micro-Architecture Specification)
 
 ## 1. Document Control
+
+> **Looking for the short version?** [`agriasic_digital_design_reference.md`](agriasic_digital_design_reference.md)
+> describes the design as it stands today, module by module, in ~290 lines. This
+> document is the living record: it keeps every superseded decision and the
+> reasoning behind it, which is what makes it long. Use it when you need to know
+> *why*, or what something used to be.
 - Project: Single-Die Impedance Sensing Node — low-power agricultural impedance sensing (senior design)
 - Subsystem: Digital control, sequencing, and SPI control plane
 - Process: TSMC 180nm MS/RF-G, Muse shared block

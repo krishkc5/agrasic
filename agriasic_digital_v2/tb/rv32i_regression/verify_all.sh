@@ -92,3 +92,9 @@ echo "=================================================="
 echo "15. HOST SPI PORT (M4: read/write while the core runs, permissions, gain decode, abort/restart)"
 echo "=================================================="
 bash "$R/spi_host.sh" 2>&1 | grep -E "^\[TB\]   [A-G]:|SPI_HOST_" | tail -22
+
+echo ""
+echo "=================================================="
+echo "16. ABORT WAKES THE CORE (a host abort must not strand firmware in wfi)"
+echo "=================================================="
+bash "$R/abort_wake.sh" 2>&1 | grep -E "^\[TB\]|ABORT_WAKE_" | tail -16

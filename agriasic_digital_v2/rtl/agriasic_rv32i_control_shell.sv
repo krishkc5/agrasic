@@ -70,7 +70,7 @@
 //
 // Sleep during a measurement (replaces the Rev 4.3 Phase 2.2 core_clk_en):
 //   Ibex has no clock-enable input. Firmware writes CTRL.START and executes
-//   wfi; the bridge's sticky DONE latch is fed to irq_fast_i[0]. Ibex leaves
+//   wfi; the bridge's sticky DONE-or-ABORTED wake is fed to irq_fast_i[0]. Ibex leaves
 //   SLEEP when any interrupt enabled in mie becomes pending, independent of
 //   mstatus.MIE (ibex_controller.sv SLEEP state), so with mie.fast0 set and
 //   MIE clear the core resumes after the wfi without taking a trap. While
@@ -102,7 +102,7 @@ module agriasic_rv32i_control_shell #(
   parameter int unsigned ADC_WIDTH         = 8,
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait (~5 ms at 160 MHz)
   parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
-  parameter int unsigned ROM_USED_WORDS    = 141,      // words the golden image occupies
+  parameter int unsigned ROM_USED_WORDS    = 136,      // words the golden image occupies
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation: IMEM filled by $readmemh
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation preload ("" = none)
 ) (
@@ -282,7 +282,7 @@ module agriasic_rv32i_control_shell #(
 
   logic        fw_done;
   logic        trap_seen;
-  logic        meas_done_irq;
+  logic        meas_wake_irq;
   logic        core_sleep;
   logic        debug_req;
 
@@ -401,7 +401,7 @@ module agriasic_rv32i_control_shell #(
     .irq_software_i         (1'b0),
     .irq_timer_i            (1'b0),
     .irq_external_i         (1'b0),
-    .irq_fast_i             ({14'd0, meas_done_irq}),
+    .irq_fast_i             ({14'd0, meas_wake_irq}),
     .irq_nm_i               (1'b0),
 
     // Scrambling / security: unused
@@ -564,7 +564,7 @@ module agriasic_rv32i_control_shell #(
     .cfg_tia_rf_o        (afe_tia_rf_o),
     .fw_done_o           (fw_done),
     .trap_seen_o         (trap_seen),
-    .meas_done_irq_o     (meas_done_irq),
+    .meas_wake_irq_o     (meas_wake_irq),
     .done_i              (measurement_done_i),
     .overrange_dv_i      (measurement_overrange_dv_i),
     .overrange_cur_i     (measurement_overrange_cur_i),

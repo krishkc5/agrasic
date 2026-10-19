@@ -6,8 +6,8 @@
 //   these words into the IMEM SRAM at reset and releases the core.
 //
 //   GENERATED FILE -- do not edit by hand.
-//     source : fw/golden/agriasic_fw_golden.hex (141 words, 564 bytes)
-//     sha256 : c604e1ec536d555af5821cdc3fc270c7a4e58c203850e3e7200f79ab1ac4fe65
+//     source : fw/golden/agriasic_fw_golden.hex (136 words, 544 bytes)
+//     sha256 : 43a36ec0a7397455c04fa1c8360ab02e1d32bad5ba9202cca1234ed4fd0a27b0
 //     regen  : python3 fw/gen_boot_rom.py
 //
 // Why a table and not a memory array:
@@ -30,7 +30,7 @@ module agriasic_boot_rom #(
   parameter int unsigned NUM_WORDS  = 256,
   // What the instantiator believes the image length is. Checked below against
   // the table actually generated into this file.
-  parameter int unsigned USED_WORDS = 141
+  parameter int unsigned USED_WORDS = 136
 ) (
   input  logic [31:0] addr_i,   // byte address; [1:0] ignored (4B aligned)
   output logic [31:0] data_o
@@ -43,7 +43,7 @@ module agriasic_boot_rom #(
   // The shell carries its own ROM_USED_WORDS; if the two ever drift, the copier
   // would load a truncated or over-long image and the chip would silently run
   // something that is not the golden image. Fail loudly instead.
-  localparam int unsigned GENERATED_USED_WORDS = 141;
+  localparam int unsigned GENERATED_USED_WORDS = 136;
 
 `ifndef SYNTHESIS
   initial
@@ -91,7 +91,7 @@ module agriasic_boot_rom #(
       8'd32: data_o = 32'h00010137;
       8'd33: data_o = 32'h20010113;
       8'd34: data_o = 32'h907362C1;
-      8'd35: data_o = 32'h2A393042;
+      8'd35: data_o = 32'h201D3042;
       8'd36: data_o = 32'h800002B7;
       8'd37: data_o = 32'h10000313;
       8'd38: data_o = 32'h0062A023;
@@ -101,102 +101,97 @@ module agriasic_boot_rom #(
       8'd42: data_o = 32'hA0232000;
       8'd43: data_o = 32'h00730062;
       8'd44: data_o = 32'hBFF51050;
-      8'd45: data_o = 32'h800007B7;
-      8'd46: data_o = 32'h4705C7C8;
-      8'd47: data_o = 32'h800007B7;
-      8'd48: data_o = 32'h0073C398;
-      8'd49: data_o = 32'h07371050;
-      8'd50: data_o = 32'h07518000;
-      8'd51: data_o = 32'h8B85431C;
-      8'd52: data_o = 32'h07B7FFF5;
-      8'd53: data_o = 32'h4F888000;
-      8'd54: data_o = 32'h800007B7;
-      8'd55: data_o = 32'h01C7A303;
-      8'd56: data_o = 32'h800007B7;
-      8'd57: data_o = 32'h0347A883;
-      8'd58: data_o = 32'h800007B7;
-      8'd59: data_o = 32'h0387A803;
-      8'd60: data_o = 32'h07B74705;
-      8'd61: data_o = 32'hC3988000;
-      8'd62: data_o = 32'h10500073;
-      8'd63: data_o = 32'h80000737;
-      8'd64: data_o = 32'h431C0751;
-      8'd65: data_o = 32'hFFF58B85;
-      8'd66: data_o = 32'h800007B7;
-      8'd67: data_o = 32'h07B74F90;
-      8'd68: data_o = 32'h4FD48000;
-      8'd69: data_o = 32'h800007B7;
-      8'd70: data_o = 32'h07B75BD8;
-      8'd71: data_o = 32'h87938000;
-      8'd72: data_o = 32'h439C0387;
-      8'd73: data_o = 32'h969A962A;
-      8'd74: data_o = 32'h97464509;
-      8'd75: data_o = 32'h463397C2;
-      8'd76: data_o = 32'hC6B302A6;
-      8'd77: data_o = 32'hC19002A6;
-      8'd78: data_o = 32'h02A74733;
-      8'd79: data_o = 32'hC7B3C1D4;
-      8'd80: data_o = 32'hC59802A7;
-      8'd81: data_o = 32'h8082C5DC;
-      8'd82: data_o = 32'h050A67C1;
-      8'd83: data_o = 32'h11078793;
-      8'd84: data_o = 32'hC38C97AA;
-      8'd85: data_o = 32'h800007B7;
-      8'd86: data_o = 32'h07B75FD4;
-      8'd87: data_o = 32'h07D18000;
-      8'd88: data_o = 32'h6741439C;
-      8'd89: data_o = 32'h000305B7;
-      8'd90: data_o = 32'h06C207BA;
-      8'd91: data_o = 32'h17070713;
-      8'd92: data_o = 32'h82C18FED;
-      8'd93: data_o = 32'h8FD5972A;
-      8'd94: data_o = 32'h4218C31C;
-      8'd95: data_o = 32'h879367C1;
-      8'd96: data_o = 32'h97AA1207;
-      8'd97: data_o = 32'h4258C398;
-      8'd98: data_o = 32'h879367C1;
-      8'd99: data_o = 32'h97AA1307;
-      8'd100: data_o = 32'h4618C398;
-      8'd101: data_o = 32'h879367C1;
-      8'd102: data_o = 32'h97AA1507;
-      8'd103: data_o = 32'h67C1C398;
-      8'd104: data_o = 32'h16078793;
-      8'd105: data_o = 32'h465C953E;
-      8'd106: data_o = 32'h8082C11C;
-      8'd107: data_o = 32'hCE061101;
-      8'd108: data_o = 32'h07B7CC22;
-      8'd109: data_o = 32'h07138000;
-      8'd110: data_o = 32'hC3980800;
-      8'd111: data_o = 32'hC3C04409;
-      8'd112: data_o = 32'h800007B7;
-      8'd113: data_o = 32'h4705C780;
-      8'd114: data_o = 32'h800007B7;
-      8'd115: data_o = 32'h07B7CB98;
-      8'd116: data_o = 32'h07138000;
-      8'd117: data_o = 32'hDFD82000;
-      8'd118: data_o = 32'h4505858A;
-      8'd119: data_o = 32'h860A3DE1;
-      8'd120: data_o = 32'h45014585;
-      8'd121: data_o = 32'h858A3795;
-      8'd122: data_o = 32'h06400513;
-      8'd123: data_o = 32'h860A35E1;
-      8'd124: data_o = 32'h06400593;
-      8'd125: data_o = 32'h3F894505;
-      8'd126: data_o = 32'h858A6509;
-      8'd127: data_o = 32'h71050513;
-      8'd128: data_o = 32'h65893D55;
-      8'd129: data_o = 32'h4509860A;
-      8'd130: data_o = 32'h71058593;
-      8'd131: data_o = 32'h67C13F35;
-      8'd132: data_o = 32'h14078793;
-      8'd133: data_o = 32'hC398577D;
-      8'd134: data_o = 32'h879367C1;
-      8'd135: data_o = 32'hC3801007;
-      8'd136: data_o = 32'h446240F2;
-      8'd137: data_o = 32'h879367C1;
-      8'd138: data_o = 32'h470D1047;
-      8'd139: data_o = 32'h4501C398;
-      8'd140: data_o = 32'h80826105;
+      8'd45: data_o = 32'hD6227179;
+      8'd46: data_o = 32'hD04ED426;
+      8'd47: data_o = 32'hCC56CE52;
+      8'd48: data_o = 32'hC85ECA5A;
+      8'd49: data_o = 32'hC662D24A;
+      8'd50: data_o = 32'hC26AC466;
+      8'd51: data_o = 32'h07B7C06E;
+      8'd52: data_o = 32'h07138000;
+      8'd53: data_o = 32'hC3980820;
+      8'd54: data_o = 32'hC3D84709;
+      8'd55: data_o = 32'h800007B7;
+      8'd56: data_o = 32'h0337C798;
+      8'd57: data_o = 32'h07B78000;
+      8'd58: data_o = 32'h47058000;
+      8'd59: data_o = 32'h0313CB98;
+      8'd60: data_o = 32'h079303C3;
+      8'd61: data_o = 32'h20232000;
+      8'd62: data_o = 32'h0EB700F3;
+      8'd63: data_o = 32'h67C18000;
+      8'd64: data_o = 32'h80000637;
+      8'd65: data_o = 32'h80000F37;
+      8'd66: data_o = 32'h80000FB7;
+      8'd67: data_o = 32'h800002B7;
+      8'd68: data_o = 32'h800003B7;
+      8'd69: data_o = 32'h64896441;
+      8'd70: data_o = 32'h87934681;
+      8'd71: data_o = 32'h0EB11107;
+      8'd72: data_o = 32'h0A374E09;
+      8'd73: data_o = 32'h49858000;
+      8'd74: data_o = 32'h06514A85;
+      8'd75: data_o = 32'h0FF10F61;
+      8'd76: data_o = 32'h03428293;
+      8'd77: data_o = 32'h03838393;
+      8'd78: data_o = 32'h00030B37;
+      8'd79: data_o = 32'h4B8D147D;
+      8'd80: data_o = 32'h71048493;
+      8'd81: data_o = 32'h00EEA023;
+      8'd82: data_o = 32'h45814C09;
+      8'd83: data_o = 32'h48014501;
+      8'd84: data_o = 32'h20234881;
+      8'd85: data_o = 32'h0073015A;
+      8'd86: data_o = 32'h29031050;
+      8'd87: data_o = 32'h79130006;
+      8'd88: data_o = 32'h1CE30019;
+      8'd89: data_o = 32'h2903FE09;
+      8'd90: data_o = 32'h79130006;
+      8'd91: data_o = 32'h16631009;
+      8'd92: data_o = 32'h2D830609;
+      8'd93: data_o = 32'hAD03000F;
+      8'd94: data_o = 32'hAC83000F;
+      8'd95: data_o = 32'hA9030002;
+      8'd96: data_o = 32'h98EE0003;
+      8'd97: data_o = 32'h9566986A;
+      8'd98: data_o = 32'h166395CA;
+      8'd99: data_o = 32'hC8B3053C;
+      8'd100: data_o = 32'hC39803C8;
+      8'd101: data_o = 32'h00032903;
+      8'd102: data_o = 32'h06854218;
+      8'd103: data_o = 32'h00897933;
+      8'd104: data_o = 32'h7733073A;
+      8'd105: data_o = 32'h67330167;
+      8'd106: data_o = 32'hD3B80127;
+      8'd107: data_o = 32'h03C84833;
+      8'd108: data_o = 32'h0117A823;
+      8'd109: data_o = 32'h03C54533;
+      8'd110: data_o = 32'h0307A023;
+      8'd111: data_o = 32'h03C5C5B3;
+      8'd112: data_o = 32'hCBACC3A8;
+      8'd113: data_o = 32'h01768B63;
+      8'd114: data_o = 32'h06400713;
+      8'd115: data_o = 32'h01368363;
+      8'd116: data_o = 32'h07918726;
+      8'd117: data_o = 32'h4C05BF85;
+      8'd118: data_o = 32'h67C1BFAD;
+      8'd119: data_o = 32'h14078793;
+      8'd120: data_o = 32'hC398577D;
+      8'd121: data_o = 32'h879367C1;
+      8'd122: data_o = 32'h47091007;
+      8'd123: data_o = 32'h67C1C398;
+      8'd124: data_o = 32'h87935432;
+      8'd125: data_o = 32'hC3941047;
+      8'd126: data_o = 32'h08000713;
+      8'd127: data_o = 32'h800007B7;
+      8'd128: data_o = 32'h54A2C398;
+      8'd129: data_o = 32'h59825912;
+      8'd130: data_o = 32'h4AE24A72;
+      8'd131: data_o = 32'h4BC24B52;
+      8'd132: data_o = 32'h4CA24C32;
+      8'd133: data_o = 32'h4D824D12;
+      8'd134: data_o = 32'h61454501;
+      8'd135: data_o = 32'h00008082;
       default: data_o = 32'h0000_0013;   // RV32 NOP
     endcase
   end

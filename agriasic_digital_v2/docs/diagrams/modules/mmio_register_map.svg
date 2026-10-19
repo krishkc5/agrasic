@@ -32,7 +32,7 @@
   <text x="280" y="878" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0014</text>
   <text x="1000" y="878" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">STATUS</text>
   <text x="1720" y="878" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
-  <text x="1900" y="878" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, done, overrange, trap_seen, fw_done, b7 start_rejected (sticky)</text>
+  <text x="1900" y="878" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, done, overrange, trap_seen, fw_done, b7 start_rejected, b8 ABORTED</text>
   <rect x="220" y="952" width="4560" height="428" rx="8" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
   <text x="246" y="994" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">results  (host computes Z(f) = dV(f) / I(f))</text>
   <text x="280" y="1070" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0018</text>
@@ -85,4 +85,6 @@
   <text x="120" y="2382" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Restarting: a start written while busy is REJECTED, not queued - the sequencer only samples start in S_IDLE, so such a write used to vanish silently. It now sets the sticky STATUS b7 start_rejected flag, cleared by clear_err. To restart early: write CTRL.abort, then CTRL.start.</text>
   <text x="120" y="2432" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Abort forces the sequencer AND the SAR controller to S_IDLE and clears busy, but emits no done pulse and no interrupt, so an aborted run cannot be read back as a completed one. Section 7.1 has the bit fields.</text>
   <text x="120" y="2482" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Abort wins over start when one write asserts both, and the dropped start is still flagged: otherwise the bridge cleared busy while the sequencer, which only honours abort outside S_IDLE, accepted the start - the engine would run with STATUS reporting idle.</text>
+  <text x="120" y="2532" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The core's wfi wake is done OR aborted (meas_wake_irq_o). With done alone a host abort rescued the engine and left the processor asleep forever. The two stay SEPARATE bits so that "woken" never implies "a result is ready": firmware checks ABORTED before reading the shadow registers.</text>
+  <text x="120" y="2582" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">The ABORTED term is gated on NOT fw_done and NOT trap_seen: the wake is level sensitive, so an abort arriving after the core parked would hold it high with nothing left to clear it and spin park: wfi forever. Only the wake is gated - STATUS b8 still reports ABORTED to the host.</text>
 </svg>

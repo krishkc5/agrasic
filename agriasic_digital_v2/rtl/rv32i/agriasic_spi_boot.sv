@@ -77,7 +77,7 @@ module agriasic_spi_boot #(
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // ~5 ms at 160 MHz (flash tVSL)
   parameter logic [7:0]  BOOT_CLK_DIV      = 8'd7,
   parameter bit          IMEM_PRELOADED    = 1'b0,
-  parameter int unsigned ROM_USED_WORDS    = 148       // golden image size, see agriasic_boot_rom
+  parameter int unsigned ROM_USED_WORDS    = 136       // golden image size, see agriasic_boot_rom
 ) (
   input  logic        clk,
   input  logic        rst_n,
@@ -175,6 +175,14 @@ module agriasic_spi_boot #(
           bit_cnt_q <= 4'd8;
           div_cnt_q <= '0;
         end
+      // eng_div == 0 is SAFE here, and safe by idiom rather than by guard:
+      // div_cnt_q starts at 0 and this compares `== eng_div`, so zero means
+      // "toggle every cycle" (SCK = f_clk/2) and a match always happens within
+      // eng_div+1 cycles. eng_busy therefore always clears, in at most
+      // 8*(eng_div+1)*2 cycles, so firmware polling SPI_STATUS.busy cannot
+      // hang. Contrast excitation_ctrl, which compares against `divider - 1`
+      // and so needs an explicit N=0 guard to avoid underflowing to all-ones.
+      // If that pattern is ever copied here, zero becomes a hang.
       end else if (div_cnt_q == eng_div) begin
         div_cnt_q <= '0;
         if (!sck_q) begin

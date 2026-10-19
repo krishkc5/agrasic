@@ -10,9 +10,25 @@ BASE = ROOT.parent
 DMEM_BASE  = 0x00010000   # agriasic_rv32i_bus.sv / control shell (Phase 2 flat map)
 DMEM_BYTES = 0x200
 # The stack lives at the top of DMEM and grows down; everything below it in
-# this region is the result block. Derived rather than hardcoded so a resize
-# of DMEM does not silently reclassify every stack access as a result.
-STACK_BASE = DMEM_BYTES - 0x20
+# this region is the result block. Both the window and the reported frame size
+# come from GCC's -fstack-usage output rather than being hardcoded: main's frame
+# grew from 28 to 48 bytes when the sweep became a loop, which silently pushed
+# the live stack below a hardcoded 0x20 window and reclassified real stack
+# accesses as result-buffer writes.
+def _stack_frame_bytes(default=0x40):
+    """Largest static frame in the firmware, from GCC -fstack-usage."""
+    worst = 0
+    for su in BASE.glob("fw/*.su"):
+        for line in su.read_text().splitlines():
+            parts = line.split("	")
+            if len(parts) >= 2 and parts[1].strip().isdigit():
+                worst = max(worst, int(parts[1].strip()))
+    # Round up to a 16-byte boundary and keep headroom for start.S, which has
+    # no .su entry of its own.
+    return max(default, (worst + 15) // 16 * 16 + 16) if worst else default
+
+STACK_FRAME_BYTES = _stack_frame_bytes()
+STACK_BASE = DMEM_BYTES - STACK_FRAME_BYTES
 
 def bounds(values):
     values = set(values)
@@ -63,7 +79,7 @@ def main():
                "retired_addresses_beyond_linked_image": [f"0x{a:08X}" for a in sorted(set(retire)) if a >= image["vma_end_exclusive"]],
                "data_memory": bounds(ram_bytes), "result_buffers": bounds(result_bytes), "stack_accesses": bounds(stack_bytes),
                "stack_pointer_values_in_order": ["0x" + s.upper() for s in sp],
-               "stack_frame_bytes_static": 32, "dmem_base": f"0x{DMEM_BASE:08X}", "data_memory_address_span_from_dmem_base_bytes": max(ram_bytes) + 1,
+               "stack_frame_bytes_static": STACK_FRAME_BYTES, "dmem_base": f"0x{DMEM_BASE:08X}", "data_memory_address_span_from_dmem_base_bytes": max(ram_bytes) + 1,
                "mmio_accesses": [{"kind": kind, "word_address": f"0x{addr:08X}", "count": n} for (kind, addr), n in sorted(mmio.items(), key=lambda p: (p[0][1], p[0][0]))],
                "invalid_accesses": invalid, "data_loads_before_observed_store": uninitialized_reads,
                "event_counts": dict(Counter(e["kind"] for e in events)),

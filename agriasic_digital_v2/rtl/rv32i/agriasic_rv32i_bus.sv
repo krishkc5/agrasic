@@ -43,6 +43,19 @@
 //
 // Response contract to each master: rvalid one cycle after gnt; err with
 // rvalid for an unmapped or disallowed target, or a bridge-reported error.
+// rvalid is an unconditional registered copy of gnt, so every accepted access
+// is answered -- a master can never be granted and then abandoned. This is
+// what makes the interconnect deadlock-free regardless of arbitration.
+//
+// Starvation, on the other hand, rests on an ASSUMPTION worth stating before
+// anyone adds a sixth master: M0 (fetch) is bottom priority, and it is safe
+// only because every master above it is intermittent BY CONSTRUCTION --
+// the host SPI port is paced by SCLK (<= f_clk/16, so one access per 16+
+// cycles), the debugger's SBA is paced by DMI transactions, the boot loader
+// runs only while the core is held in reset, and the core's own data port
+// cannot issue back-to-back accesses without fetching the instructions that
+// issue them. A new master above M0 with a high duty cycle would starve the
+// fetch port, and nothing here would stop it.
 // -----------------------------------------------------------------------------
 module agriasic_rv32i_bus #(
   parameter int unsigned  IMEM_BYTES   = 32'h0000_1000,

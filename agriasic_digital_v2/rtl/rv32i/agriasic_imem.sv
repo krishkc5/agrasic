@@ -91,6 +91,29 @@ module agriasic_imem #(
   end
 
   // Storage: no reset, one enable per byte lane.
+  //
+  // KEEP always_ff. mem_array is written here AND by the initial preload
+  // above, and IEEE 1800 9.2.2.4 says a variable assigned in an always_ff
+  // shall not be written by any other process -- an initial block is one. A
+  // strict front end (VCS, Xcelium, slang, Spyglass) can therefore reject
+  // this. Neither of our tools does: verilator -Wall on this file is silent,
+  // and power/build/synthesis blackboxes agriasic_imem, so it is not caught
+  // here and the first report will come from someone else's flow.
+  //
+  // Do NOT answer that by downgrading to plain `always`. It silences the
+  // message by discarding exactly the checking that makes this block safe --
+  // single driver, no blocking assignments, flop inference -- and the latch
+  // path below had a real write-address bug during bring-up that this class
+  // of checking is what catches. agriasic_dmem has no preload and so no
+  // conflict; only this module provokes it.
+  //
+  // Sanctioned handling, in order: waive it for this module (the preload is
+  // simulation-only and runs at time 0, so it cannot race the clocked
+  // writes); or blackbox the module, as synthesis already does. Only if a
+  // tool refuses outright, move the $readmemh out to the testbench via a
+  // hierarchical reference and delete the initial -- that also needs
+  // power/run_sim.sh changed, since it compiles a simulation with -DSYNTHESIS
+  // and relies on the image being here.
   always_ff @(posedge clk) begin
     if (ce_i) begin
       if (we_i[0]) mem_array[word_addr][7:0]   <= din_i[7:0];
@@ -172,6 +195,10 @@ module agriasic_imem #(
       .clk_i (clk_int), .en_i (word_addr == AddrW'(w)), .test_en_i (1'b0),
       .clk_o (word_clk[w])
     );
+    // KEEP always_latch -- same LRM 9.2.2.4 conflict with the initial preload
+    // as the flop path above (always_latch carries the same single-process
+    // restriction), and the same answer: waive or blackbox, never downgrade
+    // to a plain `always`.
     always_latch begin
       if (word_clk[w]) begin
         if (we_q[0]) mem_array[w][7:0]   = din_q[7:0];

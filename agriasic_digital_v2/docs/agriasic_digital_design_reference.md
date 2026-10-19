@@ -204,9 +204,11 @@ rewrite its own flash.
 
 ![boot_rom_generation_flow](diagrams/modules/boot_rom_generation_flow.svg)
 
-141 words emitted as a constant `case` table — **no ROM compiler needed**;
+136 words emitted as a constant `case` table — **no ROM compiler needed**;
 synthesis maps it to ~1,000 gates. Promotion is explicit (`gen_boot_rom.py --promote`), never a side effect of a build, and the generator keeps the word
-count in step everywhere it appears.
+count in step in all four places it is declared — `agriasic_spi_boot`'s copy is
+a module default the shell always overrides, which is precisely why it had
+drifted to 148 unnoticed.
 
 ### Debug and host access
 
@@ -288,18 +290,45 @@ Asynchronous assert, synchronous release. One per chip top.
 ## 4. Software interface
 
 Firmware writes configuration, pulses `CTRL.START`, executes **`wfi`**, and is
-woken by `irq_fast[0]` from a sticky DONE latch. `mie.fast0` is set but
+woken by `irq_fast[0]` from a sticky DONE **or** ABORTED latch. `mie.fast0` is set but
 `mstatus.MIE` is not, so the core **resumes at the next instruction rather than
 taking a trap** — no handler, no context save. The core is idle **99.98%** of a
 sweep.
 
-Because an abort emits no DONE pulse, it cannot wake a core already parked in
-`wfi`. `CTRL.ABORT` is therefore a **host- and debugger-side** control — a way
-to reclaim a stuck engine over the host SPI port or the debug module's system
-bus — and not part of the firmware's own wait path. Firmware never needs it: it
-starts one run and is woken by that run's completion.
+An abort emits no DONE pulse, so the wake source is `done || aborted` rather
+than `done` alone — otherwise a host abort would rescue the engine and leave the
+processor asleep forever with the sweep half finished. The two are **separate
+status bits** on purpose, so that "the core woke" never implies "a result is
+ready": `STATUS[8]` is a sticky ABORTED flag and firmware checks it before
+reading the shadow registers. Collapsing them would just move the stale-result
+bug into firmware, which would wake, pass its `busy` guard, and average the
+previous point's I/Q into the current one.
 
-Firmware is **564 B**, no heap, no libc, 28 B of stack. Results land in DMEM at
+Firmware treats an abort as a command to stand down: it abandons the point,
+reports the points actually completed in `OUT_NUM_POINTS`, clears the sticky bit
+so the level-sensitive wake cannot keep its park `wfi` spinning, and exits
+through the normal `FW_DONE` path. `CTRL.ABORT` is still issued from the **host
+or debugger side** — over the host SPI port or the debug module's system bus.
+
+**Firmware's init aborts before it configures anything** (`CTRL.ABORT |
+CTRL.CLEAR_ERR`). A core reset — `gpio_start_i` dropped, or `ndmreset` — does
+not reset the engine, and `run_clear_i` clears only `FW_DONE`/`TRAP_SEEN`, so
+firmware can start up with a measurement still in flight from its previous
+incarnation. Without the abort its first `START` is rejected as busy and it
+wakes on the old run's completion. The config registers are **live-wired** into
+the engine, so that stale run would also have been retuned mid-flight by the new
+`REG_DIVIDER` — settled at one frequency, sampled at another. The standing rule:
+do not write the engine's config while it is busy. A host driving the engine
+directly must abort first, exactly as firmware does.
+
+The ABORTED term in the wake is gated on `!fw_done && !trap_seen`. An abort
+arriving *after* the core has parked would otherwise hold a level-sensitive
+line high with nothing left to clear it, and `park: wfi; j park` would spin at
+full power forever. An abort only needs to wake a core that is **waiting** for
+a measurement. Only the wake is gated — `STATUS[8]` still reports ABORTED to
+the host.
+
+Firmware is **542 B**, no heap, no libc, 48 B of stack. Results land in DMEM at
 `0x100`–`0x16B`, each point stored with the `AFE_CTRL` value and overrange flags
 it was measured under — without those a host cannot compute `Z` correctly, since
 the two channels have independent gains that do not cancel in the ratio.

@@ -150,8 +150,13 @@ endmodule
     # this by hand is a step that gets forgotten, and agriasic_boot_rom asserts
     # the two agree -- so forgetting it stops the regression rather than
     # shipping a truncated boot, but there is no reason to rely on that.
+    # agriasic_spi_boot's copy is a module DEFAULT that the shell always
+    # overrides, so it is never used in the real hierarchy -- but a stale
+    # default is still what someone reads, or inherits instantiating the
+    # module standalone. It drifted to 148 that way; keep it in step too.
     for rel in ("rtl/agriasic_rv32i_control_shell.sv",
-                "rtl/agriasic_digital_rv32i_top.sv"):
+                "rtl/agriasic_digital_rv32i_top.sv",
+                "rtl/rv32i/agriasic_spi_boot.sv"):
         path = HERE.parent / rel
         text = path.read_text(encoding="utf-8")
         new, n = re.subn(r"(parameter int unsigned ROM_USED_WORDS\s*=\s*)\d+",

@@ -118,13 +118,32 @@ SHELL -> FSM : abort_i
 SHELL -> SAR : abort_i
 FSM -> FSM : state -> S_IDLE (overrides every state)
 SAR -> SAR : state -> S_IDLE, drop busy / adc_enable / sample_done
-MMIO -> MMIO : clear busy. NO done pulse, NO irq_fast[0]
+MMIO -> MMIO : clear busy, set sticky ABORTED. NO done pulse
+MMIO --> FW : irq_fast[0] -- wake is done OR aborted, so the core DOES leave wfi
+FW -> MMIO : read STATUS, see ABORTED and not DONE
+FW -> FW : abandon this point, do NOT read the shadows
+FW -> MMIO : write CTRL.clear_err, then park via FW_DONE
 note right of MMIO
 Abort emits no done, so an aborted run can never be read back as
-a completed one -- and so it cannot wake a core already parked in
-wfi. That is why abort is a host- and debugger-side control (the
-host SPI port, or the debug module's system bus), not part of the
-firmware's own wait path.
+a completed one. But the core still has to WAKE, so the wake source
+is done OR aborted: with done alone a host abort rescued the engine
+and left the processor asleep forever, the sweep half finished.
+
+The two stay SEPARATE status bits so that "the core woke" never
+implies "a result is ready". Collapsing them would only move the
+stale-result bug into firmware, which would wake, pass its busy
+guard and average the PREVIOUS point's I/Q into this one.
+
+Abort is issued host- or debugger-side (the host SPI port, or the
+debug module's system bus). Firmware reports how many points it
+actually completed in OUT_NUM_POINTS, and clears the sticky bit so
+the level-sensitive wake cannot keep its park wfi spinning.
+
+The ABORTED term in the wake is also gated on NOT fw_done and NOT
+trap_seen. An abort arriving AFTER the core has parked would hold a
+level-sensitive line high with nothing left to clear it, and
+park: wfi; j park would spin at full power forever. Only the wake is
+gated; STATUS[8] still reports ABORTED to the host.
 
 The SAR is aborted as well as the FSM on purpose: a conversion
 left in flight would otherwise run to completion and pulse

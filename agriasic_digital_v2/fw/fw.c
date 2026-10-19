@@ -79,9 +79,11 @@
                                     *     [3:2] tia_rf, [5:4] amplitude, [15:8] mux_settle */
 
 #define CTRL_START      (1 << 0)
+#define CTRL_ABORT      (1 << 1)
 #define CTRL_CLEAR_ERR  (1 << 7)
 #define STATUS_BUSY     (1 << 0)
 #define STATUS_DONE     (1 << 1)
+#define STATUS_ABORTED  (1 << 8)
 
 /* Scratch RAM locations the testbench (and a debugger over JTAG) can inspect.
  *
@@ -134,7 +136,15 @@ struct iq_pair {
     int cur_q;
 };
 
-static void run_one_measurement(struct iq_pair *out)
+/*
+ * Returns 1 if a fresh result was produced, 0 if a host abort cut the run
+ * short. The distinction matters: an abort deliberately emits no done pulse
+ * and does NOT snapshot the accumulators, so the shadow registers still hold
+ * the PREVIOUS measurement. Reading them here would average a stale point
+ * into this one. The abort still wakes us -- the wake source is done OR
+ * aborted -- which is why the check is on ABORTED and not on a timeout.
+ */
+static int run_one_measurement(struct iq_pair *out)
 {
     REG_CTRL = CTRL_START;
 
@@ -144,10 +154,15 @@ static void run_one_measurement(struct iq_pair *out)
         /* guard: only spins if wfi returned early */
     }
 
+    if (REG_STATUS & STATUS_ABORTED) {
+        return 0;
+    }
+
     out->dv_i  = REG_RESULT_I;
     out->dv_q  = REG_RESULT_Q;
     out->cur_i = REG_RESULT_CUR_I;
     out->cur_q = REG_RESULT_CUR_Q;
+    return 1;
 }
 
 /*
@@ -156,7 +171,7 @@ static void run_one_measurement(struct iq_pair *out)
  * Averaging across runs is software's job: no cycle accuracy needed, and
  * it stays changeable without touching the FSM.
  */
-static void run_sweep_point(int divider_n, struct iq_pair *out)
+static int run_sweep_point(int divider_n, struct iq_pair *out)
 {
     struct iq_pair acc = { 0, 0, 0, 0 };
     int i;
@@ -165,7 +180,11 @@ static void run_sweep_point(int divider_n, struct iq_pair *out)
 
     for (i = 0; i < NUM_MEASUREMENTS; i++) {
         struct iq_pair s;
-        run_one_measurement(&s);
+        if (!run_one_measurement(&s)) {
+            return 0;       /* abandon the point: a partial average is worse
+                               than no point at all, since the host cannot
+                               tell how many runs went into it */
+        }
         acc.dv_i  += s.dv_i;
         acc.dv_q  += s.dv_q;
         acc.cur_i += s.cur_i;
@@ -176,6 +195,22 @@ static void run_sweep_point(int divider_n, struct iq_pair *out)
     out->dv_q  = acc.dv_q  / NUM_MEASUREMENTS;
     out->cur_i = acc.cur_i / NUM_MEASUREMENTS;
     out->cur_q = acc.cur_q / NUM_MEASUREMENTS;
+    return 1;
+}
+
+/*
+ * Divider for each sweep point. Immediates rather than a lookup table:
+ * link.ld ASSERTs that .rodata stays empty (Harvard split, no startup copy),
+ * so a const array would be a deliberate build error.
+ */
+static int sweep_divider(int point)
+{
+    if (point == 0) return 1;       /* 10 MHz  */
+    if (point == 1) return 100;     /* 100 kHz */
+    return 10000;                   /* 1 kHz -- carries most of the ionic
+                                       (nutrient/salt) information, and was
+                                       unreachable before Phase 4/6 widened
+                                       the divider path end to end */
 }
 
 static void store_point(int point, int divider_n, const struct iq_pair *r)
@@ -192,9 +227,24 @@ static void store_point(int point, int divider_n, const struct iq_pair *r)
 int main(void)
 {
     struct iq_pair r;
+    int points_done;
 
-    /* Clear any sticky protocol errors left over from the host interface. */
-    REG_CTRL = CTRL_CLEAR_ERR;
+    /* Start from a known engine state, not just clean flags.
+     *
+     * A core reset (gpio_start_i dropped, or a debugger's ndmreset) does NOT
+     * reset the measurement engine or the bridge's run state -- the bridge
+     * deliberately survives a core reset so a debugger can still read results,
+     * and run_clear_i only clears the firmware-owned FW_DONE/TRAP_SEEN bits.
+     * So this firmware can start up with a measurement still in flight from
+     * its previous incarnation. Without the abort, our first CTRL.START would
+     * be rejected as busy, we would sleep, and we would then wake on the OLD
+     * run's done and store a result measured under the previous configuration
+     * as point 0.
+     *
+     * ABORT forces the engine to S_IDLE and clears busy; CLEAR_ERR drops the
+     * sticky flags, including the ABORTED bit this very write sets. On a cold
+     * boot both are no-ops. */
+    REG_CTRL = CTRL_ABORT | CTRL_CLEAR_ERR;
 
     /* Measurement configuration shared across all sweep points. These are
        the knobs the FSM exposes; changing them here is exactly the
@@ -210,25 +260,32 @@ int main(void)
        firmware's assumption is visible rather than inherited. */
     REG_AFE_CTRL  = (2 << 8) | (0 << 4) | (0 << 2) | 0;
 
-    /* Point 0: 10 MHz (N=1). */
-    run_sweep_point(1, &r);
-    store_point(0, 1, &r);
+    /* Sweep the frequency points, stopping early if a host abort cuts a run
+       short. Stopping rather than continuing is deliberate: an abort is a
+       host command to stand down, so the right response is to report how far
+       the sweep got and let the host decide. */
+    for (points_done = 0; points_done < NUM_FREQ_POINTS; points_done++) {
+        int divider_n = sweep_divider(points_done);
 
-    /* Point 1: 100 kHz (N=100). */
-    run_sweep_point(100, &r);
-    store_point(1, 100, &r);
-
-    /* Point 2: 1 kHz (N=10000) -- the point carrying most of the ionic
-       (nutrient/salt) information, unreachable before Phase 4/6 widened the
-       divider path end to end. */
-    run_sweep_point(10000, &r);
-    store_point(2, 10000, &r);
+        if (!run_sweep_point(divider_n, &r)) {
+            break;
+        }
+        store_point(points_done, divider_n, &r);
+    }
 
     /* Phase 7.3, not implemented -- see header. */
     OUT_TEMP = -1;
 
     OUT_COUNT      = NUM_MEASUREMENTS;
-    OUT_NUM_POINTS = NUM_FREQ_POINTS;
+    /* Points actually completed, not the constant NUM_FREQ_POINTS: this is
+       how a host sees that a sweep was aborted part way through. Equal to
+       NUM_FREQ_POINTS on an uninterrupted sweep. */
+    OUT_NUM_POINTS = points_done;
+
+    /* Drop the sticky ABORTED bit before parking. It feeds the
+       level-sensitive wake, so leaving it set would keep the final wfi in
+       start.S from ever actually sleeping. */
+    REG_CTRL = CTRL_CLEAR_ERR;
 
     return 0;
 }

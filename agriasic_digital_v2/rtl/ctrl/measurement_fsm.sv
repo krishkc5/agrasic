@@ -321,10 +321,22 @@ module measurement_fsm #(
       end
 
       S_DONE: begin
-        done_o = 1'b1;
-        if (!start_i) begin
-          state_d = S_IDLE;
-        end
+        // One cycle, unconditionally. done_o is asserted for exactly this
+        // cycle and the bridge latches it into its sticky DONE, so there is
+        // nothing to wait for.
+        //
+        // This used to be `if (!start_i) state_d = S_IDLE`, a leftover from
+        // when start was a level. start_pulse_o is a registered single-cycle
+        // decode, so start_i is always already low here and the guard never
+        // fired -- but it made the only state in the design whose exit
+        // depended on an external signal. A start held high would have pinned
+        // the FSM in S_DONE for as long as it was held, and a start landing
+        // exactly in this cycle would have been swallowed (the FSM stays here,
+        // the pulse is gone by the time it reaches S_IDLE) while the bridge's
+        // DONE stayed latched -- so firmware would wake immediately and read
+        // the PREVIOUS run's result.
+        done_o  = 1'b1;
+        state_d = S_IDLE;
       end
 
       default: state_d = S_IDLE;

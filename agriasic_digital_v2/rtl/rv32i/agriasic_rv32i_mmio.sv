@@ -46,6 +46,11 @@
 //                                bit5 = trap_seen, bit6 = fw_done,
 //                                bit7 = start rejected (START written while
 //                                       busy), sticky, cleared by CTRL bit7
+//                                bit8 = ABORTED (sticky; the run was cut short
+//                                       by CTRL.abort, so NO fresh result was
+//                                       produced -- the shadows still hold the
+//                                       previous one). Cleared by CTRL bit7 or
+//                                       by the next accepted start.
 //   0x8000_0018  RESULT_I   R   [15:0] signed dV in-phase accumulator
 //   0x8000_001C  RESULT_Q   R   [15:0] signed dV quadrature accumulator
 //
@@ -74,8 +79,13 @@
 //   0x8000_0030  SPI_STATUS  R   bit0 = busy, bit1 = firmware owns the SPI pins
 //
 // Sleep / wake:
-//   meas_done_irq_o is the sticky DONE latch, exported so the shell can feed
-//   it to Ibex's irq_fast_i[0]. Firmware writes START, executes wfi, and
+//   meas_wake_irq_o is the core's wake source: sticky DONE *or* sticky
+//   ABORTED. Both have to wake the core -- an abort produces no done, so
+//   waking only on done would leave firmware asleep forever after a host
+//   abort. They stay SEPARATE status bits so that "woken" never implies "a
+//   fresh result is ready": firmware checks ABORTED before reading results.
+//   Exported so the shell can feed it to Ibex's irq_fast_i[0].
+//   Firmware writes START, executes wfi, and
 //   Ibex wakes when DONE goes pending (mie.fast0 set, mstatus.MIE clear, so
 //   no trap is taken -- execution simply resumes after the wfi). The next
 //   START clears the latch. This replaces the previous shell's core_clk_en.
@@ -129,7 +139,7 @@ module agriasic_rv32i_mmio #(
   // Firmware-state outputs to the shell.
   output logic        fw_done_o,        // firmware wrote CTRL.FW_DONE
   output logic        trap_seen_o,      // firmware wrote CTRL.TRAP_SEEN
-  output logic        meas_done_irq_o,  // sticky DONE latch, level interrupt
+  output logic        meas_wake_irq_o,  // sticky DONE or ABORTED, level interrupt
 
   // Status inputs from the measurement engine.
   //   done_i is the FSM's RAW single-cycle done pulse.
@@ -400,6 +410,17 @@ module agriasic_rv32i_mmio #(
     end
   end
 
+  // Sticky: the run was cut short by an abort, so no fresh result exists.
+  // This is what keeps "the core woke up" from meaning "a result is ready":
+  // it wakes the core (below) but is reported separately from done.
+  logic meas_aborted_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                                 meas_aborted_q <= 1'b0;
+    else if (ctrl_abort_write)                  meas_aborted_q <= 1'b1;
+    else if (ctrl_start_write && !meas_busy_q)  meas_aborted_q <= 1'b0;
+    else if (clear_errors_o)                    meas_aborted_q <= 1'b0;
+  end
+
   // Sticky: a start that arrived while busy was discarded. Cleared by
   // CTRL.clear_err, like the other sticky error bits.
   logic start_rejected_q;
@@ -409,7 +430,24 @@ module agriasic_rv32i_mmio #(
     else if (clear_errors_o)    start_rejected_q <= 1'b0;
   end
 
-  assign meas_done_irq_o = meas_done_q;
+  // Wake on either. Done alone would strand firmware in wfi after an abort:
+  // an aborted run emits no done pulse, by design, so there would be nothing
+  // left to wake it and the sweep would hang half-finished.
+  //
+  // ABORTED is gated on the core not having parked for good. start.S ends in
+  // `park: wfi; j park`, and this wake is LEVEL sensitive while ABORTED is
+  // sticky -- so an abort arriving after FW_DONE would hold the line high with
+  // nothing left to clear it (firmware has already run its clear path for the
+  // last time), wfi would return immediately forever, and the core would spin
+  // at full power instead of sleeping. An abort only ever needs to wake a core
+  // that is WAITING for a measurement; once firmware has finished or trapped,
+  // waking it just re-parks it.
+  //
+  // This cannot mask a wake the firmware needs: fw_done_q is only set after
+  // main() returns, and ndmreset clears it, so a restarted firmware wakes
+  // normally again.
+  assign meas_wake_irq_o = meas_done_q ||
+                           (meas_aborted_q && !fw_done_q && !trap_seen_q);
 
   // --------------------------------------------------------------------------
   // Peripheral read path (registered: same 1-cycle latency as the SRAM)
@@ -426,7 +464,7 @@ module agriasic_rv32i_mmio #(
       // [3:2] are the real ADC overrange bits, one per channel, held by the
       // measurement FSM until the next run starts. Bit 4 is a different
       // thing despite the name: a static guard on the configured pair count.
-      REG_STATUS:    periph_rdata = {24'd0, start_rejected_q,
+      REG_STATUS:    periph_rdata = {23'd0, meas_aborted_q, start_rejected_q,
                                      fw_done_q, trap_seen_q, status_overrange_w,
                                      overrange_cur_i, overrange_dv_i,
                                      meas_done_q, meas_busy_q};

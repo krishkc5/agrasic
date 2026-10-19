@@ -389,7 +389,7 @@ def mmio_register_map():
         ("0x8000_0008", "SETTLE", "RW", "excitation PERIODS to wait after start"),
         ("0x8000_000C", "DIVIDER", "RW", "raw N;  f_exc = f_clk / (16 N)"),
         ("0x8000_0010", "CONV", "RW", "SAR comparator regeneration, per bit trial"),
-        ("0x8000_0014", "STATUS", "R", "busy, done, overrange, trap_seen, fw_done, b7 start_rejected (sticky)")]),
+        ("0x8000_0014", "STATUS", "R", "busy, done, overrange, trap_seen, fw_done, b7 start_rejected, b8 ABORTED")]),
         ("results  (host computes Z(f) = dV(f) / I(f))", BLUE, [
             ("0x8000_0018", "RESULT_I", "R", "dV in-phase"),
             ("0x8000_001C", "RESULT_Q", "R", "dV quadrature"),
@@ -429,6 +429,14 @@ def mmio_register_map():
                     "still flagged: otherwise the bridge cleared busy while the sequencer, which "
                     "only honours abort outside S_IDLE, accepted the start - the engine would run "
                     "with STATUS reporting idle.")
+    c.note(y + 260, "The core's wfi wake is done OR aborted (meas_wake_irq_o). With done alone a "
+                    "host abort rescued the engine and left the processor asleep forever. The two "
+                    "stay SEPARATE bits so that \"woken\" never implies \"a result is ready\": "
+                    "firmware checks ABORTED before reading the shadow registers.")
+    c.note(y + 310, "The ABORTED term is gated on NOT fw_done and NOT trap_seen: the wake is level "
+                    "sensitive, so an abort arriving after the core parked would hold it high with "
+                    "nothing left to clear it and spin park: wfi forever. Only the wake is gated - "
+                    "STATUS b8 still reports ABORTED to the host.")
     c.save("mmio_register_map.svg")
 
 

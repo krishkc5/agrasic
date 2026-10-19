@@ -77,7 +77,7 @@ bash "$R/settle_conv_sweep.sh" 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | tail -12
 
 echo ""
 echo "=================================================="
-echo "13. JTAG / RISC-V DEBUG MODULE (Phase 2: halt, abstract regs, SBA, resume, ndmreset)"
+echo "13. JTAG / RISC-V DEBUG MODULE (halt, abstract regs, SBA, resume, ndmreset with a measurement in flight)"
 echo "=================================================="
 bash "$R/jtag.sh" 2>&1 | grep -E "^\[TB\]|JTAG_DEBUG_" | tail -8
 
@@ -89,6 +89,6 @@ bash "$R/flash_boot.sh" 2>&1 | grep -E "^\[TB\] [A-G]:|FLASH_BOOT_" | tail -12
 
 echo ""
 echo "=================================================="
-echo "15. HOST SPI PORT (M4: read/write while the core runs, permissions, gain decode)"
+echo "15. HOST SPI PORT (M4: read/write while the core runs, permissions, gain decode, abort/restart)"
 echo "=================================================="
-bash "$R/spi_host.sh" 2>&1 | grep -E "^\[TB\]   [A-F]:|SPI_HOST_" | tail -16
+bash "$R/spi_host.sh" 2>&1 | grep -E "^\[TB\]   [A-G]:|SPI_HOST_" | tail -22

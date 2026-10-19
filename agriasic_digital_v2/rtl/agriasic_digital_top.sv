@@ -38,6 +38,7 @@ module agriasic_digital_top #(
   input  logic                   clk,
   input  logic                   rst_n,
   input  logic                   start,
+  input  logic                   abort_i,   // force the engine back to idle
   input  logic [3:0]             cfg_pair_log2_i,
   input  logic [7:0]             cfg_settle_cycles_i,
   input  logic [13:0]            cfg_exc_divider_i,  // Rev 4.3 Phase 4.2: widened 8->14 bits, see GAP-1
@@ -96,6 +97,7 @@ module agriasic_digital_top #(
     .rst_n          (rst_n),
     .sample_req_i        (sample_req),
     .take_sample_i       (take_sample),
+    .abort_i             (abort_i),
     .channel_i           (channel),
     .conv_cycles_i       (cfg_conv_cycles_i),
     .mux_settle_cycles_i (cfg_mux_settle_i),
@@ -124,6 +126,7 @@ module agriasic_digital_top #(
     .phase_index_i   (exc_phase_index),
     .period_tick_i   (exc_period_tick),
     .sar_done_i      (sample_done),
+    .abort_i         (abort_i),
     .sar_overrange_i (sar_overrange),
     .overrange_dv_o  (overrange_dv_o),
     .overrange_cur_o (overrange_cur_o),

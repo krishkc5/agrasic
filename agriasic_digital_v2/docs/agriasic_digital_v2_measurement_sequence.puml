@@ -14,17 +14,24 @@ participant SHELL as "agriasic_rv32i_control_shell"
 participant FSM as "measurement_fsm"
 participant EXC as "excitation_ctrl"
 participant SAR as "sar_controller"
-participant AFE as "Analog front end\n(sine DAC, PGA, TIA, S/H, SAR ADC)"
+participant AFE as "Analog front end\n(sine DAC, fixed-gain PGA, prog. TIA, S/H, SAR ADC)"
 
 == Configuration and launch ==
 FW -> MMIO : write PAIR_LOG2, SETTLE, DIVIDER, CONV
-FW -> MMIO : write AFE_CTRL (pga_gain, tia_rf, amplitude, mux_settle)
+FW -> MMIO : write AFE_CTRL (tia_rf, amplitude, mux_settle)
 MMIO -> SHELL : cfg_* updates
-MMIO -> AFE : afe_pga_gain_o[2:0], afe_tia_rf_o[2:0]\n(2-bit code decoded to 3 switch wires)
+MMIO -> AFE : afe_tia_rf_o[2:0]\n(2-bit code decoded to 3 switch wires)\nThe diff PGA gain is FIXED - no digital control
 
 FW -> MMIO : write CTRL.START
 MMIO -> SHELL : start_pulse_o (one cycle, differentiated from the write)
 SHELL -> FSM : start
+note right of MMIO
+A START arriving while busy is REJECTED, not queued: the FSM
+only samples start in S_IDLE, so such a write used to vanish
+with no way for firmware to tell. It now sets the sticky
+STATUS[7] start_rejected flag. To restart early, write
+CTRL.ABORT first -- see the abort path at the end.
+end note
 FW -> FW : execute wfi -- core clock gates off
 note right of FW
 The core sleeps for the whole measurement.
@@ -99,6 +106,39 @@ Z(f) = dV(f) / I(f) is computed HOST-side, never on die.
 The gain settings must be stored alongside the results:
 the two channels have independent gains, so they do not
 cancel in the ratio.
+end note
+
+== Abort: the only way to cut a run short (host / debugger side) ==
+note over FW, AFE
+Reachable from ANY state above, not only from here.
+end note
+FW -> MMIO : write CTRL.ABORT
+MMIO -> SHELL : abort_pulse_o (one cycle)
+SHELL -> FSM : abort_i
+SHELL -> SAR : abort_i
+FSM -> FSM : state -> S_IDLE (overrides every state)
+SAR -> SAR : state -> S_IDLE, drop busy / adc_enable / sample_done
+MMIO -> MMIO : clear busy. NO done pulse, NO irq_fast[0]
+note right of MMIO
+Abort emits no done, so an aborted run can never be read back as
+a completed one -- and so it cannot wake a core already parked in
+wfi. That is why abort is a host- and debugger-side control (the
+host SPI port, or the debug module's system bus), not part of the
+firmware's own wait path.
+
+The SAR is aborted as well as the FSM on purpose: a conversion
+left in flight would otherwise run to completion and pulse
+sample_done after the FSM had gone idle, where the NEXT run would
+consume it as its own first sample.
+
+The accumulators are cleared by the next START rather than by the
+abort, so the last complete result stays readable.
+
+ABORT wins over START when one write asserts both, and the dropped
+start is still flagged in STATUS[7]. Without that precedence the
+two disagreed: the bridge cleared busy while the FSM, which only
+honours abort outside S_IDLE, accepted the start -- the engine
+would run with STATUS reporting idle.
 end note
 
 @enduml

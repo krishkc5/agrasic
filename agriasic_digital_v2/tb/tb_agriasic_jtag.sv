@@ -423,11 +423,33 @@ module tb_agriasic_jtag;
     sba_read32(DMEM_BASE + 32'h138, v, sberr); expect_eq("OUT_Q[2] (SBA)", v, 32'd280);
     sba_read32(DMEM_BASE + 32'h140, v, sberr); expect_eq("OUT_TEMP (SBA)", v, 32'hFFFF_FFFF);
 
-    // ---- 7. ndmreset ------------------------------------------------------
+    // ---- 7. ndmreset, with a measurement deliberately in flight -----------
+    // The engine shares the MMIO bridge's reset domain, so ndmreset must take
+    // the two down together. When the engine sat on the wider rst_n_sync it
+    // survived an ndmreset that cleared the bridge, and its eventual done set
+    // done in a bridge that had never seen a start -- a stale result presented
+    // as a fresh one. Resetting an idle engine cannot catch that, so start a
+    // run first and check it is genuinely in flight before pulling reset.
+    sba_write32(32'h8000_0000, 32'h0000_0001);            // CTRL.start
+    sba_read32 (32'h8000_0014, v, sberr);
+    expect_eq("engine busy before ndmreset", v & 32'h1, 32'd1);
+    if (4'(dut.u_measurement_top.u_measurement_fsm.state_q) == 4'd0) begin
+      $error("setup: engine still in S_IDLE -- the reset check would be vacuous");
+      errors++;
+    end else begin
+      $display("[TB]   engine FSM left S_IDLE, run in flight OK");
+    end
+
     dmi_write(DM_DMCONTROL, DMCONTROL_NDMRESET | DMCONTROL_DMACTIVE);
     repeat (4) @(posedge clk);
     expect_eq("sys_rst_n during ndmreset", {31'd0, dut.u_control_shell.sys_rst_n}, 32'd0);
     expect_eq("FW_DONE cleared by ndmreset", {31'd0, dut.u_control_shell.done_o}, 32'd0);
+    expect_eq("engine FSM reset to S_IDLE by ndmreset",
+              {28'd0, 4'(dut.u_measurement_top.u_measurement_fsm.state_q)}, 32'd0);
+    expect_eq("SAR reset to S_IDLE by ndmreset",
+              {29'd0, 3'(dut.u_measurement_top.u_sar_controller.state_q)}, 32'd0);
+    expect_eq("engine busy dropped with the bridge",
+              {31'd0, dut.u_measurement_top.busy_o}, 32'd0);
     dmi_write(DM_DMCONTROL, DMCONTROL_DMACTIVE);   // release
     dmi_read(DM_DMSTATUS, v);
     expect_eq("dmstatus.allhavereset", (v >> 19) & 32'h1, 32'h1);

@@ -79,12 +79,19 @@ module, and owns **three reset domains**:
 
 | Domain         | Resets                      | Formed from         |
 | -------------- | --------------------------- | ------------------- |
-| `rst_n_sync` | debug module, TAP           | `rst_sync` output |
-| `sys_rst_n`  | MMIO bridge, result latches | `&& !ndmreset`    |
-| `core_rst_n` | Ibex only                   | `&& !core_rst`    |
+| `rst_n_sync` | debug module, TAP                               | `rst_sync` output |
+| `sys_rst_n`  | MMIO bridge, result latches, measurement engine | `&& !ndmreset`    |
+| `core_rst_n` | Ibex only                                       | `&& !core_rst`    |
 
 The debug module deliberately survives `ndmreset` — otherwise a debugger would
 disconnect itself the moment it asked for a reset.
+
+The **measurement engine shares the bridge's domain**, not the wider
+`rst_n_sync`. It previously sat on `rst_n_sync`, so a debugger's `ndmreset`
+cleared the bridge's `busy`/`done` state while the engine kept sequencing; the
+run's eventual completion then set `done` in a bridge that had never seen a
+start, presenting a stale result as a fresh one. Anything that reports the
+engine's state has to be reset with it.
 
 #### `ibex_top` — the core
 
@@ -143,8 +150,27 @@ Decodes the data port into DMEM and a 64-byte register window. Decode is
 every peripheral aliased across the upper half of the map.
 
 A store to `CTRL` asserts write-enable for exactly one cycle, so `START` is a
-single-cycle pulse regardless of bus timing — a repeated write cannot restart a
-run in progress.
+single-cycle pulse regardless of bus timing.
+
+**Restarting a run.** `START` written while the engine is busy is **rejected**,
+not queued and not silently dropped: the sequencer only samples `start` in
+`S_IDLE`, so such a write used to vanish with no way for firmware to tell. It
+now sets the sticky `STATUS[7]` *start-rejected* flag, cleared by
+`CTRL.clear_err` like the other sticky bits. To restart early, write
+`CTRL.ABORT` (bit 1) and then `CTRL.START`. Abort forces both the measurement
+sequencer and the SAR controller back to `S_IDLE` and clears `busy`; it produces
+**no** `done` pulse, so an aborted run cannot be mistaken for a completed one.
+The accumulators are zeroed by the next start rather than by the abort, so the
+previous complete result stays readable in the shadow registers.
+
+Aborting the SAR controller as well as the sequencer is not redundant: a
+conversion left in flight would otherwise run to completion and pulse
+`sample_done` into the *next* run.
+
+`ABORT` wins over `START` when one write asserts both, and the dropped start is
+still flagged. Without that precedence the two disagreed — the bridge cleared
+`busy` while the sequencer, which only honours abort outside `S_IDLE`, accepted
+the start — leaving the engine running with `STATUS` reporting idle.
 
 Also decodes the **TIA's 2-bit gain code into three switch wires**. No code
 decodes to all-open — that would be an open feedback network and a railed
@@ -266,6 +292,12 @@ woken by `irq_fast[0]` from a sticky DONE latch. `mie.fast0` is set but
 `mstatus.MIE` is not, so the core **resumes at the next instruction rather than
 taking a trap** — no handler, no context save. The core is idle **99.98%** of a
 sweep.
+
+Because an abort emits no DONE pulse, it cannot wake a core already parked in
+`wfi`. `CTRL.ABORT` is therefore a **host- and debugger-side** control — a way
+to reclaim a stuck engine over the host SPI port or the debug module's system
+bus — and not part of the firmware's own wait path. Firmware never needs it: it
+starts one run and is woken by that run's completion.
 
 Firmware is **564 B**, no heap, no libc, 28 B of stack. Results land in DMEM at
 `0x100`–`0x16B`, each point stored with the `AFE_CTRL` value and overrange flags

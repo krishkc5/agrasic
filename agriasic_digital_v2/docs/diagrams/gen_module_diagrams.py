@@ -180,7 +180,9 @@ def control_shell_reset_domains():
                "Section 6.13 - three distinct resets; confusing them is the classic integration bug",
                "Reset tree. The chip pin rst_n passes through rst_sync to rst_n_sync, which resets "
                "the debug module and TAP and is removed by nothing else. sys_rst_n adds NOT "
-               "ndmreset and resets the MMIO bridge and the result latches. core_rst_n adds NOT "
+               "ndmreset and resets the MMIO bridge, the result latches and the measurement "
+               "engine, which must share a domain with the registers that report it. "
+               "core_rst_n adds NOT "
                "core_rst and resets only the Ibex core; core_rst is the registered inverse of "
                "gpio_start_i AND fw_valid.", h=2200)
     c.box(200, 430, 540, 180, "rst_n", ["chip pin, asynchronous"], fill=INK, head_size=26, line_size=18)
@@ -191,7 +193,7 @@ def control_shell_reset_domains():
     c.line(1700, 520, 1700, 1660, BLUE_S)
     rows = [(520, "rst_n_sync", "", "dm_top,  dmi_jtag", PURPLE,
              "Debug survives everything. If ndmreset reset the DM, the debugger would"),
-            (1090, "sys_rst_n", "&& !ndmreset", "MMIO bridge,  result latches", GREEN,
+            (1090, "sys_rst_n", "&& !ndmreset", "MMIO bridge,  results,  measurement engine", GREEN,
              "The debugger's \"reset the system\": config and sticky flags clear; the"),
             (1660, "core_rst_n", "&& !core_rst", "ibex_top   (and nothing else)", ORANGE,
              "core_rst = !(gpio_start_i && fw_valid), registered, so the release edge is")]
@@ -207,6 +209,10 @@ def control_shell_reset_domains():
               head_size=24, line_size=17, line_fill=GREY, lead=26)
     c.note(1960, "Read top to bottom as widening scope: each domain resets its own block plus "
                  "everything below it. Nothing above a line is ever reset by something below it.")
+    c.note(2010, "The measurement engine is on sys_rst_n, not rst_n_sync: when it sat in the wider "
+                 "domain an ndmreset cleared the bridge's busy/done while the engine kept "
+                 "sequencing, and the run's completion set done in a bridge that never saw a "
+                 "start. A block and whatever reports its state share a reset domain.")
     c.save("control_shell_reset_domains.svg")
 
 
@@ -373,16 +379,17 @@ def mmio_register_map():
                "Section 6.17 - the complete 64-byte peripheral window at 0x8000_0000",
                "Register map of the peripheral window. CTRL, PAIR_LOG2, SETTLE, DIVIDER and CONV "
                "configure and start a measurement; STATUS and the four RESULT registers read it "
-               "back; AFE_CTRL carries the analog gain and mux settling controls; BOOT_STATUS and "
+               "back, and a start written while busy is rejected and flagged rather than dropped; "
+               "AFE_CTRL carries the analog gain and mux settling controls; BOOT_STATUS and "
                "BOOT_CTRL control the boot loader; SPI_CTRL, SPI_DATA and SPI_STATUS are the boot "
                "SPI engine handed to firmware after boot.", h=2800)
     groups = [("measurement", GREEN, [
-        ("0x8000_0000", "CTRL", "W", "start, clear_err, FW_DONE, TRAP_SEEN"),
+        ("0x8000_0000", "CTRL", "W", "b0 start (rejected while busy), b1 abort, b7 clear_err, FW_DONE, TRAP_SEEN"),
         ("0x8000_0004", "PAIR_LOG2", "RW", "M = 2^n sample pairs, clamped to 64"),
         ("0x8000_0008", "SETTLE", "RW", "excitation PERIODS to wait after start"),
         ("0x8000_000C", "DIVIDER", "RW", "raw N;  f_exc = f_clk / (16 N)"),
         ("0x8000_0010", "CONV", "RW", "SAR comparator regeneration, per bit trial"),
-        ("0x8000_0014", "STATUS", "R", "busy, done, overrange, trap_seen, fw_done")]),
+        ("0x8000_0014", "STATUS", "R", "busy, done, overrange, trap_seen, fw_done, b7 start_rejected (sticky)")]),
         ("results  (host computes Z(f) = dV(f) / I(f))", BLUE, [
             ("0x8000_0018", "RESULT_I", "R", "dV in-phase"),
             ("0x8000_001C", "RESULT_Q", "R", "dV quadrature"),
@@ -411,8 +418,17 @@ def mmio_register_map():
         y += h + 40
     c.note(y + 60, "Pulse generation: a store to CTRL asserts we for exactly one cycle, so "
                    "start_pulse_o is a single-cycle pulse no matter how long the bus access takes.")
-    c.note(y + 110, "A repeated write therefore cannot restart a run already in progress. "
-                    "Section 7.1 has the bit fields.")
+    c.note(y + 110, "Restarting: a start written while busy is REJECTED, not queued - the "
+                    "sequencer only samples start in S_IDLE, so such a write used to vanish "
+                    "silently. It now sets the sticky STATUS b7 start_rejected flag, cleared by "
+                    "clear_err. To restart early: write CTRL.abort, then CTRL.start.")
+    c.note(y + 160, "Abort forces the sequencer AND the SAR controller to S_IDLE and clears busy, "
+                    "but emits no done pulse and no interrupt, so an aborted run cannot be read "
+                    "back as a completed one. Section 7.1 has the bit fields.")
+    c.note(y + 210, "Abort wins over start when one write asserts both, and the dropped start is "
+                    "still flagged: otherwise the bridge cleared busy while the sequencer, which "
+                    "only honours abort outside S_IDLE, accepted the start - the engine would run "
+                    "with STATUS reporting idle.")
     c.save("mmio_register_map.svg")
 
 

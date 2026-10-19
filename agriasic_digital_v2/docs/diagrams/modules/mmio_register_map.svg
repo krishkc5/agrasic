@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2800" viewBox="0 0 5000 2800" role="img" aria-labelledby="t d">
   <title id="t">agriasic_rv32i_mmio register map</title>
-  <desc id="d">Register map of the peripheral window. CTRL, PAIR_LOG2, SETTLE, DIVIDER and CONV configure and start a measurement; STATUS and the four RESULT registers read it back; AFE_CTRL carries the analog gain and mux settling controls; BOOT_STATUS and BOOT_CTRL control the boot loader; SPI_CTRL, SPI_DATA and SPI_STATUS are the boot SPI engine handed to firmware after boot.</desc>
+  <desc id="d">Register map of the peripheral window. CTRL, PAIR_LOG2, SETTLE, DIVIDER and CONV configure and start a measurement; STATUS and the four RESULT registers read it back, and a start written while busy is rejected and flagged rather than dropped; AFE_CTRL carries the analog gain and mux settling controls; BOOT_STATUS and BOOT_CTRL control the boot loader; SPI_CTRL, SPI_DATA and SPI_STATUS are the boot SPI engine handed to firmware after boot.</desc>
   <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
   <rect width="5000" height="2800" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_rv32i_mmio register map</text>
@@ -12,7 +12,7 @@
   <text x="280" y="418" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0000</text>
   <text x="1000" y="418" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">CTRL</text>
   <text x="1720" y="418" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">W</text>
-  <text x="1900" y="418" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">start, clear_err, FW_DONE, TRAP_SEEN</text>
+  <text x="1900" y="418" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">b0 start (rejected while busy), b1 abort, b7 clear_err, FW_DONE, TRAP_SEEN</text>
   <text x="280" y="510" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0004</text>
   <text x="1000" y="510" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">PAIR_LOG2</text>
   <text x="1720" y="510" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">RW</text>
@@ -32,7 +32,7 @@
   <text x="280" y="878" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0014</text>
   <text x="1000" y="878" font-family="Arial" font-size="23" font-weight="700" fill="#212121" xml:space="preserve">STATUS</text>
   <text x="1720" y="878" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
-  <text x="1900" y="878" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, done, overrange, trap_seen, fw_done</text>
+  <text x="1900" y="878" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, done, overrange, trap_seen, fw_done, b7 start_rejected (sticky)</text>
   <rect x="220" y="952" width="4560" height="428" rx="8" fill="#BBDEFB" stroke="#BBDEFB" stroke-width="2"/>
   <text x="246" y="994" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">results  (host computes Z(f) = dV(f) / I(f))</text>
   <text x="280" y="1070" font-family="Arial" font-size="23" fill="#212121" xml:space="preserve">0x8000_0018</text>
@@ -82,5 +82,7 @@
   <text x="1720" y="2198" font-family="Arial" font-size="23" fill="#616161" xml:space="preserve">R</text>
   <text x="1900" y="2198" font-family="Arial" font-size="21" fill="#616161" xml:space="preserve">busy, fw_owned</text>
   <text x="120" y="2332" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Pulse generation: a store to CTRL asserts we for exactly one cycle, so start_pulse_o is a single-cycle pulse no matter how long the bus access takes.</text>
-  <text x="120" y="2382" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">A repeated write therefore cannot restart a run already in progress. Section 7.1 has the bit fields.</text>
+  <text x="120" y="2382" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Restarting: a start written while busy is REJECTED, not queued - the sequencer only samples start in S_IDLE, so such a write used to vanish silently. It now sets the sticky STATUS b7 start_rejected flag, cleared by clear_err. To restart early: write CTRL.abort, then CTRL.start.</text>
+  <text x="120" y="2432" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Abort forces the sequencer AND the SAR controller to S_IDLE and clears busy, but emits no done pulse and no interrupt, so an aborted run cannot be read back as a completed one. Section 7.1 has the bit fields.</text>
+  <text x="120" y="2482" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">Abort wins over start when one write asserts both, and the dropped start is still flagged: otherwise the bridge cleared busy while the sequencer, which only honours abort outside S_IDLE, accepted the start - the engine would run with STATUS reporting idle.</text>
 </svg>

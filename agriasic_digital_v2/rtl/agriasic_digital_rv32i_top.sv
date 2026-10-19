@@ -84,6 +84,8 @@ module agriasic_digital_rv32i_top #(
   logic shell_busy;
   logic shell_done;
   logic shell_start_pulse;
+  logic shell_abort_pulse;
+  logic shell_sys_rst_n;
   logic shell_clear_errors;
   logic signed [15:0] shell_result_dv_i;
   logic signed [15:0] shell_result_dv_q;
@@ -111,6 +113,8 @@ module agriasic_digital_rv32i_top #(
     .busy_o                  (shell_busy),
     .done_o                  (shell_done),
     .start_pulse_o           (shell_start_pulse),
+    .abort_pulse_o           (shell_abort_pulse),
+    .sys_rst_n_o             (shell_sys_rst_n),
     .clear_errors_o          (shell_clear_errors),
     .cfg_pair_log2_o         (dbg_cfg_pair_log2_o),
     .cfg_settle_cycles_o     (dbg_cfg_settle_cycles_o),
@@ -145,8 +149,15 @@ module agriasic_digital_rv32i_top #(
     .ADC_WIDTH(ADC_WIDTH)
   ) u_measurement_top (
     .clk                (clk),
-    .rst_n              (rst_n_sync),
+    // The engine sits in the SAME reset domain as the MMIO bridge that reports
+    // it, not the wider rst_n_sync. Previously a debugger's ndmreset cleared the
+    // bridge's busy/done state while the engine kept running, so the next
+    // completion set done in a bridge that had never seen a start -- a stale
+    // result presented as a fresh one. The debug module and TAP stay on
+    // rst_n_sync because they must survive a system reset; the engine need not.
+    .rst_n              (shell_sys_rst_n),
     .start              (shell_start_pulse),
+    .abort_i            (shell_abort_pulse),
     .cfg_pair_log2_i    (dbg_cfg_pair_log2_o),
     .cfg_settle_cycles_i(dbg_cfg_settle_cycles_o),
     .cfg_exc_divider_i  (dbg_cfg_exc_divider_o),

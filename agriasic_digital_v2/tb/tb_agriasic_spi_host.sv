@@ -260,6 +260,48 @@ module tb_agriasic_spi_host;
       $error("F: a gain code decoded to all-open"); errors++;
     end
 
+    // ---- G. abort, and start-while-busy rejection --------------------------
+    // Run last, with firmware already parked in wfi, so aborting the engine
+    // cannot strand the firmware waiting on a done that will never arrive.
+    host_write32(32'h8000_0000, 32'h0000_0001);          // CTRL.start
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: engine busy after host start", v & 32'h1, 32'd1);
+
+    host_write32(32'h8000_0000, 32'h0000_0001);          // start again, while busy
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: second start REJECTED, not silently dropped", (v >> 7) & 32'h1, 32'd1);
+    expect_eq("G: still busy -- the run was not disturbed", v & 32'h1, 32'd1);
+
+    host_write32(32'h8000_0000, 32'h0000_0002);          // CTRL.abort
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: abort clears busy", v & 32'h1, 32'd0);
+    expect_eq("G: abort does not fake a done", (v >> 1) & 32'h1, 32'd0);
+    expect_eq("G: engine FSM back in S_IDLE",
+              {28'd0, 4'(dut.u_measurement_top.u_measurement_fsm.state_q)}, 32'd0);
+    expect_eq("G: SAR back in S_IDLE",
+              {29'd0, 3'(dut.u_measurement_top.u_sar_controller.state_q)}, 32'd0);
+
+    host_write32(32'h8000_0000, 32'h0000_0080);          // CTRL.clear_err
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: clear_err clears the reject flag", (v >> 7) & 32'h1, 32'd0);
+
+    host_write32(32'h8000_0000, 32'h0000_0001);          // start accepted again
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: restartable after abort", v & 32'h1, 32'd1);
+    host_write32(32'h8000_0000, 32'h0000_0002);          // leave it idle
+
+    // Abort wins over start when one write asserts both. Without that the two
+    // disagreed: the bridge took the abort branch and left busy clear while the
+    // sequencer accepted the start, so the engine ran while STATUS read idle.
+    host_write32(32'h8000_0000, 32'h0000_0080);          // clear the flag first
+    host_write32(32'h8000_0000, 32'h0000_0003);          // start | abort, engine idle
+    host_read32 (32'h8000_0014, v);
+    expect_eq("G: start+abort in one write does not start", v & 32'h1, 32'd0);
+    expect_eq("G: ...and the dropped start is still flagged", (v >> 7) & 32'h1, 32'd1);
+    expect_eq("G: ...engine left in S_IDLE",
+              {28'd0, 4'(dut.u_measurement_top.u_measurement_fsm.state_q)}, 32'd0);
+    host_write32(32'h8000_0000, 32'h0000_0080);          // tidy up
+
     if (errors == 0) $display("[TB] SPI_HOST_PASS -- all checks passed");
     else             $display("[TB] SPI_HOST_FAIL -- %0d error(s)", errors);
     $finish;

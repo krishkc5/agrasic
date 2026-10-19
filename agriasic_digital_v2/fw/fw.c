@@ -56,13 +56,18 @@
 #define PERIPH_BASE   0x80000000u
 #define REG(off)      (*(volatile int *)(PERIPH_BASE + (off)))
 
-#define REG_CTRL      REG(0x00)   /* W  bit0 = start, bit7 = clear errors, bit8 = fw_done, bit9 = trap_seen */
+#define REG_CTRL      REG(0x00)   /* W  bit0 = start (rejected while busy -- write bit1 abort
+                                   *       first to restart early; firmware never needs to,
+                                   *       it starts one run and sleeps until that run ends),
+                                   *    bit1 = abort, bit7 = clear errors,
+                                   *    bit8 = fw_done, bit9 = trap_seen */
 #define REG_PAIR_LOG2 REG(0x04)   /* RW */
 #define REG_SETTLE    REG(0x08)   /* RW */
 #define REG_DIVIDER   REG(0x0C)   /* RW  raw N, unlike SPI's selector-based REG_FREQ_SEL */
 #define REG_CONV      REG(0x10)   /* RW */
 #define REG_STATUS    REG(0x14)   /* R   bit0 = busy, bit1 = done, bit2/3 = ADC overrange dV/current,
-                                   *     bit4 = pair-count guard, bit5 = trap_seen, bit6 = fw_done */
+                                   *     bit4 = pair-count guard, bit5 = trap_seen, bit6 = fw_done,
+                                   *     bit7 = a START was written while busy and discarded (sticky) */
 #define REG_RESULT_I  REG(0x18)   /* R   sign-extended dV in-phase accumulator */
 #define REG_RESULT_Q  REG(0x1C)   /* R   sign-extended dV quadrature accumulator */
 /* Rev 5 tetrapolar front end: the return-current channel is a second complex

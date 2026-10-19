@@ -70,6 +70,7 @@ module tb_settle_conv_sweep;
     .clk(clk),
     .rst_n(rst_n),
     .start(start),
+    .abort_i(1'b0),
     .cfg_pair_log2_i(cfg_pair_log2_i),
     .cfg_settle_cycles_i(cfg_settle_cycles_i),
     .cfg_exc_divider_i(cfg_exc_divider_i),

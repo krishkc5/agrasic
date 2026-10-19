@@ -47,6 +47,7 @@ module tb_sar_bit_trial;
     .rst_n          (rst_n),
     .sample_req_i   (sample_req_i),
     .take_sample_i  (take_sample_i),
+    .abort_i        (1'b0),
     .channel_i      (channel_i),
     .mux_settle_cycles_i (8'd2),
     .conv_cycles_i  (conv_cycles_i),

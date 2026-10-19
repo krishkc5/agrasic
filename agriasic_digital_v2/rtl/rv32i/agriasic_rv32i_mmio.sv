@@ -27,7 +27,9 @@
 //   data port and the debug module's system-bus master onto this one port.
 //
 // Peripheral registers (word aligned, selected by addr[4:2]):
-//   0x8000_0000  CTRL       W   bit0 = start
+//   0x8000_0000  CTRL       W   bit0 = start (REJECTED while busy -- abort first),
+//                                bit1 = abort (force the engine back to idle;
+//                                       wins over bit0 in the same write)
 //                                bit7 = clear sticky errors
 //                                bit8 = FW_DONE   (sticky; firmware finished,
 //                                                  replaces the old ecall halt)
@@ -41,7 +43,9 @@
 //   0x8000_0014  STATUS     R   bit0 = busy, bit1 = done,
 //                                bit2 = ADC overrange on dV, bit3 = on current,
 //                                bit4 = pair-count guard (NOT an ADC rail),
-//                                bit5 = trap_seen, bit6 = fw_done
+//                                bit5 = trap_seen, bit6 = fw_done,
+//                                bit7 = start rejected (START written while
+//                                       busy), sticky, cleared by CTRL bit7
 //   0x8000_0018  RESULT_I   R   [15:0] signed dV in-phase accumulator
 //   0x8000_001C  RESULT_Q   R   [15:0] signed dV quadrature accumulator
 //
@@ -109,6 +113,7 @@ module agriasic_rv32i_mmio #(
 
   // Control outputs to the measurement engine.
   output logic        start_pulse_o,
+  output logic        abort_pulse_o,    // CTRL.abort, single cycle
   output logic        clear_errors_o,
   output logic [3:0]  cfg_pair_log2_o,
   output logic [7:0]  cfg_settle_cycles_o,
@@ -289,6 +294,7 @@ module agriasic_rv32i_mmio #(
     end else begin
       // Default low: both are single-cycle pulses.
       start_pulse_o  <= 1'b0;
+      abort_pulse_o  <= 1'b0;
       clear_errors_o <= 1'b0;
 
       if (run_clear_i) begin
@@ -299,7 +305,19 @@ module agriasic_rv32i_mmio #(
       if (periph_wr) begin
         unique case (periph_reg)
           REG_CTRL: begin
-            start_pulse_o  <= data_wdata_i[0];
+            // Starting while busy is not allowed: the sequencer only samples
+            // start in S_IDLE, so such a write used to vanish with no way for
+            // firmware to know. It is now rejected explicitly and flagged in
+            // STATUS[7]. To restart early, write CTRL.abort then CTRL.start.
+            //
+            // Abort wins over start in the same write. Without the !abort term
+            // the two disagreed: the busy register below takes the abort branch
+            // and leaves busy clear, while the sequencer -- which only honours
+            // abort outside S_IDLE -- would accept the start. The engine would
+            // run with STATUS reporting idle. The dropped start is flagged in
+            // STATUS[7] rather than lost silently.
+            start_pulse_o  <= data_wdata_i[0] && !data_wdata_i[1] && !meas_busy_q;
+            abort_pulse_o  <= data_wdata_i[1];
             clear_errors_o <= data_wdata_i[7];
             if (data_be_i[1]) begin
               if (data_wdata_i[8]) fw_done_q   <= 1'b1;
@@ -357,6 +375,10 @@ module agriasic_rv32i_mmio #(
   // pulse, and it doubles as the level-sensitive wake interrupt for wfi.
   // --------------------------------------------------------------------------
   wire ctrl_start_write = periph_wr && (periph_reg == REG_CTRL) && data_wdata_i[0];
+  wire ctrl_abort_write = periph_wr && (periph_reg == REG_CTRL) && data_wdata_i[1];
+  // A start write that was NOT honoured, for either reason: the engine was
+  // busy, or the same write also asserted abort, which wins.
+  wire start_rejected_w = ctrl_start_write && (meas_busy_q || ctrl_abort_write);
 
   logic meas_busy_q;
   logic meas_done_q;
@@ -365,13 +387,26 @@ module agriasic_rv32i_mmio #(
     if (!rst_n) begin
       meas_busy_q <= 1'b0;
       meas_done_q <= 1'b0;
-    end else if (ctrl_start_write) begin
+    end else if (ctrl_abort_write) begin
+      // An aborted run produces no done pulse, so busy must be cleared here or
+      // STATUS would read busy forever and every later start would be rejected.
+      meas_busy_q <= 1'b0;
+    end else if (ctrl_start_write && !meas_busy_q) begin
       meas_busy_q <= 1'b1;
       meas_done_q <= 1'b0;
     end else if (done_i) begin
       meas_busy_q <= 1'b0;
       meas_done_q <= 1'b1;
     end
+  end
+
+  // Sticky: a start that arrived while busy was discarded. Cleared by
+  // CTRL.clear_err, like the other sticky error bits.
+  logic start_rejected_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                 start_rejected_q <= 1'b0;
+    else if (start_rejected_w)  start_rejected_q <= 1'b1;
+    else if (clear_errors_o)    start_rejected_q <= 1'b0;
   end
 
   assign meas_done_irq_o = meas_done_q;
@@ -391,7 +426,8 @@ module agriasic_rv32i_mmio #(
       // [3:2] are the real ADC overrange bits, one per channel, held by the
       // measurement FSM until the next run starts. Bit 4 is a different
       // thing despite the name: a static guard on the configured pair count.
-      REG_STATUS:    periph_rdata = {25'd0, fw_done_q, trap_seen_q, status_overrange_w,
+      REG_STATUS:    periph_rdata = {24'd0, start_rejected_q,
+                                     fw_done_q, trap_seen_q, status_overrange_w,
                                      overrange_cur_i, overrange_dv_i,
                                      meas_done_q, meas_busy_q};
       REG_RESULT_I:  periph_rdata = {{16{result_dv_i_i[15]}}, result_dv_i_i};

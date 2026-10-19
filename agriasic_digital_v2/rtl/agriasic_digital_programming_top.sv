@@ -96,6 +96,7 @@ module agriasic_digital_programming_top #(
     .clk                (clk),
     .rst_n              (rst_n_sync),
     .start              (start_pulse_q),
+    .abort_i             (1'b0),  // no abort source on this variant
     .cfg_pair_log2_i    (cfg_pair_log2_q),
     .cfg_settle_cycles_i(cfg_settle_q),
     .cfg_exc_divider_i  (cfg_divider_w),

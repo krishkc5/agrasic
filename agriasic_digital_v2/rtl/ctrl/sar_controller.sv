@@ -69,6 +69,10 @@ module sar_controller #(
   input  logic                 rst_n,
   input  logic                 sample_req_i,
   input  logic                 take_sample_i,   // 1: strobe the S/H, 0: convert the held value
+  // Abort: drop the conversion in flight and return to S_IDLE. Without this a
+  // conversion aborted by measurement_fsm would still run to completion and
+  // pulse sample_done_o, which the next run could mistake for its own.
+  input  logic                 abort_i,
   input  logic [1:0]           channel_i,       // analog mux select for this conversion
   input  logic [7:0]           conv_cycles_i,
   input  logic [7:0]           mux_settle_cycles_i,
@@ -139,6 +143,19 @@ module sar_controller #(
       adc_sample_o  <= 1'b0;
       sample_done_o <= 1'b0;
 
+      if (abort_i) begin
+        // Stated in full rather than leaning on the defaults above: an abort
+        // block is the one place where the complete effect should be readable
+        // without looking elsewhere. Leaving mux_sel_o and the S/H wherever
+        // they are is harmless -- the next conversion re-drives the mux and
+        // re-strobes the hold before trial 1.
+        state_q       <= S_IDLE;
+        busy_o        <= 1'b0;
+        adc_enable_o  <= 1'b0;
+        conv_start_o  <= 1'b0;
+        adc_sample_o  <= 1'b0;
+        sample_done_o <= 1'b0;
+      end else
       unique case (state_q)
         S_IDLE: begin
           // Do not accept a new request in the same cycle a completion is

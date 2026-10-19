@@ -83,6 +83,10 @@ module measurement_fsm #(
   output logic signed [ACC_WIDTH-1:0] result_dv_q_o,
   output logic signed [ACC_WIDTH-1:0] result_cur_i_o,
   output logic signed [ACC_WIDTH-1:0] result_cur_q_o,
+  // Abort: force the sequencer back to S_IDLE immediately, wherever it is.
+  // Accumulators are zeroed on the NEXT start, not here, so an aborted run
+  // leaves the previous complete result in the shadows untouched.
+  input  logic                    abort_i,
   // Sticky per channel, cleared when a new run starts so each run reports
   // its own result. Separate bits because the two channels have independent
   // gain controls -- firmware needs to know WHICH one to step.
@@ -190,6 +194,12 @@ module measurement_fsm #(
     busy_o         = 1'b0;
     done_o         = 1'b0;
 
+    // Abort overrides every state. Placed before the case so no state can
+    // out-vote it; sar_controller is aborted in parallel so a conversion in
+    // flight cannot land a stale sample_done on the next run.
+    if (abort_i && (state_q != S_IDLE)) begin
+      state_d = S_IDLE;
+    end else
     unique case (state_q)
       S_IDLE: begin
         if (start_i) begin

@@ -122,6 +122,11 @@ module agriasic_rv32i_control_shell #(
   output logic                 busy_o,
   output logic                 done_o,
   output logic                 start_pulse_o,
+  output logic                 abort_pulse_o,
+  // The measurement subsystem's reset. Exported so the chip top can put the
+  // engine in the SAME domain as the bridge that reports it -- see the note
+  // in the chip top.
+  output logic                 sys_rst_n_o,
   output logic                 clear_errors_o,
 
   output logic [3:0]           cfg_pair_log2_o,
@@ -245,6 +250,8 @@ module agriasic_rv32i_control_shell #(
   logic ndmreset_q;
   wire  sys_rst_n  = rst_n && !ndmreset;
   wire  core_rst_n = sys_rst_n && !core_rst;
+
+  assign sys_rst_n_o = sys_rst_n;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) ndmreset_q <= 1'b0;
@@ -546,6 +553,7 @@ module agriasic_rv32i_control_shell #(
     .data_rdata_o        (mmio_rdata),
     .data_err_o          (mmio_err),
     .start_pulse_o       (start_pulse_o),
+    .abort_pulse_o       (abort_pulse_o),
     .clear_errors_o      (clear_errors_o),
     .cfg_pair_log2_o     (cfg_pair_log2_o),
     .cfg_settle_cycles_o (cfg_settle_cycles_o),

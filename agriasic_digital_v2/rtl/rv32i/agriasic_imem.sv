@@ -86,8 +86,37 @@ module agriasic_imem #(
   // in that build and the core fetches nothing. The init is harmless in
   // synthesis: it becomes an init attribute, not logic.
   initial begin
+    // Fill the WHOLE array first, then let $readmemh overwrite the words the
+    // image occupies. The fill used to sit in an `else`, so with an INIT_FILE
+    // every word past the image stayed uninitialised -- X in a 4-state
+    // simulator, 0 under Verilator, which is why this never showed up here.
+    //
+    // Why it matters, measured rather than assumed. The firmware image is 136
+    // words; main's `ret` is the last instruction, at 0x21c. Ibex prefetches
+    // linearly and speculatively, so it reads past `ret` before the return
+    // resolves. Instrumenting the e2e fetch bus shows EXACTLY two such
+    // fetches, at 0x220 and 0x224, and no more -- the prefetch buffer is
+    // NUM_REQS=2 / FIFO DEPTH=3, so it cannot run further ahead than that.
+    // Both are discarded by the branch flush.
+    //
+    // With X in those two words, though, the overrun stops being bounded.
+    // ibex_fetch_fifo derives aligned_is_compressed from rdata[1:0], and that
+    // signal gates pop_fifo and addr_incr_two. X on rdata[1:0] puts X on
+    // pop_fifo, the FIFO never cleanly stalls, the prefetcher keeps issuing,
+    // and fetch_addr_q marches +4 per grant into more unwritten words -- which
+    // are also X. The corruption feeds itself and the fetch address walks to
+    // the top of IMEM. A two-word speculative peek becomes a runaway.
+    //
+    // So the fill is not cosmetic X-cleanliness; it is what keeps a bounded
+    // discarded prefetch from turning into an unbounded one. NOP (0x13) has
+    // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
+    //
+    // NOTE this is a SIMULATION fix only. On silicon these latches power up
+    // undefined and the boot copier writes only ROM_USED_WORDS (136) of the
+    // 256 words, so words 136..255 are genuinely undefined on the die and the
+    // prefetcher still peeks at two of them. See agriasic_spi_boot.sv.
+    for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
-    else for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP: empty part
   end
 
   // Storage: no reset, one enable per byte lane.
@@ -222,8 +251,37 @@ module agriasic_imem #(
   // empty in that build and the core fetches nothing. The init is harmless in
   // synthesis: it becomes an init attribute, not logic.
   initial begin
+    // Fill the WHOLE array first, then let $readmemh overwrite the words the
+    // image occupies. The fill used to sit in an `else`, so with an INIT_FILE
+    // every word past the image stayed uninitialised -- X in a 4-state
+    // simulator, 0 under Verilator, which is why this never showed up here.
+    //
+    // Why it matters, measured rather than assumed. The firmware image is 136
+    // words; main's `ret` is the last instruction, at 0x21c. Ibex prefetches
+    // linearly and speculatively, so it reads past `ret` before the return
+    // resolves. Instrumenting the e2e fetch bus shows EXACTLY two such
+    // fetches, at 0x220 and 0x224, and no more -- the prefetch buffer is
+    // NUM_REQS=2 / FIFO DEPTH=3, so it cannot run further ahead than that.
+    // Both are discarded by the branch flush.
+    //
+    // With X in those two words, though, the overrun stops being bounded.
+    // ibex_fetch_fifo derives aligned_is_compressed from rdata[1:0], and that
+    // signal gates pop_fifo and addr_incr_two. X on rdata[1:0] puts X on
+    // pop_fifo, the FIFO never cleanly stalls, the prefetcher keeps issuing,
+    // and fetch_addr_q marches +4 per grant into more unwritten words -- which
+    // are also X. The corruption feeds itself and the fetch address walks to
+    // the top of IMEM. A two-word speculative peek becomes a runaway.
+    //
+    // So the fill is not cosmetic X-cleanliness; it is what keeps a bounded
+    // discarded prefetch from turning into an unbounded one. NOP (0x13) has
+    // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
+    //
+    // NOTE this is a SIMULATION fix only. On silicon these latches power up
+    // undefined and the boot copier writes only ROM_USED_WORDS (136) of the
+    // 256 words, so words 136..255 are genuinely undefined on the die and the
+    // prefetcher still peeks at two of them. See agriasic_spi_boot.sv.
+    for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
-    else for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;
   end
 `endif
 

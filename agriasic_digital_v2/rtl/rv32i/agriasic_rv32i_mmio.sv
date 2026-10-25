@@ -26,7 +26,8 @@
 //   The bridge sits behind agriasic_rv32i_bus, which arbitrates the core's
 //   data port and the debug module's system-bus master onto this one port.
 //
-// Peripheral registers (word aligned, selected by addr[4:2]):
+// Peripheral registers (word aligned, selected by addr[5:2] -- 16 words, not the
+// 8 the pre-fix decode could reach; see note 2 above):
 //   0x8000_0000  CTRL       W   bit0 = start (REJECTED while busy -- abort first),
 //                                bit1 = abort (force the engine back to idle;
 //                                       wins over bit0 in the same write)

@@ -211,9 +211,10 @@ rewrite its own flash.
 
 148 words emitted as a constant `case` table — **no ROM compiler needed**;
 synthesis maps it to ~1,000 gates. Promotion is explicit (`gen_boot_rom.py --promote`), never a side effect of a build, and the generator keeps the word
-count in step in all four places it is declared — `agriasic_spi_boot`'s copy is
-a module default the shell always overrides, which is precisely why it had
-drifted to 148 unnoticed.
+count in step in all four places it is declared. `agriasic_spi_boot`'s copy is a
+module default the shell always overrides, which is how it once sat at a stale
+148 while the image was 136 words with nothing failing — the reason the
+generator patches all four rather than trusting the override.
 
 ### Debug and host access
 
@@ -326,12 +327,17 @@ the engine, so that stale run would also have been retuned mid-flight by the new
 do not write the engine's config while it is busy. A host driving the engine
 directly must abort first, exactly as firmware does.
 
-The ABORTED term in the wake is gated on `!fw_done && !trap_seen`. An abort
-arriving *after* the core has parked would otherwise hold a level-sensitive
-line high with nothing left to clear it, and `park: wfi; j park` would spin at
-full power forever. An abort only needs to wake a core that is **waiting** for
-a measurement. Only the wake is gated — `STATUS[8]` still reports ABORTED to
-the host.
+**Both terms** in the wake are gated on `!fw_done && !trap_seen`:
+`meas_wake_irq_o = (done || aborted) && !fw_done && !trap_seen`. Either latch
+arriving — or surviving — *after* the core has parked would otherwise hold a
+level-sensitive line high with nothing left to clear it, and `park: wfi; j
+park` would spin at full power forever. `aborted` is the obvious case; `done`
+is the one that bites every run, because `meas_done_q` is cleared only by reset
+or by a fresh `START`, so it survives the last point into the park loop. Before
+the gate the core measured `core_sleep` **0 of 2000** cycles after `FW_DONE`;
+after it, 2000 of 2000. A wake only ever needs to reach a core that is
+**waiting** for a measurement. Only the wake is gated — `STATUS` still reports
+DONE and `STATUS[8]` still reports ABORTED to the host.
 
 Firmware is **592 B**, no heap, no libc, 48 B of stack. Results land in DMEM at
 `0x000`–`0x0DF`: eight arrays-of-8 (`OUT_DIV`, `OUT_DV_I`, `OUT_DV_Q`,

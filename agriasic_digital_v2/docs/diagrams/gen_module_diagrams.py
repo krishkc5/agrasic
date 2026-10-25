@@ -115,17 +115,20 @@ def control_shell_block():
     c = Canvas("agriasic_rv32i_control_shell",
                "Section 6.13 - the control subsystem: Ibex, interconnect, memories, boot, debug",
                "Block diagram of agriasic_rv32i_control_shell. Chip pins enter on the left: clk, "
-               "rst_n, gpio_start_i, gpio_boot_sel_i, five JTAG wires and four flash SPI wires. "
-               "The shell contains the Ibex core, the four-master interconnect, IMEM, the MMIO "
-               "bridge with DMEM, the boot loader, the golden boot ROM and the riscv-dbg debug "
-               "module. Measurement-engine configuration and results leave on the right.", h=2620)
+               "rst_n, gpio_start_i, gpio_boot_sel_i, five JTAG wires, four flash SPI wires and "
+               "four host SPI wires. The shell contains the Ibex core, the five-master "
+               "interconnect, IMEM, the MMIO bridge with DMEM, the boot loader, the golden boot "
+               "ROM, the host SPI port and the riscv-dbg debug module. Measurement-engine "
+               "configuration and results leave on the right.", h=2700)
     c.box(190, 300, 760, 1060, "Chip pins (in)", [
         "clk", "rst_n", "gpio_start_i", "gpio_boot_sel_i", "",
         "gpio_jtag_tck_i", "gpio_jtag_tms_i", "gpio_jtag_trst_ni", "gpio_jtag_tdi_i", "",
-        "gpio_flash_miso_i"], fill=INK, lead=36)
+        "gpio_flash_miso_i", "",
+        "gpio_spi_sclk_i", "gpio_spi_cs_n_i", "gpio_spi_mosi_i"], fill=INK, lead=36)
     c.box(190, 1450, 760, 560, "Chip pins (out)", [
         "gpio_jtag_tdo_o", "gpio_boot_fail_o", "", "gpio_flash_sck_o",
-        "gpio_flash_cs_n_o", "gpio_flash_mosi_o"], fill=INK, lead=36)
+        "gpio_flash_cs_n_o", "gpio_flash_mosi_o", "",
+        "gpio_spi_miso_o", "gpio_spi_miso_oe_o"], fill=INK, lead=36)
     c.box(1120, 290, 2680, 1980, "control shell", fill=WHITE, stroke=INK, tfill=INK, head_size=30)
     c.box(1190, 390, 1180, 320, "ibex_top", [
         "RV32IMC + Zicsr, 3-stage", "RV32MFast multiplier", "latch regfile for ASIC"],
@@ -133,20 +136,23 @@ def control_shell_block():
     c.box(2500, 390, 1220, 320, "dmi_jtag  +  dm_top", [
         "TAP + DTM, IDCODE 0x14341001", "DM at 0x1A11_0000", "SBA is a full bus master"],
         fill=PURPLE, tfill=INK)
-    c.box(1190, 800, 2530, 230, "agriasic_rv32i_bus   -   4 masters / 4 targets", [
-        "priority   M1 core-data  >  M2 debug-SBA  >  M3 boot-loader  >  M0 core-fetch"],
-        fill=GREEN, tfill=INK)
+    c.box(1190, 800, 2530, 230, "agriasic_rv32i_bus   -   5 masters / 4 targets", [
+        "priority   M1 core-data  >  M2 debug-SBA  >  M4 host-SPI  >  M3 boot-loader  >  M0 core-fetch"],
+        fill=GREEN, tfill=INK, line_size=18)
     c.box(1190, 1120, 780, 300, "agriasic_imem", [
         "1 KiB, 256 x 32", "writable: shadow-load target", "and JTAG patch target"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2030, 1120, 820, 300, "agriasic_rv32i_mmio", [
-        "64 B peripheral window", "instantiates agriasic_dmem", "512 B, 128 x 32"],
+        "64 B peripheral window", "instantiates agriasic_dmem", "384 B, 96 x 32"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2910, 1120, 810, 300, "agriasic_spi_boot", [
         "golden ROM or SPI flash", "header + CRC-32 check", "then a firmware peripheral"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2910, 1470, 810, 200, "agriasic_boot_rom", ["148 words, constant table"],
         fill=RED, tfill=INK, head_size=24)
+    c.box(1190, 1470, 1660, 200, "agriasic_spi_host", [
+        "bus master M4   -   DMEM + MMIO only, never IMEM or the debug module"],
+        fill=PURPLE, tfill=INK, head_size=24, line_size=18)
     c.box(1190, 1730, 2530, 430, "Three reset domains", [
         "rst_n_sync   ->  dm_top, dmi_jtag            debug survives everything",
         "sys_rst_n    ->  MMIO bridge, result latches  adds  && !ndmreset",
@@ -257,14 +263,16 @@ def ibex_boot_image_map():
 # --------------------------------------------------------------- 6.15 the bus
 def rv32i_bus_block():
     c = Canvas("agriasic_rv32i_bus",
-               "Section 6.15 - four masters, four targets, fixed priority, per-master permissions",
+               "Section 6.15 - five masters, four targets, fixed priority, per-master permissions",
                "Interconnect block diagram. Masters in priority order: M1 the core data port, M2 "
-               "the debug system-bus-access master, M3 the boot loader, M0 the core fetch port. "
+               "the debug system-bus-access master, M4 the host SPI port, M3 the boot loader, "
+               "M0 the core fetch port. "
                "Targets: IMEM at 0x0000_0000, DMEM and MMIO at 0x0001_0000 and 0x8000_0000, the "
                "debug module at 0x1A11_0000, and an error responder for everything else. Each "
                "master reaches only the targets its permissions allow.")
     masters = [("M1", "core data port", "IMEM  -  DMEM/MMIO  -  DM", BLUE),
                ("M2", "debug SBA", "IMEM  -  DMEM/MMIO          (DM -> error)", PURPLE),
+               ("M4", "host SPI port", "DMEM/MMIO only              (else -> error)", PURPLE),
                ("M3", "boot loader", "IMEM only                   (else -> error)", ORANGE),
                ("M0", "core fetch", "IMEM  -  DM                 (else -> error)", GREEN)]
     y = 440
@@ -273,14 +281,14 @@ def rv32i_bus_block():
               head_size=26, line_size=18, line_fill=GREY)
         c.arrow(1420, y + 115, 1780, y + 115, INK)
         y += 300
-    c.box(1780, 440, 980, 1330, "decode  +  arbitrate", [
+    c.box(1780, 440, 980, 1630, "decode  +  arbitrate", [
         "", "fixed priority, highest first:", "", "    M1   core data", "    M2   debug SBA",
-        "    M3   boot loader", "    M0   core fetch", "",
+        "    M4   host SPI", "    M3   boot loader", "    M0   core fetch", "",
         "permissions are enforced in", "the decode, not merely", "documented: a master that",
         "reaches outside its own set", "gets a bus error, never a", "silent wrong access"],
         fill=INK, head_size=28, line_size=19, lead=30)
     targets = [("IMEM", "0x0000_0000", "1 KiB", ORANGE),
-               ("DMEM  +  MMIO", "0x0001_0000  /  0x8000_0000", "512 B  +  64 B", ORANGE),
+               ("DMEM  +  MMIO", "0x0001_0000  /  0x8000_0000", "384 B  +  64 B", ORANGE),
                ("Debug module", "0x1A11_0000", "4 KiB", PURPLE),
                ("error   (no target)", "anything else", "bus error -> precise trap", RED)]
     y = 440
@@ -289,10 +297,14 @@ def rv32i_bus_block():
         c.box(3120, y, 1640, 230, name, ["%s          %s" % (addr, size)], fill=col, tfill=INK,
               head_size=26, line_size=18, line_fill=GREY)
         y += 300
-    c.note(1930, "A bus error is not a segmentation fault - there is no OS and no MMU here. The "
+    c.note(2230, "A bus error is not a segmentation fault - there is no OS and no MMU here. The "
                  "target returns err, Ibex takes it as a precise load/store access fault, and the")
-    c.note(1980, "trap handler sets CTRL.TRAP_SEEN. The regression asserts that bit never fires, "
+    c.note(2280, "trap handler sets CTRL.TRAP_SEEN. The regression asserts that bit never fires, "
                  "and the instrumented memory audit records zero accesses outside the map.")
+    c.note(2350, "Starvation freedom is an ASSUMPTION, not a property: M0 (fetch) is bottom "
+                 "priority and is safe only because every master above it is intermittent by")
+    c.note(2400, "construction - host SPI paced by SCLK <= f_clk/16, SBA paced by DMI, boot runs "
+                 "with the core held, and the data port cannot run back-to-back without fetching.")
     c.save("rv32i_bus_block_diagram.svg")
 
 
@@ -339,7 +351,7 @@ def imem_dmem_timing():
                "clock edge while ce_i is high. On a write cycle the addressed byte lanes are "
                "written and dout_o holds its previous value. On a read cycle dout_o is valid the "
                "following cycle. dout_o also holds whenever ce_i is low. This is the no-change "
-               "output policy a foundry SRAM compiler macro provides.", h=2400)
+               "output policy a foundry SRAM compiler macro provides.", h=2500)
     c.box(260, 380, 1080, 840, "Inputs", [
         "clk", "ce_i            chip enable", "addr_i          word address",
         "we_i[3:0]       byte write enables", "din_i[31:0]     write data"],
@@ -365,11 +377,12 @@ def imem_dmem_timing():
         for x, v in zip(xs, r):
             c.text(x, 1620 + i * 130, v, 20, GREY)
     c.box(260, 2130, 4480, 190, "Instantiated vs used", [
-        "IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  512 B (128 x 32)     "
-        "100 B used"], fill=ORANGE, tfill=INK, head_size=24, line_size=19)
-    c.note(2350, "No SRAM compiler is available, so these are standard-cell flop arrays: "
-                 "both the flops and the NUM_WORDS:1 read mux scale with depth, and that mux "
-                 "sits in the fetch path.")
+        "IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  384 B (96 x 32)     "
+        "224 B results  +  48 B stack"], fill=ORANGE, tfill=INK, head_size=24, line_size=19)
+    c.note(2350, "No SRAM compiler is available, so these are standard-cell LATCH arrays "
+                 "(AGRIASIC_FLOP_MEM selects flops instead, at +28 kGE): both the storage and "
+                 "the NUM_WORDS:1 read mux scale with depth, and that mux sits in the fetch "
+                 "path, so depth costs timing as well as area.")
     c.save("imem_dmem_timing_contract.svg")
 
 
@@ -433,10 +446,13 @@ def mmio_register_map():
                     "host abort rescued the engine and left the processor asleep forever. The two "
                     "stay SEPARATE bits so that \"woken\" never implies \"a result is ready\": "
                     "firmware checks ABORTED before reading the shadow registers.")
-    c.note(y + 310, "The ABORTED term is gated on NOT fw_done and NOT trap_seen: the wake is level "
-                    "sensitive, so an abort arriving after the core parked would hold it high with "
-                    "nothing left to clear it and spin park: wfi forever. Only the wake is gated - "
-                    "STATUS b8 still reports ABORTED to the host.")
+    c.note(y + 310, "BOTH terms are gated on NOT fw_done and NOT trap_seen: the wake is level "
+                    "sensitive, so a latch arriving - or surviving - after the core parked holds "
+                    "it high with nothing left to clear it and spins park: wfi forever. done is "
+                    "the one that bites every run, since meas_done_q clears only on reset or a")
+    c.note(y + 360, "fresh start, so it survives the last point into the park loop: measured "
+                    "core_sleep 0 of 2000 cycles after FW_DONE before the gate, 2000 of 2000 "
+                    "after. Only the wake is gated - STATUS still reports DONE and b8 ABORTED.")
     c.save("mmio_register_map.svg")
 
 
@@ -911,7 +927,7 @@ def spi_host_block():
                "bytes; a framing state machine turns command plus address plus data into bus "
                "transactions on master port M4. Permissions are enforced in the interconnect: M4 "
                "reaches DMEM and the peripheral window only, never IMEM and never the debug "
-               "module.", h=2700)
+               "module.", h=2760)
     c.box(200, 320, 820, 420, "Host SPI pads", [
         "gpio_spi_sclk_i     in", "gpio_spi_cs_n_i     in", "gpio_spi_mosi_i     in",
         "gpio_spi_miso_o     out", "gpio_spi_miso_oe_o  out"], fill=INK, lead=38)
@@ -965,7 +981,7 @@ def system_overview():
                "and where the analog boundary is",
                "System overview. Off-chip on the left: an SPI host, an SPI NOR flash, a JTAG "
                "debugger, and clock plus boot straps. On the die: the Ibex core with its "
-               "instruction and data memories behind a four-master interconnect, the boot "
+               "instruction and data memories behind a five-master interconnect, the boot "
                "loader and golden ROM, the debug module, and the host SPI port. The "
                "measurement engine runs the excitation and conversion sequence in hardware. On "
                "the right, the analog front end drives a four-electrode soil probe.",
@@ -996,7 +1012,7 @@ def system_overview():
         "RISC-V Debug 0.13", "SBA is a bus master", "halt / resume / patch"],
         fill=PURPLE, tfill=INK, head_size=26)
 
-    c.box(1020, 730, 2460, 220, "agriasic_rv32i_bus   -   4 masters, permission-checked", [
+    c.box(1020, 730, 2460, 220, "agriasic_rv32i_bus   -   5 masters, permission-checked", [
         "priority  M1 core-data > M2 debug-SBA > M4 host-SPI > M3 boot > M0 core-fetch"],
         fill=GREEN, tfill=INK, head_size=26, line_size=19)
 
@@ -1004,7 +1020,7 @@ def system_overview():
         "1 KiB, 256 x 32", "LATCH array", "writable: patchable"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(1870, 1020, 780, 300, "agriasic_rv32i_mmio", [
-        "64 B register window", "+ agriasic_dmem", "512 B, 128 x 32, latch"],
+        "64 B register window", "+ agriasic_dmem", "384 B, 96 x 32, latch"],
         fill=ORANGE, tfill=INK, head_size=24)
     c.box(2740, 1020, 740, 300, "agriasic_spi_host", [
         "bus master M4", "DMEM + MMIO only", "never IMEM or DM"],

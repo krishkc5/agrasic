@@ -2,7 +2,7 @@
 // Module: agriasic_rv32i_bus
 // Purpose:
 //   Interconnect for the Ibex control core and the RISC-V debug module.
-//   Three OBI-style masters, three one-cycle slaves, fixed-priority
+//   Five OBI-style masters, three one-cycle slaves, fixed-priority
 //   arbitration with grant back-pressure.
 //
 // Why it exists (Phase 2, debug):
@@ -14,8 +14,8 @@
 //   memories to load firmware. So the map is now flat and non-overlapping:
 //
 //     0x0000_0000 - 0x0000_0FFF  IMEM   fetch; programming reads/writes
-//     0x0001_0000 - 0x0001_07FF  DMEM   } one slave: agriasic_rv32i_mmio,
-//     0x8000_0000 - 0x8000_001F  MMIO   } which decodes RAM vs peripherals
+//     0x0001_0000 - 0x0001_017F  DMEM   } one slave: agriasic_rv32i_mmio,
+//     0x8000_0000 - 0x8000_003F  MMIO   } which decodes RAM vs peripherals
 //     0x1A11_0000 - 0x1A11_0FFF  DM     debug module (dm_top slave port)
 //     everything else            bus error (Ibex: access-fault trap;
 //                                          SBA: sberror)

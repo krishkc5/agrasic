@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2700" viewBox="0 0 5000 2700" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2760" viewBox="0 0 5000 2760" role="img" aria-labelledby="t d">
   <title id="t">agriasic_spi_host - the host SPI port (bus master M4)</title>
   <desc id="d">Host SPI port. Four pads carry a mode-0 SPI slave: the host drives SCK, CS_N and MOSI and reads MISO. spi_slave oversamples them into the core clock and hands up bytes; a framing state machine turns command plus address plus data into bus transactions on master port M4. Permissions are enforced in the interconnect: M4 reaches DMEM and the peripheral window only, never IMEM and never the debug module.</desc>
   <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
-  <rect width="5000" height="2700" fill="#fff"/>
+  <rect width="5000" height="2760" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_spi_host - the host SPI port (bus master M4)</text>
   <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.24 - an external host reads results out of DMEM while the core sleeps</text>
-  <rect x="80" y="180" width="4840" height="2400" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="80" y="180" width="4840" height="2460" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
   <rect x="200" y="320" width="820" height="420" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="226" y="362" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Host SPI pads</text>
   <text x="226" y="402" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">gpio_spi_sclk_i     in</text>

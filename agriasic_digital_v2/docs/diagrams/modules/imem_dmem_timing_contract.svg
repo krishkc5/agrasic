@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2400" viewBox="0 0 5000 2400" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="2500" viewBox="0 0 5000 2500" role="img" aria-labelledby="t d">
   <title id="t">agriasic_imem / agriasic_dmem timing contract</title>
   <desc id="d">Timing contract for the memory wrappers. The address is captured on the rising clock edge while ce_i is high. On a write cycle the addressed byte lanes are written and dout_o holds its previous value. On a read cycle dout_o is valid the following cycle. dout_o also holds whenever ce_i is low. This is the no-change output policy a foundry SRAM compiler macro provides.</desc>
   <defs><marker id="mb" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1565C0"/></marker><marker id="mg" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#1B5E20"/></marker><marker id="mo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#E65100"/></marker><marker id="mp" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#7B1FA2"/></marker><marker id="mr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#B71C1C"/></marker><marker id="mk" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#212121"/></marker><marker id="my" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#616161"/></marker></defs>
-  <rect width="5000" height="2400" fill="#fff"/>
+  <rect width="5000" height="2500" fill="#fff"/>
   <text x="120" y="95" font-family="Arial" font-size="38" font-weight="700" fill="#212121">agriasic_imem / agriasic_dmem timing contract</text>
   <text x="120" y="140" font-family="Arial" font-size="22" fill="#616161">Section 6.16 - one-cycle synchronous SRAM with a no-change output policy</text>
-  <rect x="80" y="180" width="4840" height="2100" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
+  <rect x="80" y="180" width="4840" height="2200" rx="12" fill="#F5F5F5" stroke="#444" stroke-width="2"/>
   <rect x="260" y="380" width="1080" height="840" rx="10" fill="#212121" stroke="#212121" stroke-width="2"/>
   <text x="286" y="422" font-family="Arial" font-size="28" font-weight="700" fill="#fff" xml:space="preserve">Inputs</text>
   <text x="286" y="462" font-family="Arial" font-size="19" fill="#fff" xml:space="preserve">clk</text>
@@ -53,6 +53,6 @@
   <text x="3100" y="1880" font-family="Arial" font-size="20" fill="#616161" xml:space="preserve">HOLDS</text>
   <rect x="260" y="2130" width="4480" height="190" rx="10" fill="#FFE0B2" stroke="#FFE0B2" stroke-width="2"/>
   <text x="286" y="2172" font-family="Arial" font-size="24" font-weight="700" fill="#212121" xml:space="preserve">Instantiated vs used</text>
-  <text x="286" y="2212" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  512 B (128 x 32)     100 B used</text>
-  <text x="120" y="2350" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">No SRAM compiler is available, so these are standard-cell flop arrays: both the flops and the NUM_WORDS:1 read mux scale with depth, and that mux sits in the fetch path.</text>
+  <text x="286" y="2212" font-family="Arial" font-size="19" fill="#212121" xml:space="preserve">IMEM  1 KiB (256 x 32), writable     592 B used        DMEM  384 B (96 x 32)     224 B results  +  48 B stack</text>
+  <text x="120" y="2350" font-family="Arial" font-size="22" fill="#616161" xml:space="preserve">No SRAM compiler is available, so these are standard-cell LATCH arrays (AGRIASIC_FLOP_MEM selects flops instead, at +28 kGE): both the storage and the NUM_WORDS:1 read mux scale with depth, and that mux sits in the fetch path, so depth costs timing as well as area.</text>
 </svg>

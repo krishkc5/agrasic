@@ -48,7 +48,7 @@ Three partitions:
 | Region               | Base            | Size  | Reachable by                        |
 | -------------------- | --------------- | ----- | ----------------------------------- |
 | IMEM                 | `0x0000_0000` | 1 KiB | fetch, data, debug SBA, boot loader |
-| DMEM                 | `0x0001_0000` | 512 B | data, debug SBA, host SPI           |
+| DMEM                 | `0x0001_0000` | 384 B | data, debug SBA, host SPI           |
 | Debug module         | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data             |
 | Peripheral registers | `0x8000_0000` | 64 B  | data, debug SBA, host SPI           |
 | anything else        | —              | —    | bus error → precise trap           |
@@ -127,8 +127,13 @@ Ibex takes as a precise fault — **not a segfault; there is no OS and no MMU.**
 
 ![imem_dmem_timing_contract](diagrams/modules/imem_dmem_timing_contract.svg)
 
-IMEM **1 KiB (256 × 32)**, DMEM **512 B (128 × 32)**, sized to measured use
-(592 B image, 100 B data) rather than round numbers.
+IMEM **1 KiB (256 × 32)**, DMEM **384 B (96 × 32)**, sized to measured use
+rather than round numbers. DMEM was 128 × 32 while the firmware's result block
+sat at offset `0x100`; relocating that block to offset 0 for the 8-point sweep
+freed 32 words, so the array dropped to 96 — 1024 latch bits and a 128:1 → 96:1
+read mux. 96 is not a power of two, which is safe because the bridge's
+`ram_sel` is an arithmetic compare against `RAM_WORDS*4`, not an address mask:
+anything above `0x180` returns `data_err` and traps rather than aliasing.
 
 **There is no SRAM compiler**, so these are standard-cell **latch arrays** —
 `AGRIASIC_FLOP_MEM` selects flops instead at a cost of 28 kGE. The write path
@@ -204,7 +209,7 @@ rewrite its own flash.
 
 ![boot_rom_generation_flow](diagrams/modules/boot_rom_generation_flow.svg)
 
-136 words emitted as a constant `case` table — **no ROM compiler needed**;
+148 words emitted as a constant `case` table — **no ROM compiler needed**;
 synthesis maps it to ~1,000 gates. Promotion is explicit (`gen_boot_rom.py --promote`), never a side effect of a build, and the generator keeps the word
 count in step in all four places it is declared — `agriasic_spi_boot`'s copy is
 a module default the shell always overrides, which is precisely why it had
@@ -328,10 +333,15 @@ full power forever. An abort only needs to wake a core that is **waiting** for
 a measurement. Only the wake is gated — `STATUS[8]` still reports ABORTED to
 the host.
 
-Firmware is **542 B**, no heap, no libc, 48 B of stack. Results land in DMEM at
-`0x100`–`0x16B`, each point stored with the `AFE_CTRL` value and overrange flags
-it was measured under — without those a host cannot compute `Z` correctly, since
-the two channels have independent gains that do not cancel in the ratio.
+Firmware is **592 B**, no heap, no libc, 48 B of stack. Results land in DMEM at
+`0x000`–`0x0DF`: eight arrays-of-8 (`OUT_DIV`, `OUT_DV_I`, `OUT_DV_Q`,
+`OUT_CUR_I`, `OUT_CUR_Q`, `OUT_AFE`) at 0x20 strides, preceded by `OUT_COUNT`,
+`OUT_NUM_POINTS` and `OUT_TEMP`. Each point is stored with the `AFE_CTRL` value
+and overrange flags it was measured under — without those a host cannot compute
+`Z` correctly, since the two channels have independent gains that do not cancel
+in the ratio. The arrays are a full 8 words apart and `fw.c` carries
+`_Static_assert`s on the stride: the previous 4-word packing would have let
+`OUT_DIV[4]` overwrite `OUT_DV_I[0]` silently at five points.
 
 Measurement sequence: [`agriasic_digital_v2_measurement_sequence.puml`](agriasic_digital_v2_measurement_sequence.puml) — updated for Rev 5 and Ibex.
 The rendered `.svg` beside it is **stale** (it still shows the single-channel

@@ -22,10 +22,10 @@
   - agriasic_digital_timing_checklist.md
   - interface_contract.md
 - **Post-v0.14 note — Ibex core swap.** The Penn CIS 5710 RV32IM core described in sections 8.1/DR-023 (`core_clk_en`) and the Phase 2.2 rows below has been replaced by lowRISC Ibex (RV32IMC+Zicsr, 3-stage). `core_clk_en` no longer exists: the core sleeps in `wfi` during a measurement and is woken by the DONE latch on `irq_fast[0]` with no trap taken; `core_sleep_o` is exported and the clock is still not gated, so DR-023's intent (no gated clock) holds. `ecall` is replaced by `CTRL.FW_DONE` (bit 8); `CTRL.TRAP_SEEN` (bit 9) and STATUS bits 5/6 (`trap_seen`, `fw_done`) are new; the MMIO bridge now fully decodes addresses and returns a bus error (trap) outside RAM/MMIO. Reset vector is `0x80` with a 32-entry vector table at `0x0`. The debug-module window `0x1A11_0000` is reserved. See `agriasic_digital_v2/README.md`, "Processor provenance", and `rtl/ibex/VENDOR.md`. Sections referring to `DatapathPipelined`, `core_clk_en` or the 77-test cocotb ISA regression describe the retired core.
-- **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (1 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (512 B; firmware `SP = 0x0001_0200`, results at `0x0001_0100..0x0001_016B` — section 7.1's scratch-RAM offsets are unchanged relative to the RAM base), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets the core, the peripheral bridge and the measurement engine — not the debug module or the boot loader. GAP-11 (host-visible results) had a bench-level answer here — results are readable over JTAG (`fw/openocd_agriasic.cfg`) — and the deployed SPI path is now built too (section 6.24). Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
+- **Post-v0.14 note — debug module (Phase 2).** pulp `riscv-dbg` (JTAG DTM + Debug Module, Debug Spec 0.13) is integrated behind five new chip pins `jtag_tck_i/tms_i/trst_ni/tdi_i/tdo_o` (IDCODE `0x14341001`). A new interconnect `agriasic_rv32i_bus.sv` gives a single flat map: IMEM `0x0000_0000` (1 KiB, now writable so OpenOCD can `load`), **DMEM relocated from `0x0` to `0x0001_0000`** (384 B since the 8-point relayout; firmware `SP = 0x0001_0180`, taken from `link.ld`'s `_stack_top`; results at `0x0001_0000..0x0001_00DF` — see section 7.1), DM `0x1A11_0000`, MMIO `0x8000_0000` (unchanged). Out-of-map accesses are bus errors on every master. `dmcontrol.ndmreset` resets the core, the peripheral bridge and the measurement engine — not the debug module or the boot loader. GAP-11 (host-visible results) had a bench-level answer here — results are readable over JTAG (`fw/openocd_agriasic.cfg`) — and the deployed SPI path is now built too (section 6.24). Verified by `tb_agriasic_jtag.sv` (stage 13 of `verify_all.sh`).
 - **Post-v0.14 note — restart handling: abort, start rejection, and the engine's reset domain.** Restarting a measurement had three separate problems, all of which could present a stale result as a fresh one. (1) The sequencer only samples `start` in `S_IDLE`, so a `CTRL.START` arriving mid-run did nothing and left no trace; firmware could not tell "restarted" from "ignored". Such a write is now **rejected explicitly** and sets the sticky `STATUS[7]` start-rejected flag, cleared by `CTRL.clear_err`. (2) There was no way to cut a run short at all. `CTRL` bit 1 is now a real **abort**: it forces `measurement_fsm` *and* `sar_controller` back to `S_IDLE` and clears `busy`, while emitting **no** `done` pulse and no interrupt, so an aborted run can never be read back as a completed one. Aborting the SAR too is not redundant — a conversion left in flight would otherwise run to completion and pulse `sample_done` after the sequencer had gone idle, where the next run would consume it as its own first sample. The accumulators are cleared by the next start rather than by the abort, so the last complete result stays readable. Because abort produces no `done`, it cannot wake a core parked in `wfi`, which makes it a host- and debugger-side control rather than part of the firmware's wait path. **Abort wins over start when a single write asserts both** — without that term the two disagreed, the bridge taking the abort branch and leaving `busy` clear while the sequencer, which only honours abort outside `S_IDLE`, accepted the start: the engine would have run with `STATUS` reporting idle. The dropped start is flagged in `STATUS[7]` rather than lost. **The abort also has to WAKE the core.** Abort deliberately emits no `done`, and the wake source was `done` alone, so a host abort left firmware asleep in `wfi` forever with the sweep half finished — the abort rescued the engine and stranded the processor. The wake is now `done || aborted` (`meas_wake_irq_o`, renamed from `meas_done_irq_o` because a signal called *done* that also fires on abort is exactly the misleading name this class of bug comes from). The two stay **separate status bits** so that "the core woke" never implies "a fresh result is ready": `STATUS[8]` is a sticky ABORTED flag, and firmware checks it before reading the shadows. Without that separation the bug would simply move into the firmware — `run_one_measurement()` would wake, pass its `busy` guard, and average the *previous* point's I/Q into the current one. Firmware now treats an abort as a command to stand down: it abandons the point, reports the number of points actually completed in `OUT_NUM_POINTS` (previously the constant 3), clears the sticky bit so the level-sensitive wake cannot keep its park `wfi` spinning, and exits through its normal `FW_DONE` path. The wake's ABORTED term is additionally **gated on `!fw_done && !trap_seen`**, which covers the case firmware cannot: an abort arriving *after* the core has parked would otherwise hold a level-sensitive line high with nothing left to clear it — firmware has run its clear path for the last time — so `park: wfi; j park` would spin at full power forever, destroying the 99.98 % sleep the power budget rests on. An abort only ever needs to wake a core that is *waiting* for a measurement. Only the wake is gated; `STATUS[8]` still reports ABORTED to the host, and `ndmreset` clears `fw_done`, so a restarted firmware wakes normally. The golden boot ROM was re-promoted so the gate-level fallback image carries this too — it is the image that runs when flash boot fails, which is exactly when a host would need abort to work. **A pre-freeze review of the handoff contracts then found the same stale-result hole still open on the `core_rst` path.** `run_clear_i` is `core_rst`, and it clears only the firmware-owned `FW_DONE`/`TRAP_SEEN` bits — the engine and the bridge's `meas_busy_q`/`meas_done_q` deliberately survive a core reset so a debugger can still read results. So firmware can come up with a measurement still in flight from its previous incarnation: its first `CTRL.START` is rejected as busy, it sleeps, and it wakes on the *old* run's completion and stores that as point 0. Measured in `tb_abort_wake` scenario F, the stale result is worse than merely old — it arrived after only 15,143 cycles rather than the ~1M a 1 kHz run needs, because **the config registers are live-wired into the engine** and firmware's `REG_DIVIDER = 1` retuned the run in flight. The point would have been settled at one frequency and sampled at another. The fix is one line of **firmware**, not RTL: init writes `CTRL.ABORT | CTRL.CLEAR_ERR` before it configures anything, so the engine is forced to `S_IDLE` and `busy` cleared whatever the previous incarnation left behind. Both RTL alternatives are traps and were rejected: aborting the engine on `core_rst` alone leaves `meas_busy_q` stuck at 1 with no `done` ever coming, so every later start is rejected — **a genuine deadlock**; extending `run_clear` alone is worse than nothing, because the start is then accepted, the engine ignores it, and the stale wake arrives with no warning flag. They would have to land together with priority ordering against `ctrl_start_write`, for no benefit over the firmware line. The standing rule that follows: **do not write the engine's config registers while it is busy** — they take effect immediately. Firmware now aborts first; a host driving the engine directly must do the same. Three further contracts were hardened in the same review. (a) `S_DONE` was the only state in the design whose exit depended on an external signal (`if (!start_i) state_d = S_IDLE`), a leftover from when start was a level. It now advances unconditionally: a held start would otherwise have pinned the FSM there for as long as it was held, and a start landing exactly in the `S_DONE` cycle would have been swallowed — the FSM stays put, the pulse is gone by the time it reaches `S_IDLE` — while the bridge's sticky DONE stayed latched, so firmware would wake at once and read the *previous* run's result. A no-op in normal operation, since `start_pulse_o` is a registered single-cycle decode and `start_i` is always already low there. (b) The boot SPI engine's `eng_div == 0` is safe, but **by idiom rather than by guard**: it compares `div_cnt_q == eng_div` from zero, so 0 means toggle-every-cycle and a match always occurs within `eng_div+1`. `excitation_ctrl` compares against `divider - 1` and therefore needs its explicit N=0 guard to avoid underflowing to all-ones. Both are now commented, because copying the excitation pattern into the SPI engine would turn zero into a hang of firmware's `SPI_STATUS.busy` poll. (c) The interconnect is deadlock-free structurally — `rvalid` is an unconditional registered copy of `gnt`, so no master can be granted and then abandoned — but freedom from *starvation* rests on an assumption now written into the header: M0 (fetch) is bottom priority and is safe only because every master above it is intermittent by construction (host SPI paced by SCLK <= f_clk/16, SBA paced by DMI, boot runs with the core held, and the core's data port cannot run back-to-back without fetching the instructions that issue the accesses). A sixth master above M0 with a high duty cycle would starve the fetch port and nothing would stop it. (3) The engine sat on `rst_n_sync` while the MMIO bridge that reports it sat on `sys_rst_n`, so a debugger's `ndmreset` cleared `busy`/`done` while the engine kept sequencing, and the run's eventual completion set `done` in a bridge that had never seen a start. The engine is now on **`sys_rst_n`** — the general rule being that **a block and whatever reports its state belong to the same reset domain**. Verified by `tb_agriasic_spi_host.sv` scenario G (twelve checks: reject flagged, abort clears busy without faking a done, both FSMs back in `S_IDLE`, restartable afterwards, and a combined start+abort write neither starts the engine nor loses the flag) by `tb_agriasic_jtag.sv` stage 7, which now starts a measurement and confirms the sequencer has actually left `S_IDLE` before asserting `ndmreset`, so the check cannot pass vacuously against an idle engine; and by the new `tb_abort_wake.sv` (stage 16), which aborts the **1 kHz** point over the host SPI port and checks the core leaves `wfi` and the firmware loop finishes cleanly. Two things that test had to get right: the abort must target a long run, because a `write32` over SPI takes ~1500 core cycles while a 10 MHz measurement finishes in ~1350 and would complete before the abort arrived; and the observations must be **latched rather than polled**, because the firmware wakes, abandons the point, clears the sticky bit and re-parks faster than the SPI transaction that delivered the abort can finish. Its scenario E covers the mirror-image hazard, aborting an already-parked core and holding it for 2,000 cycles to prove it stays asleep. Neither half is vacuous: reverting the wake to `done` alone makes it fail on the stranded-in-`wfi` timeout, and removing the `fw_done` gate makes scenario E fail on the woken-and-spinning core.
 - **Post-v0.14 note — host SPI port, GAP-11 CLOSED.** `agriasic_spi_host.sv` gives an external host its own bus master port (**M4**) behind four pads (`gpio_spi_sclk_i/cs_n_i/mosi_i`, `gpio_spi_miso_o/miso_oe_o`), kept separate from the flash port because the two run opposite directions on every wire. The host reads a finished sweep straight out of DMEM **while the core is parked in `wfi`** — no firmware cooperation, no mailbox protocol. Permissions are enforced in the interconnect decode: M4 reaches DMEM and the peripheral window only, never IMEM (so a field host cannot overwrite firmware) and never the debug module (so it cannot take debug control). Arbitration is `M1 > M2 > M4 > M3 > M0`. Cost, measured: **+218 flops and +1,242 combinational primitives**, about 1.4% of the design. Digital pads go 14 → 18. Section 6.24 has the protocol; verified by `tb_agriasic_spi_host.sv` (stage 15 of `verify_all.sh`), which reads real measurement results over SPI and confirms both refusals raise a visible sticky error.
-- **Post-v0.14 note — no SRAM compiler: memories shrunk and built from flops.** The project has no SRAM compiler available, so `agriasic_imem` and `agriasic_dmem` are standard-cell flop arrays rather than macros. Two measurements drove a resize. First, both the flops *and* the read mux scale with depth: with the memories inferred as flops, IMEM 4 KiB + DMEM 2 KiB cost **52,941 flops and 85,448 combinational cells** (138,391 total), against 3,726 + 28,565 with them blackboxed. Second, the read mux is now in the instruction-fetch critical path, where an SRAM macro would have had a specified access time — so depth costs timing as well as area. **IMEM is therefore 256 x 32 (1 KiB) and DMEM 128 x 32 (512 B)**, built from **latches** rather than flops (section 6.16: 153 kGE against 181 kGE), sized to the measured 592 B image and 100 B data footprint rather than to round numbers, with the firmware stack pointer moved to `0x0001_0200`. 512 B is the DMEM floor without relocating the result block, which occupies `0x100..0x16B`. The wrappers keep the `AGRIASIC_USE_SRAM_MACRO` hook and the one-cycle timing contract of section 6.16 unchanged, so a macro can still drop in if one becomes available. The golden ROM was re-promoted because the image now carries the new stack pointer. The boot ROM was always a synthesized constant table and never needed a compiler.
+- **Post-v0.14 note — no SRAM compiler: memories shrunk and built from flops.** The project has no SRAM compiler available, so `agriasic_imem` and `agriasic_dmem` are standard-cell flop arrays rather than macros. Two measurements drove a resize. First, both the flops *and* the read mux scale with depth: with the memories inferred as flops, IMEM 4 KiB + DMEM 2 KiB cost **52,941 flops and 85,448 combinational cells** (138,391 total), against 3,726 + 28,565 with them blackboxed. Second, the read mux is now in the instruction-fetch critical path, where an SRAM macro would have had a specified access time — so depth costs timing as well as area. **IMEM is therefore 256 x 32 (1 KiB) and DMEM 96 x 32 (384 B)**, built from **latches** rather than flops (section 6.16: 153 kGE against 181 kGE), sized to the measured image and data footprint rather than to round numbers, with the firmware stack pointer at `0x0001_0180` (from `link.ld`'s `_stack_top`). DMEM was 128 x 32 (512 B) while the result block sat at `0x100..0x16B`; relocating that block to offset 0 for the 8-point sweep freed 32 words, so DMEM dropped to 96 — **1024 latch bits and a 128:1 -> 96:1 read mux**. 96 is not a power of two, which is safe here because `agriasic_rv32i_mmio`'s `ram_sel` is an arithmetic compare against `RAM_WORDS*4`, not an address mask: anything above `0x180` returns `data_err` and traps rather than aliasing. The wrappers keep the `AGRIASIC_USE_SRAM_MACRO` hook and the one-cycle timing contract of section 6.16 unchanged, so a macro can still drop in if one becomes available. The golden ROM was re-promoted because the image now carries the new stack pointer. The boot ROM was always a synthesized constant table and never needed a compiler.
 - **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && gpio_start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
 - **Post-v0.14 note — golden boot ROM (default boot source).** The IMEM SRAM is shadow-loaded at reset from one of two sources selected by the `BOOT_SEL` strap (latched on the first cycle out of reset): **0 = on-die synthesized golden ROM** (`agriasic_boot_rom.sv`, generated from `fw/golden/agriasic_fw_golden.hex`, ~150 cycles), 1 = external SPI flash (~80k cycles, header + CRC-32). The core always fetches from the SRAM, never from the ROM: nothing is added to the fetch path's timing, firmware is linked once for both sources, and **IMEM stays writable after a ROM boot** so a debugger can patch constants over JTAG without a rebuild or reflash — the reason this is a shadow-load rather than a fetch-path mux. `BOOT_CTRL[2]` re-boots from ROM, `[1]` from flash; `BOOT_STATUS[13:12]` reports the source actually used. ROM cost: +1,027 combinational primitives, +6 flops (a writable array of the same depth would be 4,736 storage bits). The golden image is promoted explicitly (`gen_boot_rom.py --promote`), never by `build.sh`, and its provenance is recorded in `fw/golden/GOLDEN.md`. Option A of the memory recommendation (fixed firmware in ROM) and Option C (flash boot) therefore both exist, strap-selectable.
 - **Post-v0.14 note — voltage-sense gain fixed, PGA control removed.** Analog review concluded the diff PGA does not need programmable gain. In a voltage-driven tetrapolar measurement dV = V_drive x (R23/R_total), and both resistances scale with soil resistivity, so the ratio is set by **electrode geometry, not conductivity** — the voltage channel has little dynamic range. The **current** channel carries it (I = V_drive/R_total, 3-4 decades across the soil range), so the TIA keeps its programmable Rf and its three switch wires. `afe_pga_gain_o` is deleted from the MMIO, shell and chip top, and **`AFE_CTRL[1:0]` is retired with it** rather than left as an inert field — a register bit that does nothing is the placeholder problem GAP-10 exists to clean up. `AFE_CTRL[1:0]` now reads 0 and writes are ignored. These were die-internal wires, not pads, so the pad count is unchanged at 18; the saving is on the analog side (no switched gain network in the PGA). One coupling to watch: dV is a fixed fraction of the drive, so if `AFE_CTRL.amplitude` is ever reduced the voltage channel loses resolution with no gain to recover it. Verified by `tb_agriasic_spi_host.sv` scenario F, which now also confirms the retired field reads back as zero when written non-zero.
@@ -88,12 +88,19 @@ target map, `REG_PHASE_IDX`, is reserved but deliberately not wired to
 anything** — its intended semantics don't reconcile cleanly with how Phase 5
 actually built four fixed, 90-degree-spaced sample points, and building
 speculative RTL against a guessed meaning for a silicon-bound register was
-judged worse than leaving it honest (GAP-10). **Firmware now runs the real
-3-point frequency sweep** (section 7.1, Phase 7): `fw.c` writes `REG_DIVIDER`
-to N=1/100/10000 in turn (the exact same three presets `REG_FREQ_SEL`
-exposes to SPI), averages measurements at each, and stores per-point I/Q
-into scratch RAM — verified in simulation for the real 1 kHz point, not a
-stand-in value (section 10, Phase 7). Two things are honestly still open,
+judged worse than leaving it honest (GAP-10). **Firmware now runs an 8-point
+frequency sweep** (section 7.1): `fw.c`'s `sweep_divider()` writes raw N to
+`REG_DIVIDER` as 1, 10, 32, 100, 316, 1000, 3162, 10000 — a half-decade
+(sqrt 10) log ladder from 10 MHz down to 1 kHz — averages `NUM_MEASUREMENTS`
+runs at each, and stores four results per point (dV I/Q and current I/Q) into
+scratch RAM. Log spacing rather than uniform because a dielectric dispersion
+is a feature in log frequency; the earlier three points could sample one but
+never locate it. sum(N) = 14621 against the 3-point sweep's 10101, so eight
+points cost about 1.45x the runtime, not 2.7x — the 1 kHz point dominated the
+old sweep as well. Measured 4,564,339 cycles for the full sweep, all eight
+dividers verified (section 10). **`REG_FREQ_SEL`'s three presets are a legacy
+convenience on the 2-byte SPI and programming interfaces, not the sweep
+definition** — they reach 3 of the 8 points; see section 7.1. Two things are honestly still open,
 not silently skipped: temperature sensing (Phase 7.3) has no RTL to read
 from, digital or analog, anywhere in this tree; and there is no path for
 these swept results to reach a real external host on any chip variant that
@@ -337,7 +344,7 @@ Out of scope for this MAS revision:
 Excitation is a bipolar square wave across two soil electrodes. Return current
 passes through an on-die TIA into an 8-bit SAR ADC. Ionic conduction carries a
 1/w factor and fades with frequency; water-driven permittivity does not. The
-chip is meant to sweep three frequency points (Phase 7, not yet built) and, at
+chip is meant to sweep multiple frequency points (eight as built, see section 7.1) and, at
 each point, samples four phase offsets to recover the in-phase and quadrature
 components:
 
@@ -438,7 +445,7 @@ Functional split as implemented:
 
 1. **RV32IM core + ROM** — sweep program, frequency selection, settle
    intervals, M, temperature read, result packing, SPI service, sticky error
-   and reset policy. The frequency **sweep** (three points) and temperature
+   and reset policy. The frequency **sweep** (eight points as built) and temperature
    read are still `[SPEC]`, Phase 7 — today firmware sets one divider value
    and reads back one (I, Q) pair (section 3.1).
 2. **Measurement FSM** — divider load (passthrough to `excitation_ctrl`), phase
@@ -690,7 +697,7 @@ Address map the bus decodes (section 6.15 for the full rules):
 | Region | Base | Size | Reached by |
 |---|---|---|---|
 | Program memory (IMEM) | `0x0000_0000` | 1 KiB | fetch, data, SBA, boot loader |
-| Data memory (DMEM) | `0x0001_0000` | 512 B | data, SBA, host SPI |
+| Data memory (DMEM) | `0x0001_0000` | 384 B | data, SBA, host SPI |
 | Debug module | `0x1A11_0000` | 4 KiB | fetch (debug ROM), data (data0/1) |
 | Peripheral registers | `0x8000_0000` | 64 B | data, SBA, host SPI |
 | anything else | — | — | bus error → trap / `sberror` |
@@ -719,7 +726,7 @@ one with them included:
 | Configuration | Flops | Combinational | Total cells |
 |---|---:|---:|---:|
 | Memories blackboxed (an ideal macro) | 3,944 | 29,807 | — |
-| **As built**: IMEM 1 KiB + DMEM 512 B as flops | **16,296** | **43,967** | **60,264** |
+| **As built (stale)**: IMEM 1 KiB + DMEM 512 B as flops | **16,296** | **43,967** | **60,264** |
 | For comparison: the old 4 KiB + 2 KiB as flops | 52,941 | 85,448 | 138,391 |
 
 Shrinking the memories to the measured firmware footprint cut total cells
@@ -730,6 +737,21 @@ well as area.
 
 The golden boot ROM contributes ~1,027 of those combinational primitives and
 almost no registers — it is a constant table, not storage (section 6.21).
+
+**Both figures predate the 8-point relayout and have NOT been re-synthesized.**
+Two changes pull in opposite directions:
+
+- DMEM 128 -> 96 words: **-1024 latch bits**, and the read mux goes 128:1 ->
+  96:1. The mux is in the instruction-fetch path, so this is a timing saving as
+  well as an area one.
+- Golden ROM image 136 -> 148 words: **+12 words of constant table**. At the
+  measured 1,027 cells for 136 words, that is ~7.6 cells per word, so roughly
+  **+91 combinational cells** — about 0.2 % of the 43,967 above.
+
+So the relayout is expected to be net favourable, with the storage saving
+dominating a sub-percent logic cost. That is arithmetic on the old numbers, not
+a measurement: re-run `power/run_synthesis.py` before quoting an area figure
+from this section.
 
 ## 5. Defect Register
 
@@ -1330,7 +1352,7 @@ taking an interrupt. While asleep it issues no fetches, and `core_sleep_o` is
 exported for a future integrated clock gate.
 
 `clk` itself is still never gated (section 8.1's policy). Measured: the core
-sleeps for **3,154,273 of 3,155,008 cycles** of a three-point sweep — 99.98 %.
+sleeps for **4,566,224 of 4,566,339 cycles** of the eight-point sweep — 99.997 %. (The fraction improved with the point count because the added points are mostly sleep, and because the terminal park now sleeps too: it previously spun at full clock, see section 6 on the DONE wake gate.)
 
 #### Firmware completion
 
@@ -1432,7 +1454,7 @@ so a compiler macro can be dropped in without touching anything else:
 
 | | IMEM | DMEM |
 |---|---|---|
-| Depth | 256 × 32 (1 KiB) | 128 × 32 (512 B) |
+| Depth | 256 × 32 (1 KiB) | 96 × 32 (384 B) |
 
 #### Storage: latches by default, flops as the fallback
 
@@ -1681,7 +1703,7 @@ into the SRAM.
 | | |
 |---|---|
 | Depth | 256 words (1 KiB), independent of IMEM's 1024 |
-| Used | 136 words (544 B) — only these are copied |
+| Used | 148 words (592 B) — only these are copied |
 | Cost | **+1,027 combinational primitives, +6 flops** |
 | Alternative cost | 4,736 storage bits, had it been a writable array |
 
@@ -1971,7 +1993,7 @@ unresolved items noted below.
 | 0x0 | `REG_CTRL` | RW | bit0=start pulse, bit7=clear sticky protocol flags. **No core-enable bit** — see the note below |
 | 0x1 | `REG_PAIR_LOG2` | RW | M = 2^value. Constrained to 6 or less in RTL (values above clamp to 64 and set the overrange status bit) — accumulator width, section 9.3 |
 | 0x2 | `REG_SETTLE` | RW | Excitation *periods* to wait after start (section 6.1), not raw cycles |
-| 0x3 | `REG_FREQ_SEL` | RW | **2-bit selector**, not raw N: 0 -> 10 MHz (N=1), 1 -> 100 kHz (N=100), 2 -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER`; see the note below |
+| 0x3 | `REG_FREQ_SEL` | RW | **2-bit selector**, not raw N: 0 -> 10 MHz (N=1), 1 -> 100 kHz (N=100), 2 -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER` **on this interface only**. These are 3 of the firmware's 8 sweep points; the sweep itself is driven by raw N on MMIO `REG_DIVIDER` — see the note below |
 | 0x4 | `REG_PHASE_IDX` | RW | Present in the map; **writes are stored and read back, but not wired to anything** — see the note below and GAP-10 |
 | 0x5 | `REG_CONV` | RW | SAR comparator regeneration wait, per bit trial |
 | 0x6 | `REG_STATUS` | RO | bit7 protocol_err, bit6 bad_addr, bit5 illegal_ro_write, bit4 **overrange** (new), bit1 done, bit0 busy |
@@ -1980,7 +2002,11 @@ unresolved items noted below.
 | 0x9 | `REG_ID` | RO | Fixed design/revision identifier, `8'h43` |
 
 **`REG_RESULT_DATA` index mapping.** The Rev 4.3 target result set is I/Q for
-three frequency points plus temperature — 13 bytes. Only one frequency
+three frequency points plus temperature — 13 bytes. **Superseded for sweep
+results:** the firmware sweeps eight points with four results each (128 bytes),
+which this window cannot express; read the DMEM result block over the host SPI
+port or JTAG instead (section 7.1). The window is still accurate as a single
+live I/Q pair from the engine's shadow registers. Only one frequency
 point's data exists today (Phase 7's sweep isn't built, and no temperature
 sensing exists anywhere in the digital RTL):
 
@@ -2478,18 +2504,43 @@ asserted without being run.
 ### Phase 7 — Sweep policy in firmware ✅ complete (7.1/7.2/7.4), 7.3 blocked
 | Step | Work | Status |
 |---|---|---|
-| 7.1 | Three frequency points → divider N values (see [GAP-1] table) | **Done.** `fw.c` writes `REG_DIVIDER` = 1, then 100, then 10000 in sequence via `run_sweep_point()` — the exact three presets `REG_FREQ_SEL` exposes on SPI. Verified for the real N=10000 (1 kHz) point in simulation, not a stand-in value: `tb_agriasic_rv32i_e2e.sv` measures the full sweep at ~3.15M cycles, confirming the mechanism works at the actual worst-case timing, not an optimistic one |
+| 7.1 | Frequency points → divider N values (see [GAP-1] table) | **Done, and since widened from three points to eight.** `fw.c`'s `sweep_divider()` writes raw N = 1, 10, 32, 100, 316, 1000, 3162, 10000 — a half-decade log ladder, 10 MHz to 1 kHz — via `run_sweep_point()`. Three points could sample a dispersion but not locate it; log spacing because the feature is log-frequency. `REG_FREQ_SEL`'s three presets reach 3 of the 8 and are a legacy SPI convenience, not the sweep definition. Verified for the real N=10000 (1 kHz) point, not a stand-in: `tb_agriasic_rv32i_e2e.sv` measures the full sweep at 4,564,339 cycles with all eight dividers checked, so the mechanism is confirmed at the actual worst-case timing |
 | 7.2 | Four phase offsets per point | **Already done, since Phase 5.** Every measurement already samples all four I/Q phases (0/90/180/270) per pair; Phase 7 just runs that same mechanism three times, once per frequency point. There was no separate "phase offset" mechanism left to build |
 | 7.3 | Temperature read and result packing | **Blocked, not implemented.** No PTAT/ADC-test-mux interface exists anywhere in the digital RTL — this is an analog-side dependency (Krishna/Vidhu), not a firmware gap. `fw.c` writes a `-1` sentinel to `OUT_TEMP` so nothing downstream mistakes an unread value for a real reading. "Result packing" into the Phase 6 target's 13-byte format was not attempted either — see GAP-11, the reason is architectural, not a missing feature |
 | 7.4 | Mirror any shell interface change into the microsequencer per section 4.2 | **N/A this phase.** Phase 7 changed only `fw.c` (firmware) — no port or interface on `agriasic_rv32i_control_shell.sv` changed, so there is nothing to mirror into `.orig` |
 
-**New scratch-RAM layout (retires the Phase 1-6 single-frequency-demo
-layout):** `OUT_COUNT`/`OUT_NUM_POINTS` (0x100/0x104), `OUT_DIV[3]` (0x110),
-`OUT_I[3]`/`OUT_Q[3]` (0x120/0x130), `OUT_TEMP` (0x140, sentinel). The old
-`OUT_AVERAGE`/`OUT_AVERAGE_Q`/`OUT_SAMPLES`/`OUT_SAMPLES_Q` addresses are
-gone — a real 3-point sweep replaces the placeholder one-frequency loop those
-existed to demonstrate, the same way each earlier phase's completion moved
-the expected numbers (D-3: 240→480; Phase 4: cycle counts; Phase 5: added Q).
+**Scratch-RAM layout, relaid for the 8-point sweep.** The result block now
+starts at DMEM offset 0 and every array is a full 8 words (0x20) wide, one
+word per sweep point:
+
+| Offset | Name | Words |
+|---|---|---|
+| `0x000` | `OUT_COUNT` | 1 |
+| `0x004` | `OUT_NUM_POINTS` | 1 (< 8 means the sweep was aborted) |
+| `0x008` | `OUT_TEMP` | 1 (sentinel -1) |
+| `0x00C` | reserved | 5 |
+| `0x020` | `OUT_DIV[8]` | 8 |
+| `0x040` | `OUT_DV_I[8]` | 8 |
+| `0x060` | `OUT_DV_Q[8]` | 8 |
+| `0x080` | `OUT_CUR_I[8]` | 8 |
+| `0x0A0` | `OUT_CUR_Q[8]` | 8 |
+| `0x0C0` | `OUT_AFE[8]` | 8 |
+| `0x0E0` | guard, 28 words | stack grows down from `0x180` |
+
+This supersedes two earlier layouts. The Phase 1-6 single-frequency demo
+(`OUT_AVERAGE`/`OUT_AVERAGE_Q`/`OUT_SAMPLES`/`OUT_SAMPLES_Q`) is gone. So is
+the Phase 7 3-point layout that put `OUT_COUNT`/`OUT_NUM_POINTS` at
+0x100/0x104 with the arrays packed 0x10 apart: **that packing left each array
+only four words while advertising "[3]", so at five points `OUT_DIV[4]` would
+have landed on `OUT_DV_I[0]` — silent corruption, no trap, no warning.** Two
+`_Static_assert`s in `fw.c` now make both overflow modes (points exceeding the
+stride, and results plus stack exceeding DMEM) build errors instead.
+
+Moving the block to offset 0 is what let DMEM shrink; at 0x100 the eight-point
+block would not fit 96 words. `start.S` now takes `sp` from `link.ld`'s
+`_stack_top` symbol rather than the literal `0x0001_0200`, so the RAM size is
+stated once in the firmware instead of in a constant that goes stale on every
+resize.
 `tb_agriasic_rv32i_e2e.sv` and `tb_diag.sv` were updated to match and both
 verify the new layout end to end.
 
@@ -2588,7 +2639,7 @@ Descope order, applied only as far as needed:
 1. Drop the 32 MHz stretch point
 2. Reduce phase steps from 16 to 8, halving the required clock to 80 MHz
 3. Replace the core with a fixed FSM program
-4. Reduce the sweep from three frequency points to two, keeping the widest separation
+4. Reduce the sweep point count (eight as built), keeping the widest separation
 
 **Retain in all cases:** two frequency points, I and Q accumulation, the TIA,
 8-bit conversion, temperature sense, reset safety, and a readable result vector
@@ -2895,7 +2946,7 @@ rather than the firmware level.
 | DR-030 | The 1 kHz excitation point shall be reachable over the 2-byte SPI protocol without widening it | `REG_FREQ_SEL`, a 2-bit selector (0/1/2), translated combinationally to N (1/100/10000) — the only encoding that fits 14 bits of divider range into a 1-byte SPI write | `tb_agriasic_digital_spi_top.sv`: `REG_FREQ_SEL=0` reproduces the pre-Phase-6 N=1 behavior exactly (I=480/Q=320) | **[IMPL]** Phase 6, closes GAP-1 |
 | DR-031 | A host shall be able to identify the design/revision it is talking to | `REG_ID`, fixed `8'h43`, read-only | `tb_agriasic_digital_spi_top.sv`: reads back `0x43` | **[IMPL]** Phase 6 |
 | DR-032 | A silently-clamped M configuration shall be host-visible | `REG_STATUS` bit4 (SPI) / MMIO `REG_STATUS` bit4, set when `REG_PAIR_LOG2 > 6` is written | `tb_agriasic_digital_spi_top.sv`: sets on `PAIR_LOG2=7`, clears on a subsequent valid write | **[IMPL]** Phase 6 |
-| DR-033 | Firmware shall sweep the three real excitation frequency points and store per-point I/Q results | `fw.c`'s `run_sweep_point()` writes `REG_DIVIDER` = 1/100/10000 in sequence, averages `NUM_MEASUREMENTS` runs at each, stores to `OUT_DIV`/`OUT_I`/`OUT_Q` scratch RAM arrays | `tb_agriasic_rv32i_e2e.sv`: all three divider values, both channels, at all three points confirmed correct after a real ~3.15M-cycle run including the true N=10000 point | **[IMPL]** Phase 7.1 |
+| DR-033 | Firmware shall sweep the real excitation frequency points and store per-point I/Q results | `fw.c`'s `sweep_divider()`/`run_sweep_point()` write raw `REG_DIVIDER` = 1, 10, 32, 100, 316, 1000, 3162, 10000, average `NUM_MEASUREMENTS` runs at each, and store to the `OUT_DIV`/`OUT_DV_I`/`OUT_DV_Q`/`OUT_CUR_I`/`OUT_CUR_Q`/`OUT_AFE` arrays (8 words each) | `tb_agriasic_rv32i_e2e.sv`: all eight divider values, both channels, at all eight points confirmed correct after a real 4,564,339-cycle run including the true N=10000 point; `OUT_NUM_POINTS` reports partial counts on abort | **[IMPL]** Phase 7.1, widened 3 -> 8 points |
 | DR-034 | A host shall be able to identify that temperature was not sampled, rather than reading an uninitialized value as if it were real | `OUT_TEMP` sentinel, hardwired to `-1` | `tb_agriasic_rv32i_e2e.sv`/`tb_diag.sv`: confirm the sentinel is written | **[IMPL]** Phase 7.3 (the sentinel only — no temperature sensing exists, see GAP-11's header note in `fw.c`) |
 | DR-035 | The accumulator shadow-register snapshot contract (never updates while busy) shall be checked by a formal assertion, not only by inspection | `assert property (p_shadow_stable_while_busy)` in `tb/smoke/tb_agriasic_digital_top.sv` | Passes across the full 4-pair run; would fail if `i_shadow_q`/`q_shadow_q` ever changed value on any cycle `busy_o` reads 1 | **[IMPL]** Phase 8, closes V-4 |
 | DR-036 | A sample strobe shall rise only on an exact phase-index match for its own wait state, checked by a formal assertion | `assert property (p_sample_req_exact_phase_match)` in `tb/smoke/tb_agriasic_digital_top.sv`, correlating `measurement_fsm.state_q` with `exc_phase_index` at the exact rising edge of the internal `sample_req` wire | Passes across the full run; would catch a target-swap bug a weaker "matches any of the four" check could miss | **[IMPL]** Phase 8, closes V-5 |
@@ -2942,7 +2993,7 @@ any single Rev 4.3 phase, section 10.3 GAP-8; stages 11-12 are Phase 8.)
 | 6 | Reset synchronizer (Phase 2.1) | pass, 4 clk-unaligned phase offsets |
 | 7 | SPI clk-domain rework (Phase 3) | pass, correct at exactly `f_clk/16`, corrupted below Nyquist, clean mid-byte reframe |
 | 8 | Settle timing regression (reinterpreted for Phase 4: settle now counts excitation periods; extended Phase 5 to check both channels) | pass, I=480/Q=320 at all 4 settle values |
-| 9 | End-to-end firmware + measurement (incl. core clock enable, Phase 2.2; both channels, Phase 5; real 3-point frequency sweep, Phase 7) | pass, all 3 points (N=1/100/10000) confirmed, ~3.15M cycles for the full sweep, 93% of cycles frozen |
+| 9 | End-to-end firmware + measurement (incl. core clock enable, Phase 2.2; both channels, Phase 5; 8-point frequency sweep) | pass, all 8 points (N=1/10/32/100/316/1000/3162/10000) confirmed, 4,564,339 cycles for the full sweep, >99.9% of cycles asleep, and the terminal park verified asleep for 2000 cycles after FW_DONE |
 | 10 | Control shell descope fallback lint (`.orig`, closes GAP-8) | clean |
 | 11 | Accumulator edge cases (Phase 8, closes V-2) | pass: odd (55), +1, -1, and true M=64 saturating (16320) all exact |
 | 12 | Settle × conv grid sweep (Phase 8, closes V-1) | pass: 54/54 practical grid points, no hangs, correct results |
@@ -2955,7 +3006,7 @@ any single Rev 4.3 phase, section 10.3 GAP-8; stages 11-12 are Phase 8.)
 firmware (`fw.c`) plus scratch-RAM address changes; the ADC behavioral model
 and excitation timing that caused the Phase 4/5 fixes were untouched.
 `tb_agriasic_rv32i_e2e.sv` and `tb_diag.sv` needed real content updates
-(new memory layout, new expected checks, a ~3.15M-cycle timeout budget for
+(new memory layout, new expected checks, a multi-megacycle timeout budget for
 the real N=10000 sweep point) but no new class of bug in the fix sense — the
 tests simply needed to check the new, correct behavior instead of the
 retired single-frequency demo.
@@ -3094,7 +3145,7 @@ Paths are relative to the repository root.
 | Excitation free-running phase generator regression (Phase 1 break-before-make, rewritten Phase 4 for the free-running interface) | `agriasic_digital_v2/tb/tb_excitation_drive.sv` |
 | Reset synchronizer regression (Phase 2.1) | `agriasic_digital_v2/tb/tb_rst_sync.sv` |
 | SPI clk-domain regression (Phase 3) | `agriasic_digital_v2/tb/tb_spi_domain_crossing.sv` |
-| End-to-end testbench (incl. core clock-enable monitor, Phase 2.2; both I/Q channels, Phase 5; 3-point sweep, Phase 7) | `agriasic_digital_v2/tb/tb_agriasic_rv32i_e2e.sv` |
+| End-to-end testbench (incl. core clock-enable monitor, Phase 2.2; both I/Q channels, Phase 5; 8-point sweep; post-park sleep check) | `agriasic_digital_v2/tb/tb_agriasic_rv32i_e2e.sv` |
 | Diagnostic testbench (Phase 7 sweep timing) | `agriasic_digital_v2/tb/tb_diag.sv` |
 | Accumulator edge-case regression (Phase 8, closes V-2) | `agriasic_digital_v2/tb/tb_accum_edge_cases.sv` |
 | Settle x conv grid sweep (Phase 8, closes V-1) | `agriasic_digital_v2/tb/tb_settle_conv_sweep.sv` |

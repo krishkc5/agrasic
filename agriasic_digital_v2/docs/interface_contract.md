@@ -216,7 +216,7 @@ the two exceptions called out after the table.
 | `0x0` | `REG_CTRL` | RW | bit[0] write-one pulse to start measurement; bit[7] write-one clears sticky protocol error bits in `REG_STATUS[7:5]`. **No core-enable bit** — see the note below |
 | `0x1` | `REG_PAIR_LOG2` | RW | Pair count as log2 (`M = 2^REG_PAIR_LOG2`). Values above 6 are clamped to 64 in hardware and set `REG_STATUS` bit[4] (overrange) |
 | `0x2` | `REG_SETTLE` | RW | Excitation *periods* to wait after `start` before the FSM begins watching for a phase match (not raw clock cycles) |
-| `0x3` | `REG_FREQ_SEL` | RW | **2-bit selector, not raw N**: `0` -> 10 MHz (N=1), `1` -> 100 kHz (N=100), `2` -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER` — see the note below |
+| `0x3` | `REG_FREQ_SEL` | RW | **2-bit selector, not raw N**: `0` -> 10 MHz (N=1), `1` -> 100 kHz (N=100), `2` -> 1 kHz (N=10000). Replaces the Phase 1-5 `REG_DIVIDER` on *this* interface only. **It reaches 3 of the firmware's 8 sweep points and does not define the sweep** — see the note below |
 | `0x4` | `REG_PHASE_IDX` | RW | Present in the map; writes are stored and read back, but **not wired to anything** — see the note below |
 | `0x5` | `REG_CONV` | RW | Comparator regeneration wait, **in clk cycles, per SAR bit trial** — not total conversion latency. Total conversion time is `8 x (3 + REG_CONV)` clk cycles. Runtime-tunable because the real regeneration time isn't characterized yet |
 | `0x6` | `REG_STATUS` | RO | bit[7] sticky protocol error; bit[6] sticky bad address; bit[5] sticky illegal write to RO register; bit[4] **overrange** (new); bit[1] done — **sticky**, latched when the FSM's one-cycle `done_o` fires, held until the next start; bit[0] busy |
@@ -224,9 +224,14 @@ the two exceptions called out after the table.
 | `0x8` | `REG_RESULT_DATA` | RO | Byte at the current index — see the mapping below |
 | `0x9` | `REG_ID` | RO | Fixed design/revision identifier, `0x43` |
 
-**`REG_RESULT_DATA` index mapping.** The target result set is I/Q for three
-frequency points plus temperature (13 bytes); only one frequency point's data
-exists today:
+**`REG_RESULT_DATA` index mapping.** This 16-byte indexed window belongs to
+the legacy 2-byte SPI interface and was specified when the target was I/Q at
+three frequency points plus temperature (13 bytes). **It is superseded for
+sweep results**: the firmware now sweeps eight points with four results each
+(dV I/Q and current I/Q) = 128 bytes, which this window cannot express. Read
+sweep results from DMEM over the host SPI port or JTAG instead — the map is at
+the end of this section. The window below remains accurate for what it is: a
+single live I/Q pair from the measurement engine's shadow registers.
 
 ```text
 idx 0: I low byte      idx 1: I high byte
@@ -237,8 +242,8 @@ idx 4-15: reserved, reads as 0x00 (future frequency points + temperature)
 Read index 0-3 in order after setting `REG_RESULT_IDX = 0` to get a full I/Q
 readout in 4 back-to-back reads with no further index writes needed — the
 pointer auto-increments. Indices 4-15 read as a deliberate zero, not garbage:
-there is no second/third frequency point or temperature data anywhere in the
-digital RTL yet (Phase 7).
+no per-point result vector was ever built behind this window, and none will be
+— the firmware's DMEM result block replaced the idea.
 
 **Result semantics (Rev 4.3 defect fix D-3, unchanged since Phase 1):** each
 channel is `sum(D+ - D-)` over M pairs — the **raw** accumulated difference,
@@ -249,9 +254,19 @@ they latch only when a run completes, so a host that reads mid-run (which it
 should not do — check `busy_o`/`REG_STATUS` bit[0] first) gets the previous
 run's complete result, never a partial sum.
 
-**`REG_FREQ_SEL` — why a selector, not raw N.** The internal divider is 14
-bits (needs N=10000 for the 1 kHz point) — too wide for a single SPI byte to
-carry, and the 2-byte SPI protocol isn't being widened to fit it. A selector
+**`REG_FREQ_SEL` — why a selector, and what it is NOT.** Read this before
+assuming the chip only does three frequencies: **it does eight.** The sweep is
+driven by firmware writing raw N to the MMIO `REG_DIVIDER` (14 bits, N =
+1..16383, f_exc = 10 MHz / N), and `fw.c`'s `sweep_divider()` walks N = 1, 10,
+32, 100, 316, 1000, 3162, 10000 — a half-decade log ladder from 10 MHz to
+1 kHz. `REG_FREQ_SEL` is a convenience on the *legacy 2-byte SPI and parallel
+programming* interfaces, which cannot carry 14 bits in one byte; it exposes
+three of those eight N values as presets. Changing the sweep means editing
+`sweep_divider()`, not this register.
+
+The reason it is a selector at all: the internal divider is 14 bits (needs
+N=10000 for the 1 kHz point) — too wide for a single SPI byte to carry, and
+the 2-byte SPI protocol isn't being widened to fit it. A selector
 is the only encoding that reaches 1 kHz through one SPI byte: the host writes
 0/1/2, the wrapper looks up the matching N combinationally, and
 `excitation_ctrl` never sees the difference. The parallel programming
@@ -299,21 +314,43 @@ go. What's still missing is the *data* behind some of it:
 - `REG_PHASE_IDX` and `REG_CTRL`'s core-enable bit's actual semantics (see
   the notes above and MAS GAP-10)
 
-**GAP-11 (Phase 7 finding, not yet resolved): the RV32I firmware's sweep
-results have no host-facing path out of the chip at all.**
-`agriasic_digital_rv32i_top` — the only top-level integration that runs this
-firmware — has zero SPI or other host-facing pins (confirmed by grep, no
-matches). The 3-point sweep firmware computes real I/Q results for N=1/100/
-10000 and stores them in its own scratch RAM, but nothing outside the RV32I
-core itself can read them; the only integration with real host-facing pins,
-`agriasic_digital_spi_top`, has no RV32I core to run this firmware on in the
-first place. Do not write host software assuming firmware-computed sweep
-results are reachable over SPI (or any other interface) until this is
-resolved — see MAS section 10.3 GAP-11 for the three architectural options
-under consideration.
+**GAP-11 is resolved — sweep results ARE readable off chip.** This paragraph
+previously said they were not; that predated the host SPI port.
+`agriasic_digital_rv32i_top` now carries a host SPI slave port
+(`agriasic_spi_host.sv`, bus master M4) that reaches DMEM and the peripheral
+window with 32-bit accesses while the core runs, and the debug SBA reaches the
+same memory over JTAG. Both paths are covered by the regression (stage 15
+reads `OUT_COUNT`, `OUT_NUM_POINTS` and per-point results over SPI; stage 13
+does the same over SBA).
 
-Do not write host or firmware code against any of those yet — see the MAS for
-current phase status before starting that work.
+### Sweep result map (DMEM, read over host SPI or JTAG SBA)
+
+DMEM base is `0x0001_0000` and the result block starts at offset 0. Each array
+is **8 words (0x20) wide** — one word per sweep point, indexed by point 0..7 in
+the order `sweep_divider()` produces them (10 MHz first, 1 kHz last).
+
+| Offset | Name | Words | Contents |
+|---|---|---|---|
+| `0x000` | `OUT_COUNT` | 1 | measurements averaged per point (2) |
+| `0x004` | `OUT_NUM_POINTS` | 1 | points actually completed; **< 8 means the sweep was aborted** |
+| `0x008` | `OUT_TEMP` | 1 | sentinel `-1`, not implemented (GAP-11 temperature half) |
+| `0x00C` | reserved | 5 | reads undefined; do not rely on it |
+| `0x020` | `OUT_DIV[8]` | 8 | divider N used at each point |
+| `0x040` | `OUT_DV_I[8]` | 8 | dV in-phase average |
+| `0x060` | `OUT_DV_Q[8]` | 8 | dV quadrature average |
+| `0x080` | `OUT_CUR_I[8]` | 8 | current in-phase average |
+| `0x0A0` | `OUT_CUR_Q[8]` | 8 | current quadrature average |
+| `0x0C0` | `OUT_AFE[8]` | 8 | `AFE_CTRL` value and overrange flags per point |
+| `0x0E0` | — | 28 | guard, then the stack grows down from `0x180` |
+
+Read `OUT_NUM_POINTS` first and trust only that many entries of each array: an
+aborted sweep leaves the remaining entries holding the previous run's values,
+not zeros. Results are valid once `STATUS.FW_DONE` is set; the same raw
+accumulator semantics apply as above (divide by `OUT_COUNT`, and by 2 again
+for the true chop average).
+
+The map lives in one place, the header comment of `fw/fw.c`. If these offsets
+and that comment ever disagree, the firmware is right and this table is stale.
 
 ---
 
@@ -336,7 +373,7 @@ IDCODE `0x14341001` (version 1, part `0x4341`). IR length 5: `0x01` IDCODE,
 exception entries at `+0x800 / +0x808 / +0x810`.
 
 Debugger-visible address map: IMEM `0x0000_0000` (1 KiB, writable: `load`
-works), DMEM `0x0001_0000` (512 B), DM `0x1A11_0000`, MMIO `0x8000_0000`
+works), DMEM `0x0001_0000` (384 B, 96 words), DM `0x1A11_0000`, MMIO `0x8000_0000`
 (register map in section 7.1 / `agriasic_rv32i_mmio.sv`). Any other address
 is a bus error. `dmcontrol.ndmreset` resets the core and the MMIO bridge
 (config registers, sticky flags) but not IMEM, the DM or the TAP.

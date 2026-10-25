@@ -9,7 +9,13 @@ CC=riscv64-unknown-elf-gcc
 # false positive for every memory-mapped access built from an integer cast. The
 # accesses are volatile, so they are preserved regardless; the disassembly check
 # below confirms the stores actually survive.
-FLAGS="-march=rv32imc_zicsr -mabi=ilp32 -Os -Wall -Wextra -Wno-array-bounds -ffreestanding -nostdlib -nodefaultlibs -fno-tree-loop-distribute-patterns -fstack-usage"
+# -fno-jump-tables is load bearing, not tidiness. link.ld ASSERTs that .rodata
+# stays empty (Harvard split: the firmware keeps constants as immediates so no
+# startup copy is needed). Without this flag gcc lowers a multi-way if-chain or
+# switch returning constants -- e.g. sweep_divider() -- into a jump table in
+# .rodata, and the link fails. The 3-point sweep only ever passed because it
+# was too small to be worth tabling; the 8-point one is not.
+FLAGS="-march=rv32imc_zicsr -mabi=ilp32 -Os -Wall -Wextra -Wno-array-bounds -ffreestanding -nostdlib -nodefaultlibs -fno-tree-loop-distribute-patterns -fno-jump-tables -fstack-usage"
 
 echo "=== compiling ==="
 $CC $FLAGS -T link.ld -Wl,-Map=agriasic_fw.map,--cref -o agriasic_fw.elf start.S fw.c

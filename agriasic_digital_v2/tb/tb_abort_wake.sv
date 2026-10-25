@@ -28,6 +28,24 @@ module tb_abort_wake;
   localparam int unsigned ADC_WIDTH = 8;
   localparam logic [31:0] DMEM_BASE = 32'h0001_0000;
 
+  // Must match NUM_FREQ_POINTS in fw/fw.c. Only used to judge "the sweep
+  // stopped early", so an over-estimate here would make scenario C vacuous.
+  localparam int unsigned NUM_FREQ_POINTS = 8;
+
+  // Which sweep point to abort inside. Two competing requirements:
+  //   long enough  -- a write32 over SPI takes ~1500 core cycles, so the run
+  //                   must outlast that or it finishes before the abort lands
+  //                   and the test measures nothing. Run time is ~157*N
+  //                   cycles, so N=1000 gives ~157k cycles, a 100x margin.
+  //   early enough -- reaching point k costs the sum of N over all points
+  //                   before it. N=1000 is point 5, reached in ~156k cycles.
+  //                   The old 3-point sweep used N=10000, which in the
+  //                   8-point ladder is the LAST point and takes ~1.45M
+  //                   cycles to reach -- and aborting there leaves only one
+  //                   point outstanding, which barely counts as cutting the
+  //                   sweep short.
+  localparam logic [13:0] ABORT_TARGET_DIV = 14'd1000;   // 10 kHz, point 5
+
   logic clk = 1'b0;
   logic rst_n, start_i;
   int   errors = 0;
@@ -214,22 +232,18 @@ module tb_abort_wake;
 
     $display("[TB] abort must wake the core, not strand it in wfi");
 
-    // ---- A. get the core asleep inside the LONG sweep point ---------------
+    // ---- A. get the core asleep inside a LONG sweep point -----------------
     // Three conditions, all load bearing. Asleep proves the wake path is the
-    // only way out; busy proves there is a real run to abort; and the 1 kHz
-    // divider is what makes the abort land at all. A write32 over SPI takes
-    // ~1500 core cycles, while a 10 MHz measurement finishes in ~1350 -- the
-    // run would complete before the abort arrived and the test would be
-    // measuring nothing. The 1 kHz point runs for ~1M cycles, which is also
-    // the only case a deployed host could realistically abort.
+    // only way out; busy proves there is a real run to abort; and a large
+    // divider is what makes the abort land at all -- see ABORT_TARGET_DIV.
     waited = 0;
-    while (!(core_sleep && busy_o && cfg_divider == 14'd10000) && waited < 3000000) begin
+    while (!(core_sleep && busy_o && cfg_divider == ABORT_TARGET_DIV) && waited < 3000000) begin
       @(posedge clk);
       waited++;
     end
-    expect_eq("A: core asleep in wfi, 1 kHz run in flight",
-              {31'd0, core_sleep && busy_o && (cfg_divider == 14'd10000)}, 32'd1);
-    if (!(core_sleep && busy_o && cfg_divider == 14'd10000)) begin
+    expect_eq("A: core asleep in wfi, long run in flight",
+              {31'd0, core_sleep && busy_o && (cfg_divider == ABORT_TARGET_DIV)}, 32'd1);
+    if (!(core_sleep && busy_o && cfg_divider == ABORT_TARGET_DIV)) begin
       $display("[TB] ABORT_WAKE_FAIL -- could not reach the state under test");
       $finish;
     end
@@ -263,10 +277,10 @@ module tb_abort_wake;
     expect_eq("C: engine FSM in S_IDLE",
               {28'd0, 4'(dut.u_measurement_top.u_measurement_fsm.state_q)}, 32'd0);
 
-    // It stopped early, and said so: fewer than the full three points.
-    host_read32 (32'h0001_0104, v);                      // OUT_NUM_POINTS
-    $display("[TB]   OUT_NUM_POINTS = %0d (3 would be a full sweep)", v);
-    if (v >= 32'd3) begin
+    // It stopped early, and said so: fewer than the full point count.
+    host_read32 (32'h0001_0004, v);                      // OUT_NUM_POINTS (map relaid)
+    $display("[TB]   OUT_NUM_POINTS = %0d (%0d would be a full sweep)", v, NUM_FREQ_POINTS);
+    if (v >= 32'(NUM_FREQ_POINTS)) begin
       $error("C: sweep reported complete despite being aborted");
       errors++;
     end else begin
@@ -303,7 +317,9 @@ module tb_abort_wake;
     // busy, it would sleep, and it would then wake on the OLD run's done and
     // store a result measured under the previous configuration as point 0.
     // Firmware's init therefore aborts before it configures anything.
-    host_write32(32'h8000_0000, 32'h0000_0001);          // host starts a 1 kHz run
+    host_write32(32'h8000_0000, 32'h0000_0001);          // host starts a long run
+                                                         // (divider is still ABORT_TARGET_DIV,
+                                                         //  left there by the aborted point)
     host_read32 (32'h8000_0014, v);
     expect_eq("F: long run in flight before the core reset", v & 32'h1, 32'd1);
 
@@ -333,7 +349,7 @@ module tb_abort_wake;
   end
 
   initial begin
-    #80_000_000;
+    #150_000_000;   // 8-point sweep is ~4.6 Mcycles = ~46 ms; leave headroom
     $display("[TB] ABORT_WAKE_FAIL -- global timeout (core most likely stranded in wfi)");
     $finish;
   end

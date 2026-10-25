@@ -90,20 +90,26 @@ module tb_diag;
     $display("measurements completed : %0d", meas_count);
     $display("max PC reached         : 0x%02x", maxpc);
     $display("halt asserted (cycles) : %0d", halt_seen);
-    $display("scratch RAM (Rev 4.3 Phase 7 sweep layout -- see fw.c):");
-    $display("  [0x100] count (per point)  = %0d", $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[64]));
-    $display("  [0x104] num_points         = %0d", $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[65]));
-    for (int i = 0; i < 3; i++)
-      $display("  [0x%0x] div[%0d]  = %0d", 'h110 + 4*i, i,
-               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[68+i]));
-    for (int i = 0; i < 3; i++)
-      $display("  [0x%0x] I[%0d]    = %0d", 'h120 + 4*i, i,
-               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[72+i]));
-    for (int i = 0; i < 3; i++)
-      $display("  [0x%0x] Q[%0d]    = %0d", 'h130 + 4*i, i,
-               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[76+i]));
-    $display("  [0x140] temp (sentinel -1, GAP-11) = %0d",
-             $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[80]));
+    $display("scratch RAM (8-point sweep layout -- see the map in fw.c):");
+    $display("  [0x000] count (per point)  = %0d", $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[0]));
+    $display("  [0x004] num_points         = %0d", $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[1]));
+    $display("  [0x008] temp (sentinel -1, GAP-11) = %0d",
+             $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[2]));
+    for (int i = 0; i < 8; i++)
+      $display("  [0x%0x] div[%0d]   = %0d", 'h020 + 4*i, i,
+               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[8+i]));
+    for (int i = 0; i < 8; i++)
+      $display("  [0x%0x] dv_i[%0d]  = %0d", 'h040 + 4*i, i,
+               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[16+i]));
+    for (int i = 0; i < 8; i++)
+      $display("  [0x%0x] dv_q[%0d]  = %0d", 'h060 + 4*i, i,
+               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[24+i]));
+    for (int i = 0; i < 8; i++)
+      $display("  [0x%0x] cur_i[%0d] = %0d", 'h080 + 4*i, i,
+               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[32+i]));
+    for (int i = 0; i < 8; i++)
+      $display("  [0x%0x] cur_q[%0d] = %0d", 'h0A0 + 4*i, i,
+               $signed(dut.u_control_shell.u_mmio.u_dmem.ram_array[40+i]));
     $finish;
   end
 endmodule

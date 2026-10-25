@@ -32,11 +32,13 @@ _vectors:
     .section .start, "ax"
     .global _start
 _start:
-    /* Stack lives at the top of the 2 KB scratch RAM and grows down.
-       Phase 2 flat map: RAM is at 0x0001_0000-0x0001_07FF (it moved from 0 so
-       the debugger's single address space does not overlap the program
-       memory at 0). See agriasic_rv32i_bus.sv. */
-    li      sp, 0x00010200
+    /* Stack lives at the top of the scratch RAM and grows down. _stack_top
+       comes from link.ld (ORIGIN(RAM) + LENGTH(RAM)), so the RAM size is
+       stated in exactly one place; this used to be the literal 0x00010200,
+       which silently went stale whenever the RAM was resized. RAM moved off 0
+       in Phase 2 so a debugger's single address space does not overlap the
+       program memory at 0. See agriasic_rv32i_bus.sv. */
+    la      sp, _stack_top
 
     /* Enable fast interrupt 0 (measurement DONE) as a wfi wake source. */
     li      t0, (1 << 16)

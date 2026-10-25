@@ -38,6 +38,9 @@ module tb_agriasic_flash_boot;
 
   localparam int unsigned ADC_WIDTH = 8;
   localparam int unsigned IMAGE_WORDS = 256;
+  localparam int unsigned NUM_FREQ_POINTS  = 8;  // must match fw/fw.c
+  localparam int unsigned NUM_MEASUREMENTS = 2;  // averaged per point, also fw/fw.c
+  localparam int EXP_DIV [0:7] = '{1, 10, 32, 100, 316, 1000, 3162, 10000};
 
   logic clk = 1'b0;
   logic rst_n;
@@ -162,7 +165,7 @@ module tb_agriasic_flash_boot;
   // are still sitting there. Without this, E's result checks would pass on
   // A's leftovers even if E's firmware never stored anything.
   task automatic clear_outputs();
-    for (int w = 'h100/4; w <= 'h170/4; w++)
+    for (int w = 0; w <= 'h0C0/4 + 7; w++)   // whole result block, new map
       dut.u_control_shell.u_mmio.u_dmem.ram_array[w] = 32'h0000_0000;
   endtask
 
@@ -170,16 +173,15 @@ module tb_agriasic_flash_boot;
   // same codes at every excitation frequency, so each point carries the same
   // expected I/Q; only the divider differs.
   task automatic check_sweep_results(string tag);
-    check_word({tag, "OUT_COUNT"},      'h100/4, 32'd2);
-    check_word({tag, "OUT_NUM_POINTS"}, 'h104/4, 32'd3);
-    check_word({tag, "OUT_DIV[0]"},     'h110/4, 32'd1);        // 10 MHz
-    check_word({tag, "OUT_DIV[1]"},     'h114/4, 32'd100);      // 100 kHz
-    check_word({tag, "OUT_DIV[2]"},     'h118/4, 32'd10000);    // 1 kHz
-    for (int pt = 0; pt < 3; pt++) begin
-      check_word({tag, $sformatf("OUT_DV_I[%0d]",  pt)}, ('h120/4) + pt, 32'd400);
-      check_word({tag, $sformatf("OUT_DV_Q[%0d]",  pt)}, ('h130/4) + pt, 32'd280);
-      check_word({tag, $sformatf("OUT_CUR_I[%0d]", pt)}, ('h150/4) + pt, 32'd240);
-      check_word({tag, $sformatf("OUT_CUR_Q[%0d]", pt)}, ('h160/4) + pt, 32'd200);
+    check_word({tag, "OUT_COUNT"},      'h000/4, 32'd2);
+    check_word({tag, "OUT_NUM_POINTS"}, 'h004/4, 32'(NUM_FREQ_POINTS));
+    for (int pt = 0; pt < NUM_FREQ_POINTS; pt++)
+      check_word({tag, $sformatf("OUT_DIV[%0d]", pt)}, ('h020/4) + pt, 32'(EXP_DIV[pt]));
+    for (int pt = 0; pt < NUM_FREQ_POINTS; pt++) begin
+      check_word({tag, $sformatf("OUT_DV_I[%0d]",  pt)}, ('h040/4) + pt, 32'd400);
+      check_word({tag, $sformatf("OUT_DV_Q[%0d]",  pt)}, ('h060/4) + pt, 32'd280);
+      check_word({tag, $sformatf("OUT_CUR_I[%0d]", pt)}, ('h080/4) + pt, 32'd240);
+      check_word({tag, $sformatf("OUT_CUR_Q[%0d]", pt)}, ('h0A0/4) + pt, 32'd200);
     end
   endtask
 
@@ -228,7 +230,8 @@ module tb_agriasic_flash_boot;
     while (!fw_halted && cycles < 8000000) begin @(posedge clk); cycles++; end
     if (!fw_halted) begin $error("A: firmware did not finish"); errors++; end
     else $display("[TB] A: firmware finished after %0d cycles (%0d measurements)", cycles, measurements_seen);
-    expect_eq("A measurements completed", 32'(measurements_seen), 32'd6);
+    expect_eq("A measurements completed", 32'(measurements_seen),
+              32'(NUM_FREQ_POINTS * NUM_MEASUREMENTS));
     check_sweep_results("A ");
 
     // ---- B. corrupted payload byte -> CRC failure -------------------------
@@ -290,7 +293,8 @@ module tb_agriasic_flash_boot;
     if (!fw_halted) begin $error("E: firmware did not finish after a ROM boot"); errors++; end
     else $display("[TB] E: firmware finished after %0d cycles (%0d measurements)",
                   cycles, measurements_seen);
-    expect_eq("E measurements completed", 32'(measurements_seen), 32'd6);
+    expect_eq("E measurements completed", 32'(measurements_seen),
+              32'(NUM_FREQ_POINTS * NUM_MEASUREMENTS));
     check_sweep_results("E (ROM boot) ");
 
     // ---- F. IMEM is still writable after a ROM boot ------------------------
@@ -328,7 +332,7 @@ module tb_agriasic_flash_boot;
   end
 
   initial begin
-    #200_000_000;
+    #400_000_000;   // two full 8-point sweeps (A and E) at ~46 ms each, plus boots
     $error("watchdog"); $finish;
   end
 

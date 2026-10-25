@@ -2,52 +2,56 @@
 Discarded input sections
 
  .riscv.attributes
-                0x00000000       0x3a /tmp/cc60qwjQ.o
- .comment       0x00000000       0x23 /tmp/ccj2lHRP.o
+                0x00000000       0x3a /tmp/ccAya1i0.o
+ .comment       0x00000000       0x23 /tmp/cc8ifXCN.o
  .riscv.attributes
-                0x00000000       0x3c /tmp/ccj2lHRP.o
+                0x00000000       0x3c /tmp/cc8ifXCN.o
 
 Memory Configuration
 
 Name             Origin             Length             Attributes
 ROM              0x00000000         0x00000400
-RAM              0x00010000         0x00000200
+RAM              0x00010000         0x00000180
 *default*        0x00000000         0xffffffff
 
 Linker script and memory map
 
-LOAD /tmp/cc60qwjQ.o
-LOAD /tmp/ccj2lHRP.o
+LOAD /tmp/ccAya1i0.o
+LOAD /tmp/cc8ifXCN.o
+                0x00010180                        _stack_top = (ORIGIN (RAM) + LENGTH (RAM))
 
-.text           0x00000000      0x21e
+.text           0x00000000      0x250
  *(.vectors)
- .vectors       0x00000000       0x80 /tmp/cc60qwjQ.o
+ .vectors       0x00000000       0x80 /tmp/ccAya1i0.o
                 0x00000000                _vectors
                 0x00000080                        . = 0x80
  *(.start*)
- .start         0x00000080       0x34 /tmp/cc60qwjQ.o
+ .start         0x00000080       0x34 /tmp/ccAya1i0.o
                 0x00000080                _start
                 0x000000a2                trap_handler
  *(.text*)
- .text          0x000000b4        0x0 /tmp/cc60qwjQ.o
- .text          0x000000b4        0x0 /tmp/ccj2lHRP.o
- .text.startup  0x000000b4      0x16a /tmp/ccj2lHRP.o
+ .text          0x000000b4        0x0 /tmp/ccAya1i0.o
+ .text          0x000000b4        0x0 /tmp/cc8ifXCN.o
+ .text.startup  0x000000b4      0x19c /tmp/cc8ifXCN.o
                 0x000000b4                main
+
+.rela.dyn       0x00000250        0x0
+ .rela.start    0x00000250        0x0 /tmp/ccAya1i0.o
 
 .rodata
  *(.rodata*)
  *(.srodata*)
 
-.data           0x0000021e        0x0
+.data           0x00000250        0x0
  *(.data*)
- .data          0x0000021e        0x0 /tmp/cc60qwjQ.o
- .data          0x0000021e        0x0 /tmp/ccj2lHRP.o
+ .data          0x00000250        0x0 /tmp/ccAya1i0.o
+ .data          0x00000250        0x0 /tmp/cc8ifXCN.o
  *(.sdata*)
 
-.bss            0x0000021e        0x0
+.bss            0x00000250        0x0
  *(.bss*)
- .bss           0x0000021e        0x0 /tmp/cc60qwjQ.o
- .bss           0x0000021e        0x0 /tmp/ccj2lHRP.o
+ .bss           0x00000250        0x0 /tmp/ccAya1i0.o
+ .bss           0x00000250        0x0 /tmp/cc8ifXCN.o
  *(.sbss*)
 
 /DISCARD/
@@ -64,8 +68,9 @@ OUTPUT(agriasic_fw.elf elf32-littleriscv)
 Cross Reference Table
 
 Symbol                                            File
-_start                                            /tmp/cc60qwjQ.o
-_vectors                                          /tmp/cc60qwjQ.o
-main                                              /tmp/ccj2lHRP.o
-                                                  /tmp/cc60qwjQ.o
-trap_handler                                      /tmp/cc60qwjQ.o
+_stack_top                                        /tmp/ccAya1i0.o
+_start                                            /tmp/ccAya1i0.o
+_vectors                                          /tmp/ccAya1i0.o
+main                                              /tmp/cc8ifXCN.o
+                                                  /tmp/ccAya1i0.o
+trap_handler                                      /tmp/ccAya1i0.o

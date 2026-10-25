@@ -102,7 +102,7 @@ module agriasic_rv32i_control_shell #(
   parameter int unsigned ADC_WIDTH         = 8,
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // flash power-up wait (~5 ms at 160 MHz)
   parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
-  parameter int unsigned ROM_USED_WORDS    = 136,      // words the golden image occupies
+  parameter int unsigned ROM_USED_WORDS    = 148,      // words the golden image occupies
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation: IMEM filled by $readmemh
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex"  // simulation preload ("" = none)
 ) (
@@ -177,7 +177,20 @@ module agriasic_rv32i_control_shell #(
   // scale with depth (see agriasic_imem.sv). The image is 592 B and the
   // data footprint 100 B, measured by the memory audit flow.
   localparam int unsigned IMEM_WORDS = 256;   // 1 KB program memory
-  localparam int unsigned DMEM_WORDS = 128;   // 512 B scratch RAM
+  // 96 words = 384 B. Was 128. The firmware's result block is laid out for 8
+  // sweep points (6 arrays x 8 words, see fw/fw.c) and ends at +0x0E0; the
+  // stack is 48 B at the top (main's frame, from -fstack-usage), leaving a
+  // 28-word guard between them. 96 is deliberately NOT a power of two and
+  // that is safe here: agriasic_rv32i_mmio's ram_sel is an arithmetic
+  // compare against RAM_WORDS*4, not an address mask, so anything above
+  // +0x180 returns data_err (-> trap, visible in STATUS.TRAP_SEEN) instead
+  // of aliasing, and ram_ce never asserts outside the array.
+  //
+  // Keep in step with fw/link.ld's RAM LENGTH. If the firmware ever
+  // believes RAM is larger than this, its first out-of-range store traps
+  // immediately and TRAP_SEEN reports it, which the e2e and flash-boot
+  // benches both check -- a mismatch cannot pass quietly.
+  localparam int unsigned DMEM_WORDS = 96;    // 384 B scratch RAM
   localparam int unsigned IMEM_BYTES = IMEM_WORDS * 4;
 
   // Size consistency. Both failure modes below are silent in hardware -- the

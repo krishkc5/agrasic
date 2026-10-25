@@ -22,6 +22,12 @@ module tb_agriasic_spi_host;
 
   localparam int unsigned ADC_WIDTH = 8;
   localparam logic [31:0] DMEM_BASE = 32'h0001_0000;
+  localparam int unsigned NUM_FREQ_POINTS = 8;   // must match fw/fw.c
+  // Scratch for the concurrent-access probe, in the guard region between
+  // the firmware's result block (0x000-0x0DF) and the stack (from 0x150),
+  // so the firmware never writes it. Not 0x080 (now OUT_CUR_I[0]) and not
+  // 0x100 (OUT_COUNT in the old map, still read as such elsewhere).
+  localparam logic [31:0] SPI_SCRATCH = 32'h120;
 
   logic clk = 1'b0;
   logic rst_n, start_i;
@@ -184,11 +190,16 @@ module tb_agriasic_spi_host;
       $error("firmware already finished -- A does not prove concurrent access");
       errors++;
     end
-    host_write32(DMEM_BASE + 32'h080, 32'hDEAD_BEEF);
-    host_read32 (DMEM_BASE + 32'h080, v);
+    // 0x100 (word 0x40) is in the guard region between the firmware's result
+    // block (0x000-0x0DF) and the stack (from 0x150), so the firmware never
+    // touches it. This probe used to sit at 0x080, chosen when the results
+    // lived at 0x100+; 0x080 is now OUT_CUR_I[0] and the firmware overwrote
+    // the probe with 240 mid-test, which is how the relayout was caught.
+    host_write32(DMEM_BASE + SPI_SCRATCH, 32'hDEAD_BEEF);
+    host_read32 (DMEM_BASE + SPI_SCRATCH, v);
     expect_eq("A: DMEM read-back (core running)", v, 32'hDEAD_BEEF);
-    expect_eq("A: ram_array[0x20] (hier)",
-              dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h20], 32'hDEAD_BEEF);
+    expect_eq("A: ram_array[SPI_SCRATCH/4] (hier)",
+              dut.u_control_shell.u_mmio.u_dmem.ram_array[SPI_SCRATCH >> 2], 32'hDEAD_BEEF);
 
     // ---- B. peripheral window ----------------------------------------------
     host_read32(32'h8000_0014, v);          // STATUS
@@ -210,25 +221,25 @@ module tb_agriasic_spi_host;
     host_status(st);
 
     // A refused access must not have disturbed memory.
-    host_read32(DMEM_BASE + 32'h080, v);
+    host_read32(DMEM_BASE + SPI_SCRATCH, v);
     expect_eq("D: DMEM intact after refusals", v, 32'hDEAD_BEEF);
 
     // ---- E. read a real result once the sweep finishes ----------------------
     waited = 0;
-    while (!fw_halted && waited < 4_000_000) begin
+    while (!fw_halted && waited < 8_000_000) begin   // 8-point sweep is ~4.6 Mcycles
       @(posedge clk); waited++;
     end
     if (!fw_halted) begin
       $error("firmware did not finish within %0d cycles", waited); errors++;
     end else begin
       $display("[TB]   E: firmware finished after %0d cycles", waited);
-      host_read32(DMEM_BASE + 32'h100, v);
+      host_read32(DMEM_BASE + 32'h000, v);
       expect_eq("E: OUT_COUNT read over SPI", v, 32'd2);
-      host_read32(DMEM_BASE + 32'h104, v);
-      expect_eq("E: OUT_NUM_POINTS read over SPI", v, 32'd3);
-      host_read32(DMEM_BASE + 32'h120, v);
+      host_read32(DMEM_BASE + 32'h004, v);
+      expect_eq("E: OUT_NUM_POINTS read over SPI", v, 32'(NUM_FREQ_POINTS));
+      host_read32(DMEM_BASE + 32'h040, v);
       expect_eq("E: OUT_DV_I[0] read over SPI", v, 32'd400);
-      host_read32(DMEM_BASE + 32'h150, v);
+      host_read32(DMEM_BASE + 32'h080, v);
       expect_eq("E: OUT_CUR_I[0] read over SPI", v, 32'd240);
     end
 
@@ -308,7 +319,8 @@ module tb_agriasic_spi_host;
   end
 
   initial begin
-    #40_000_000;
+    #150_000_000;   // scenario E waits for a full 8-point sweep, ~46 ms.
+                    // This was 40 ms and tripped before the sweep finished.
     $error("tb_agriasic_spi_host: global timeout");
     $finish;
   end

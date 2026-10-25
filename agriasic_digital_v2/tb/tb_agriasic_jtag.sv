@@ -43,6 +43,13 @@ module tb_agriasic_jtag;
 
   // Shell constants mirrored here (checked against the DUT where possible).
   localparam logic [31:0] EXP_IDCODE = 32'h1434_1001;
+  localparam int unsigned NUM_FREQ_POINTS = 8;   // must match fw/fw.c
+  // Scratch for the SBA write/read test. Deliberately NOT 0x100: that was
+  // OUT_COUNT in the pre-relayout map and is still read as such further
+  // down this file, so reusing it made the SBA probe and the result check
+  // fight over one word. 0x120 is mid-guard -- 17 words above the end of
+  // the result block (0x0DF) and 12 below the stack (0x150).
+  localparam logic [31:0] SBA_SCRATCH = 32'h120;
   localparam logic [31:0] DMEM_BASE  = 32'h0001_0000;
   localparam logic [31:0] DM_BASE    = 32'h1A11_0000;
 
@@ -366,17 +373,24 @@ module tb_agriasic_jtag;
       $error("dpc 0x%08x outside the firmware image", dpc); errors++;
     end else $display("[TB]   dpc = 0x%08x (inside IMEM) OK", dpc);
     dm_read_reg(16'h1002, sp);                     // x2 = sp
-    if (sp < DMEM_BASE || sp > DMEM_BASE + 32'h800) begin
+    if (sp < DMEM_BASE || sp > DMEM_BASE + 32'h180) begin
       $error("sp 0x%08x outside the relocated RAM", sp); errors++;
     end else $display("[TB]   sp  = 0x%08x (inside DMEM @0x10000) OK", sp);
 
     // ---- 5. System bus access ---------------------------------------------
-    // DMEM is 512 B: 0x000-0x1FF. Results occupy 0x100-0x16B and the stack the
-    // top 32 B, so 0x080 is the scratch hole both leave free.
-    sba_write32(DMEM_BASE + 32'h080, 32'hA5A5_1234);
-    expect_eq("ram_array[0x20] after SBA write",
-              dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h20], 32'hA5A5_1234);
-    sba_read32(DMEM_BASE + 32'h080, v, sberr);
+    // DMEM is 384 B: 0x000-0x17F. The firmware's results now occupy 0x000-0x0DF
+    // and the stack the top 48 B (from 0x150), so the free hole is the guard
+    // region between them. 0x100 sits in the middle of it, 8 words clear of the
+    // results and 20 clear of the stack.
+    //
+    // This used to be 0x080, chosen when the results lived at 0x100-0x16B. That
+    // address is now OUT_CUR_I[0] and the firmware overwrote the probe -- which
+    // is how this was found. Any scratch address here is an assumption about
+    // the fw.c map; keep them in step.
+    sba_write32(DMEM_BASE + SBA_SCRATCH, 32'hA5A5_1234);
+    expect_eq("ram_array[SBA_SCRATCH/4] after SBA write",
+              dut.u_control_shell.u_mmio.u_dmem.ram_array[SBA_SCRATCH >> 2], 32'hA5A5_1234);
+    sba_read32(DMEM_BASE + SBA_SCRATCH, v, sberr);
     expect_eq("SBA read-back RAM", v, 32'hA5A5_1234);
     expect_eq("sberror (RAM)", {29'd0, sberr}, 32'd0);
 
@@ -413,15 +427,18 @@ module tb_agriasic_jtag;
     end else $display("[TB] firmware finished after %0d cycles (%0d measurements)", cycles, measurements_seen);
 
     // Results via the hierarchy ...
-    expect_eq("OUT_COUNT (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h40], 32'd2);
-    expect_eq("OUT_I[2]  (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h4A], 32'd400);
-    expect_eq("OUT_Q[2]  (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'h4E], 32'd280);
+    // Word indices into the relaid map: OUT_COUNT is word 0, OUT_DV_I starts at
+    // word 16 (0x040) and OUT_DV_Q at word 24 (0x060), 8 words apart.
+    expect_eq("OUT_COUNT (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'd0],       32'd2);
+    expect_eq("OUT_DV_I[2] (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'd16 + 2], 32'd400);
+    expect_eq("OUT_DV_Q[2] (hier)", dut.u_control_shell.u_mmio.u_dmem.ram_array[32'd24 + 2], 32'd280);
     // ... and through the debugger, at the flat-map addresses.
-    sba_read32(DMEM_BASE + 32'h100, v, sberr); expect_eq("OUT_COUNT (SBA)", v, 32'd2);
-    sba_read32(DMEM_BASE + 32'h104, v, sberr); expect_eq("OUT_NUM_POINTS (SBA)", v, 32'd3);
-    sba_read32(DMEM_BASE + 32'h128, v, sberr); expect_eq("OUT_I[2] (SBA)", v, 32'd400);
-    sba_read32(DMEM_BASE + 32'h138, v, sberr); expect_eq("OUT_Q[2] (SBA)", v, 32'd280);
-    sba_read32(DMEM_BASE + 32'h140, v, sberr); expect_eq("OUT_TEMP (SBA)", v, 32'hFFFF_FFFF);
+    sba_read32(DMEM_BASE + 32'h000, v, sberr); expect_eq("OUT_COUNT (SBA)", v, 32'd2);
+    sba_read32(DMEM_BASE + 32'h004, v, sberr);
+    expect_eq("OUT_NUM_POINTS (SBA)", v, 32'(NUM_FREQ_POINTS));
+    sba_read32(DMEM_BASE + 32'h048, v, sberr); expect_eq("OUT_I[2] (SBA)", v, 32'd400);
+    sba_read32(DMEM_BASE + 32'h068, v, sberr); expect_eq("OUT_Q[2] (SBA)", v, 32'd280);
+    sba_read32(DMEM_BASE + 32'h008, v, sberr); expect_eq("OUT_TEMP (SBA)", v, 32'hFFFF_FFFF);
 
     // ---- 7. ndmreset, with a measurement deliberately in flight -----------
     // The engine shares the MMIO bridge's reset domain, so ndmreset must take
@@ -496,7 +513,8 @@ module tb_agriasic_jtag;
 
   // Global watchdog.
   initial begin
-    #200_000_000;
+    #300_000_000;   // the firmware sweep is now 8 points (~46 ms) and JTAG
+                    // protocol time dominates the rest; leave headroom
     $error("watchdog: testbench did not finish");
     $finish;
   end

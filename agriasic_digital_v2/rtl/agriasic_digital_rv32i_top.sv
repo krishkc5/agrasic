@@ -15,7 +15,7 @@ module agriasic_digital_rv32i_top #(
   parameter bit          IMEM_PRELOADED    = 1'b0,     // simulation only: skip-boot releases the core
   parameter string       IMEM_INIT_FILE    = "agriasic_fw.hex", // simulation only ("" = start empty)
   parameter int unsigned ROM_WORDS         = 256,      // golden boot ROM depth
-  parameter int unsigned ROM_USED_WORDS    = 136       // words the golden image occupies
+  parameter int unsigned ROM_USED_WORDS    = 148       // words the golden image occupies
 ) (
   input  logic                 clk,
   input  logic                 rst_n,

@@ -116,26 +116,36 @@ module tb_agriasic_rv32i_e2e;
   // top -- those shell status outputs are currently dangling. Reach in here.
   wire fw_halted = dut.u_control_shell.done_o;
 
-  // Scratch RAM: firmware writes its outputs here. Rev 4.3 Phase 7 layout
-  // (supersedes the Phase 1-6 single-frequency-demo layout -- see fw.c).
-  // Phase 2 flat map: RAM is at 0x0001_0000, so bus address 0x0001_0100 is
-  // RAM offset 0x100; the word indices below are offsets into ram_array.
-  //   0x100 -> OUT_COUNT       (word 64)  measurements averaged per point
-  //   0x104 -> OUT_NUM_POINTS  (word 65)  frequency points swept (3)
-  //   0x110 -> OUT_DIV[0..2]   (words 68..70)  divider N used per point
-  //   0x120 -> OUT_I[0..2]     (words 72..74)  I average per point
-  //   0x130 -> OUT_Q[0..2]     (words 76..78)  Q average per point
-  //   0x140 -> OUT_TEMP        (word 80)  sentinel -1, not implemented (GAP-11)
-  localparam int W_COUNT      = 'h100 / 4;
-  localparam int W_NUM_POINTS = 'h104 / 4;
-  localparam int W_DIV        = 'h110 / 4;
-  localparam int W_DV_I       = 'h120 / 4;
-  localparam int W_DV_Q       = 'h130 / 4;
-  localparam int W_TEMP       = 'h140 / 4;
-  localparam int W_CUR_I      = 'h150 / 4;
-  localparam int W_CUR_Q      = 'h160 / 4;
+  // Scratch RAM: firmware writes its outputs here. Layout relaid for an 8-point
+  // sweep -- see the map in fw.c. The result block starts at RAM offset 0 and
+  // each array is a full 8 words (0x20) wide, so raising NUM_FREQ_POINTS up to
+  // 8 needs no address change here. The previous layout started at 0x100 and
+  // packed the arrays 0x10 apart, which no longer fits: RAM is 96 words (384 B)
+  // now, so offset 0x100 would leave only 32 words before the stack.
+  //   0x000 -> OUT_COUNT       (word 0)   measurements averaged per point
+  //   0x004 -> OUT_NUM_POINTS  (word 1)   frequency points actually swept
+  //   0x008 -> OUT_TEMP        (word 2)   sentinel -1, not implemented (GAP-11)
+  //   0x020 -> OUT_DIV[0..7]   (words  8..15)  divider N used per point
+  //   0x040 -> OUT_DV_I[0..7]  (words 16..23)  dV I average per point
+  //   0x060 -> OUT_DV_Q[0..7]  (words 24..31)  dV Q average per point
+  //   0x080 -> OUT_CUR_I[0..7] (words 32..39)  current I average per point
+  //   0x0A0 -> OUT_CUR_Q[0..7] (words 40..47)  current Q average per point
+  //   0x0C0 -> OUT_AFE[0..7]   (words 48..55)  AFE_CTRL + overrange per point
+  //   stack grows down from _stack_top = 0x180; 28 words of guard between.
+  localparam int W_COUNT      = 'h000 / 4;
+  localparam int W_NUM_POINTS = 'h004 / 4;
+  localparam int W_TEMP       = 'h008 / 4;
+  localparam int W_DIV        = 'h020 / 4;
+  localparam int W_DV_I       = 'h040 / 4;
+  localparam int W_DV_Q       = 'h060 / 4;
+  localparam int W_CUR_I      = 'h080 / 4;
+  localparam int W_CUR_Q      = 'h0A0 / 4;
+  localparam int W_AFE        = 'h0C0 / 4;
 
-  localparam int NUM_FREQ_POINTS  = 3;
+  localparam int NUM_FREQ_POINTS  = 8;   // must match fw/fw.c
+  // The ladder fw.c's sweep_divider() produces: half-decade log steps from
+  // 1 kHz to 1 MHz plus a 10 MHz anchor, cheapest point first.
+  localparam int EXP_DIV [0:7] = '{1, 10, 32, 100, 316, 1000, 3162, 10000};
   localparam int NUM_MEASUREMENTS = 2;
 
   int unsigned cycles;
@@ -255,9 +265,9 @@ module tb_agriasic_rv32i_e2e;
     check_word("OUT_NUM_POINTS", W_NUM_POINTS, 32'(NUM_FREQ_POINTS));
     check_word("OUT_TEMP",       W_TEMP,       32'hFFFFFFFF);  // sentinel -1
 
-    check_word("OUT_DIV[0] (10 MHz)",  W_DIV + 0, 32'd1);
-    check_word("OUT_DIV[1] (100 kHz)", W_DIV + 1, 32'd100);
-    check_word("OUT_DIV[2] (1 kHz)",   W_DIV + 2, 32'd10000);
+    for (int p = 0; p < NUM_FREQ_POINTS; p++)
+      check_word($sformatf("OUT_DIV[%0d] (%0d Hz)", p, 10_000_000 / EXP_DIV[p]),
+                 W_DIV + p, 32'(EXP_DIV[p]));
 
     // Frequency-invariant ADC model (see header): every point gives the
     // same I/Q numbers. That is the correct expectation here, not a bug --

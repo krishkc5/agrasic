@@ -77,7 +77,7 @@ module agriasic_spi_boot #(
   parameter int unsigned BOOT_DELAY_CYCLES = 800_000,  // ~5 ms at 160 MHz (flash tVSL)
   parameter logic [7:0]  BOOT_CLK_DIV      = 8'd7,
   parameter bit          IMEM_PRELOADED    = 1'b0,
-  parameter int unsigned ROM_USED_WORDS    = 136       // golden image size, see agriasic_boot_rom
+  parameter int unsigned ROM_USED_WORDS    = 148       // golden image size, see agriasic_boot_rom
 ) (
   input  logic        clk,
   input  logic        rst_n,

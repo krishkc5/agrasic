@@ -21,4 +21,4 @@ verilator --binary --timing --assert -j 4 -Wno-fatal -Wno-WIDTHEXPAND -Wno-WIDTH
   tb_agriasic_rv32i_e2e.sv $AGRIASIC_RV32I_SOURCES \
   2>&1 | grep -E "^%(Error|Warning)" | grep -vE "UNUSED(PARAM|SIGNAL)|DECLFILENAME" | head -20 || true
 echo "=== running ==="
-./obj_dir/sim_e2e 2>&1 | tail -30
+./obj_dir/sim_e2e 2>&1 | tail -120   # 8-point sweep prints ~50 check lines

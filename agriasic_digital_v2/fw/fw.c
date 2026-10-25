@@ -87,33 +87,84 @@
 
 /* Scratch RAM locations the testbench (and a debugger over JTAG) can inspect.
  *
- * Phase 2 flat map: RAM lives at DMEM_BASE = 0x0001_0000 (2 KiB), so the
- * debugger's single address space has program memory at 0 and RAM at
- * 0x10000 with no overlap. Results sit at DMEM_BASE + 0x100, well below the
- * stack top at DMEM_BASE + 0x200.
+ * Phase 2 flat map: RAM lives at DMEM_BASE = 0x0001_0000, so the debugger's
+ * single address space has program memory at 0 and RAM at 0x10000 with no
+ * overlap.
  *
- * Rev 4.3 Phase 7 layout (supersedes the Phase 1-6 single-frequency-demo
- * layout: OUT_AVERAGE/OUT_AVERAGE_Q/OUT_SAMPLES/OUT_SAMPLES_Q are retired --
- * a real 3-point sweep replaces the placeholder one-frequency loop those
- * existed to demonstrate). One word of gap is left between arrays. */
-#define DMEM_BASE      0x00010000u
-#define OUT_COUNT      (*(volatile int *)(DMEM_BASE + 0x100))  /* measurements averaged, per point */
-#define OUT_NUM_POINTS (*(volatile int *)(DMEM_BASE + 0x104))  /* frequency points swept (3) */
-#define OUT_DIV        ((volatile int *)(DMEM_BASE + 0x110))   /* [3]: divider N used per point */
-#define OUT_DV_I       ((volatile int *)(DMEM_BASE + 0x120))   /* [3]: dV in-phase average per point */
-#define OUT_DV_Q       ((volatile int *)(DMEM_BASE + 0x130))   /* [3]: dV quadrature average per point */
-#define OUT_CUR_I      ((volatile int *)(DMEM_BASE + 0x150))   /* [3]: current in-phase average per point */
-#define OUT_CUR_Q      ((volatile int *)(DMEM_BASE + 0x160))   /* [3]: current quadrature average per point */
+ * RAM is 384 B / 96 words (DMEM_WORDS in agriasic_rv32i_control_shell.sv,
+ * LENGTH in link.ld). Comments here used to say 2 KiB; that was the bus
+ * WINDOW, never the memory.
+ *
+ * Layout, sized for OUT_MAX_POINTS sweep points:
+ *
+ *   0x000  OUT_COUNT
+ *   0x004  OUT_NUM_POINTS
+ *   0x008  OUT_TEMP
+ *   0x00C  (reserved, 5 words -- room for scalars without moving the arrays)
+ *   0x020  OUT_DIV    [8]
+ *   0x040  OUT_DV_I   [8]
+ *   0x060  OUT_DV_Q   [8]
+ *   0x080  OUT_CUR_I  [8]
+ *   0x0A0  OUT_CUR_Q  [8]
+ *   0x0C0  OUT_AFE    [8]
+ *   0x0E0  end of results
+ *   ....   28-word guard
+ *   0x150  stack grows down from _stack_top = 0x180 (main's frame is 48 B)
+ *
+ * The old layout packed the arrays 0x10 apart, i.e. FOUR words each, while
+ * advertising "[3]". At five points OUT_DIV[4] would have landed on
+ * OUT_DV_I[0] -- silent corruption, no trap, no warning, just wrong results.
+ * Arrays are now a full OUT_MAX_POINTS apart and the static assertions below
+ * turn both overflow modes into build errors. Do NOT raise NUM_FREQ_POINTS
+ * past OUT_MAX_POINTS without widening the stride.
+ *
+ * (Supersedes the Phase 1-6 single-frequency-demo layout: OUT_AVERAGE/
+ * OUT_AVERAGE_Q/OUT_SAMPLES/OUT_SAMPLES_Q are retired.) */
+#define DMEM_BASE        0x00010000u
+#define DMEM_WORDS       96      /* == DMEM_WORDS in agriasic_rv32i_control_shell.sv */
+#define DMEM_BYTES       (DMEM_WORDS * 4)
+#define STACK_RESERVE    64      /* main's frame is 48 B per fw.su; rounded up */
+
+#define OUT_MAX_POINTS   8       /* per-array stride, in words */
+#define OUT_ARRAY_BASE   0x020u
+#define OUT_NUM_ARRAYS   6       /* DIV, DV_I, DV_Q, CUR_I, CUR_Q, AFE */
+#define OUT_END          (OUT_ARRAY_BASE + OUT_NUM_ARRAYS * OUT_MAX_POINTS * 4)
+
+#define OUT_COUNT      (*(volatile int *)(DMEM_BASE + 0x000))  /* measurements averaged, per point */
+#define OUT_NUM_POINTS (*(volatile int *)(DMEM_BASE + 0x004))  /* frequency points actually swept */
+#define OUT_TEMP       (*(volatile int *)(DMEM_BASE + 0x008))  /* sentinel -1: not implemented (GAP-11) */
+#define OUT_DIV        ((volatile int *)(DMEM_BASE + 0x020))   /* [8]: divider N used per point */
+#define OUT_DV_I       ((volatile int *)(DMEM_BASE + 0x040))   /* [8]: dV in-phase average per point */
+#define OUT_DV_Q       ((volatile int *)(DMEM_BASE + 0x060))   /* [8]: dV quadrature average per point */
+#define OUT_CUR_I      ((volatile int *)(DMEM_BASE + 0x080))   /* [8]: current in-phase average per point */
+#define OUT_CUR_Q      ((volatile int *)(DMEM_BASE + 0x0A0))   /* [8]: current quadrature average per point */
 /* [3]: the analog conditions each point was measured under.
  *   [15:0]  AFE_CTRL as it stood (tia_rf, amplitude, mux_settle)
  *   [17:16] ADC overrange, bit16 = dV channel, bit17 = current channel
  * A host CANNOT compute Z = dV / I without this: the two channels have
  * independent gains, so the gains do not cancel in the ratio. Storing it
  * per point also keeps auto-ranging honest if gain ever varies by point. */
-#define OUT_AFE        ((volatile int *)(DMEM_BASE + 0x170))
-#define OUT_TEMP       (*(volatile int *)(DMEM_BASE + 0x140))  /* sentinel -1: not implemented, see header (GAP-11) */
+#define OUT_AFE        ((volatile int *)(DMEM_BASE + 0x0C0))   /* [8]: AFE_CTRL + overrange bits per point */
 
-#define NUM_FREQ_POINTS  3
+#define NUM_FREQ_POINTS  8
+/* Build-time guards on the result map. These are the two ways it can go wrong,
+ * and both used to be silent:
+ *
+ *   1. more sweep points than the per-array stride -> each array overruns into
+ *      the next and every result after the first array is garbage. No trap, no
+ *      warning. This is what the old 4-word stride would have done at 5 points.
+ *   2. the result block plus the stack exceeding RAM -> the stack grows down
+ *      into the results, or a store lands outside the RAM and the bridge
+ *      returns data_err (which does at least trap, via STATUS.TRAP_SEEN).
+ *
+ * Raising NUM_FREQ_POINTS past OUT_MAX_POINTS is now a compile error, not a
+ * debugging session. */
+_Static_assert(NUM_FREQ_POINTS <= OUT_MAX_POINTS,
+               "NUM_FREQ_POINTS exceeds the per-array stride OUT_MAX_POINTS: "
+               "the result arrays would overlap. Widen the stride and the map.");
+_Static_assert(OUT_END + STACK_RESERVE <= DMEM_BYTES,
+               "result block plus stack reserve does not fit in DMEM: "
+               "shrink the map or raise DMEM_WORDS here and in the RTL shell.");
 #define NUM_MEASUREMENTS 2   /* averaged per frequency point */
 
 /*
@@ -199,15 +250,42 @@ static int run_sweep_point(int divider_n, struct iq_pair *out)
 }
 
 /*
- * Divider for each sweep point. Immediates rather than a lookup table:
- * link.ld ASSERTs that .rodata stays empty (Harvard split, no startup copy),
- * so a const array would be a deliberate build error.
+ * Divider for each sweep point. f_exc = f_clk / (16 * N) = 10 MHz / N.
+ *
+ * Half-decade (sqrt(10)) log ladder covering 1 kHz to 1 MHz, plus a 10 MHz
+ * anchor. LOG spacing, not uniform in Hz: a dielectric dispersion is a feature
+ * in log frequency, so uniform spacing would crowd the top decade and leave
+ * the bottom -- where the ionic/nutrient information sits -- with almost no
+ * resolution. Three points could not locate a dispersion at all; they could
+ * only sample it.
+ *
+ * Ordered cheapest (highest frequency) first. Run time is nearly linear in N,
+ * so this maximises the number of points already stored if a host abort cuts
+ * the sweep short.
+ *
+ * Cost: sum(N) = 14621 against the old 3-point sweep's 10101, so eight points
+ * take about 1.45x the time, not 2.7x -- the 1 kHz point dominated the old
+ * sweep as well. Measured 3-point sweep was ~3.16 Mcycles; this is ~4.6 M.
+ *
+ * Immediates and an if-chain rather than a lookup table or a switch: link.ld
+ * ASSERTs that .rodata stays empty (Harvard split, no startup copy), and a
+ * const array -- or a switch that the compiler lowers to a jump table -- would
+ * be a deliberate build error.
+ *
+ * To re-band the sweep, change ONLY this function. If you need more than
+ * OUT_MAX_POINTS points, widen the result-array stride in the map above too;
+ * the _Static_assert on NUM_FREQ_POINTS enforces that.
  */
 static int sweep_divider(int point)
 {
-    if (point == 0) return 1;       /* 10 MHz  */
-    if (point == 1) return 100;     /* 100 kHz */
-    return 10000;                   /* 1 kHz -- carries most of the ionic
+    if (point == 0) return 1;       /*  10    MHz */
+    if (point == 1) return 10;      /*   1    MHz */
+    if (point == 2) return 32;      /* 312.5  kHz */
+    if (point == 3) return 100;     /* 100    kHz */
+    if (point == 4) return 316;     /*  31.6  kHz */
+    if (point == 5) return 1000;    /*  10    kHz */
+    if (point == 6) return 3162;    /*   3.16 kHz */
+    return 10000;                   /*   1    kHz -- carries most of the ionic
                                        (nutrient/salt) information, and was
                                        unreachable before Phase 4/6 widened
                                        the divider path end to end */

@@ -434,20 +434,33 @@ module agriasic_rv32i_mmio #(
   // an aborted run emits no done pulse, by design, so there would be nothing
   // left to wake it and the sweep would hang half-finished.
   //
-  // ABORTED is gated on the core not having parked for good. start.S ends in
-  // `park: wfi; j park`, and this wake is LEVEL sensitive while ABORTED is
-  // sticky -- so an abort arriving after FW_DONE would hold the line high with
-  // nothing left to clear it (firmware has already run its clear path for the
-  // last time), wfi would return immediately forever, and the core would spin
-  // at full power instead of sleeping. An abort only ever needs to wake a core
-  // that is WAITING for a measurement; once firmware has finished or trapped,
-  // waking it just re-parks it.
+  // BOTH sources are gated on the core not having parked for good. start.S
+  // ends in `park: wfi; j park`, this wake is LEVEL sensitive, and both sticky
+  // bits can still be set when the core arrives there -- so an ungated term
+  // holds the line high with nothing left to clear it (firmware has already
+  // run its clear path for the last time), wfi returns immediately forever,
+  // and the core spins at full clock instead of sleeping. A wake only ever
+  // needs to reach a core that is WAITING for a measurement; once firmware has
+  // finished or trapped, waking it just re-parks it.
   //
-  // This cannot mask a wake the firmware needs: fw_done_q is only set after
-  // main() returns, and ndmreset clears it, so a restarted firmware wakes
-  // normally again.
-  assign meas_wake_irq_o = meas_done_q ||
-                           (meas_aborted_q && !fw_done_q && !trap_seen_q);
+  // DONE is the term that bites on the NORMAL path, and it was missed when
+  // this gate was first added. The firmware's closing CTRL.CLEAR_ERR drops
+  // ABORTED, but nothing clears meas_done_q except a reset or an accepted
+  // start -- so after a SUCCESSFUL sweep the final measurement's DONE was
+  // still set at the park. Measured on the e2e bench before this fix:
+  // meas_wake_irq=1, core_sleep high 0 cycles out of 2000, instr_req busy
+  // 1143 of them, i.e. the park loop fetching flat out for the rest of the
+  // chip's life. The aborted path was safe only incidentally, because an abort
+  // deliberately emits no done pulse; that is why tb_abort_wake's park checks
+  // passed while the completed-sweep park had never been looked at.
+  //
+  // Gating cannot mask a wake the firmware needs. fw_done_q is set only after
+  // main() returns and trap_seen_q only in the trap handler, and both of those
+  // paths park forever without waiting on a measurement again. run_clear_i (a
+  // core reset via gpio_start_i) and ndmreset clear both, so a restarted
+  // firmware wakes normally.
+  assign meas_wake_irq_o = (meas_done_q || meas_aborted_q) &&
+                           !fw_done_q && !trap_seen_q;
 
   // --------------------------------------------------------------------------
   // Peripheral read path (registered: same 1-cycle latency as the SRAM)

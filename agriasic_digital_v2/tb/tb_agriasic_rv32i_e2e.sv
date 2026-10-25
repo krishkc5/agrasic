@@ -291,6 +291,35 @@ module tb_agriasic_rv32i_e2e;
       errors++;
     end
 
+    // The park loop must actually SLEEP, not spin. FW_DONE is set by now, so
+    // the core is in start.S's `park: wfi; j park` for good. The wake is level
+    // sensitive, so ANY sticky wake source still set here makes wfi a no-op
+    // and the core fetches at full clock for the rest of the chip's life --
+    // visible on the bench only if something looks after FW_DONE, which
+    // nothing used to.
+    //
+    // tb_abort_wake scenarios D/E cover the park reached by an ABORT. This
+    // covers the park reached by a COMPLETED sweep, which is the case that was
+    // broken: an abort emits no done pulse, but a finished sweep leaves
+    // meas_done_q set and the firmware's clear path does not drop it.
+    begin
+      int unsigned park_slept = 0;
+      for (int unsigned k = 0; k < 2000; k++) begin
+        @(posedge clk);
+        if (core_sleep_mon) park_slept++;
+      end
+      if (park_slept < 1900) begin
+        $error("park loop is not sleeping: core_sleep high only %0d of 2000 cycles after FW_DONE (wake=%0b done_q=%0b aborted_q=%0b)",
+               park_slept,
+               dut.u_control_shell.meas_wake_irq,
+               dut.u_control_shell.u_mmio.meas_done_q,
+               dut.u_control_shell.u_mmio.meas_aborted_q);
+        errors++;
+      end else begin
+        $display("[TB] parked and asleep: core_sleep high %0d of 2000 cycles after FW_DONE", park_slept);
+      end
+    end
+
     if (errors == 0) $display("[TB] PASS -- all checks passed");
     else             $display("[TB] FAIL -- %0d error(s)", errors);
     $finish;

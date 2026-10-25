@@ -111,10 +111,17 @@ module agriasic_imem #(
     // discarded prefetch from turning into an unbounded one. NOP (0x13) has
     // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
     //
-    // NOTE this is a SIMULATION fix only. On silicon these latches power up
-    // undefined and the boot copier writes only ROM_USED_WORDS (136) of the
-    // 256 words, so words 136..255 are genuinely undefined on the die and the
-    // prefetcher still peeks at two of them. See agriasic_spi_boot.sv.
+    // NOTE this is a SIMULATION fix only, and it does not imply a silicon hole.
+    // On the die these latches power up undefined and the boot copier writes
+    // only ROM_USED_WORDS (136) of the 256 words, so words 136..255 hold
+    // garbage and the prefetcher still peeks at two of them -- but garbage in
+    // hardware is a DEFINITE bit pattern, not X. aligned_is_compressed and
+    // pop_fifo therefore resolve to real values, the branch flush discards the
+    // two words as designed, and the runaway above cannot happen. The runaway
+    // is an artifact of 4-state X propagation, i.e. of simulation only. The
+    // copier is deliberately left stopping at ROM_USED_WORDS; zero-filling the
+    // 120-word tail would buy nothing and cost boot time. See
+    // agriasic_spi_boot.sv.
     for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
   end
@@ -276,10 +283,17 @@ module agriasic_imem #(
     // discarded prefetch from turning into an unbounded one. NOP (0x13) has
     // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
     //
-    // NOTE this is a SIMULATION fix only. On silicon these latches power up
-    // undefined and the boot copier writes only ROM_USED_WORDS (136) of the
-    // 256 words, so words 136..255 are genuinely undefined on the die and the
-    // prefetcher still peeks at two of them. See agriasic_spi_boot.sv.
+    // NOTE this is a SIMULATION fix only, and it does not imply a silicon hole.
+    // On the die these latches power up undefined and the boot copier writes
+    // only ROM_USED_WORDS (136) of the 256 words, so words 136..255 hold
+    // garbage and the prefetcher still peeks at two of them -- but garbage in
+    // hardware is a DEFINITE bit pattern, not X. aligned_is_compressed and
+    // pop_fifo therefore resolve to real values, the branch flush discards the
+    // two words as designed, and the runaway above cannot happen. The runaway
+    // is an artifact of 4-state X propagation, i.e. of simulation only. The
+    // copier is deliberately left stopping at ROM_USED_WORDS; zero-filling the
+    // 120-word tail would buy nothing and cost boot time. See
+    // agriasic_spi_boot.sv.
     for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
   end

@@ -20,4 +20,4 @@ verilator --binary --timing --assert -j 4 -Wno-fatal -Wno-WIDTHEXPAND -Wno-WIDTH
   $IBEX_ARGS tb_agriasic_flash_boot.sv tb_spi_flash_model.sv $AGRIASIC_RV32I_SOURCES \
   2>&1 | grep -E "^%(Error|Warning)" | grep -vE "UNUSED(PARAM|SIGNAL)|DECLFILENAME|UNOPTFLAT" | head -20 || true
 echo "=== running ==="
-./obj_dir/sim_flash 2>&1 | tail -45
+./obj_dir/sim_flash 2>&1 | tail -120   # A and E each print ~40 check lines

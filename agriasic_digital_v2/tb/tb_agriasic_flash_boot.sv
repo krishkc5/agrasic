@@ -9,6 +9,15 @@
 //      through the bus, CRC matches, fw_valid releases the core, and the
 //      firmware then runs the full three-point sweep with correct results.
 //      IMEM contents are compared word-for-word with fw/agriasic_fw.hex.
+//
+//   This is the ONLY testbench that exercises the real boot path: it sets
+//   IMEM_PRELOADED=0 and IMEM_INIT_FILE="", so program memory starts empty
+//   and every instruction the core executes was put there by the boot FSM
+//   over SPI (A-D) or from the on-die golden ROM (E-G). Every other bench
+//   (e2e, jtag, spi_host, abort_wake) sets IMEM_PRELOADED=1 and relies on
+//   $readmemh, which is faster but cannot catch a boot-copier fault. Keep the
+//   result checking here at the same depth as the preloaded e2e test, or the
+//   path a real chip actually takes ends up the least verified one.
 //   B. Corrupted payload byte: chip reset -> boot ends in FAIL with error 3
 //      (CRC), boot_fail_o high, core stays in reset.
 //   C. Blank flash (0xFF): error 1 (bad magic), core stays in reset.
@@ -148,6 +157,32 @@ module tb_agriasic_flash_boot;
     end else $display("[TB]   %s = %0d OK", name, $signed(actual));
   endtask
 
+  // Zero the firmware's output words. Scenario E re-runs the SAME firmware
+  // after a chip reset, and DMEM is an unreset RAM, so scenario A's results
+  // are still sitting there. Without this, E's result checks would pass on
+  // A's leftovers even if E's firmware never stored anything.
+  task automatic clear_outputs();
+    for (int w = 'h100/4; w <= 'h170/4; w++)
+      dut.u_control_shell.u_mmio.u_dmem.ram_array[w] = 32'h0000_0000;
+  endtask
+
+  // All three sweep points, for every result word. The AFE model holds the
+  // same codes at every excitation frequency, so each point carries the same
+  // expected I/Q; only the divider differs.
+  task automatic check_sweep_results(string tag);
+    check_word({tag, "OUT_COUNT"},      'h100/4, 32'd2);
+    check_word({tag, "OUT_NUM_POINTS"}, 'h104/4, 32'd3);
+    check_word({tag, "OUT_DIV[0]"},     'h110/4, 32'd1);        // 10 MHz
+    check_word({tag, "OUT_DIV[1]"},     'h114/4, 32'd100);      // 100 kHz
+    check_word({tag, "OUT_DIV[2]"},     'h118/4, 32'd10000);    // 1 kHz
+    for (int pt = 0; pt < 3; pt++) begin
+      check_word({tag, $sformatf("OUT_DV_I[%0d]",  pt)}, ('h120/4) + pt, 32'd400);
+      check_word({tag, $sformatf("OUT_DV_Q[%0d]",  pt)}, ('h130/4) + pt, 32'd280);
+      check_word({tag, $sformatf("OUT_CUR_I[%0d]", pt)}, ('h150/4) + pt, 32'd240);
+      check_word({tag, $sformatf("OUT_CUR_Q[%0d]", pt)}, ('h160/4) + pt, 32'd200);
+    end
+  endtask
+
   task automatic chip_reset();
     rst_n = 1'b0;
     repeat (10) @(posedge clk);
@@ -193,13 +228,8 @@ module tb_agriasic_flash_boot;
     while (!fw_halted && cycles < 8000000) begin @(posedge clk); cycles++; end
     if (!fw_halted) begin $error("A: firmware did not finish"); errors++; end
     else $display("[TB] A: firmware finished after %0d cycles (%0d measurements)", cycles, measurements_seen);
-    check_word("OUT_COUNT",      'h100/4, 32'd2);
-    check_word("OUT_NUM_POINTS", 'h104/4, 32'd3);
-    check_word("OUT_DIV[2]",     'h118/4, 32'd10000);
-    check_word("OUT_DV_I[2]",    'h128/4, 32'd400);
-    check_word("OUT_DV_Q[2]",    'h138/4, 32'd280);
-    check_word("OUT_CUR_I[2]",   'h158/4, 32'd240);
-    check_word("OUT_CUR_Q[2]",   'h168/4, 32'd200);
+    expect_eq("A measurements completed", 32'(measurements_seen), 32'd6);
+    check_sweep_results("A ");
 
     // ---- B. corrupted payload byte -> CRC failure -------------------------
     flash.mem[16 + 5] = flash.mem[16 + 5] ^ 8'hFF;
@@ -235,6 +265,7 @@ module tb_agriasic_flash_boot;
     for (int i = 0; i < 64; i++) flash.mem[i] = 8'hFF;   // blank the image
     boot_sel = 1'b0;                                      // strap: golden ROM
     chip_reset();
+    clear_outputs();   // so E's results cannot be A's leftovers
     wait_boot(cycles);
     $display("[TB] E: ROM boot finished in %0d cycles, state=%0d err=%0d",
              cycles, boot_state, boot_err);
@@ -259,8 +290,8 @@ module tb_agriasic_flash_boot;
     if (!fw_halted) begin $error("E: firmware did not finish after a ROM boot"); errors++; end
     else $display("[TB] E: firmware finished after %0d cycles (%0d measurements)",
                   cycles, measurements_seen);
-    check_word("OUT_DV_I[2] (ROM boot)",  'h128/4, 32'd400);
-    check_word("OUT_CUR_I[2] (ROM boot)", 'h158/4, 32'd240);
+    expect_eq("E measurements completed", 32'(measurements_seen), 32'd6);
+    check_sweep_results("E (ROM boot) ");
 
     // ---- F. IMEM is still writable after a ROM boot ------------------------
     // This is what the shadow-load buys over a fetch-path mux: a debugger can

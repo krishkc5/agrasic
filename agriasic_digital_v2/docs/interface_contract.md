@@ -416,9 +416,13 @@ Registers (data-port / SBA window `0x8000_0020..0x8000_003F`):
 
 ## Analog front-end interface (Rev 5, tetrapolar)
 
-Digital-to-analog signals on `agriasic_digital_rv32i_top` and
-`agriasic_digital_spi_top`. These are die-internal to the AFE, not pads,
-except where the AFE is off-chip in a test configuration.
+Digital-to-analog signals. The first seven are present on all three chip tops
+(`agriasic_digital_rv32i_top`, `agriasic_digital_spi_top`,
+`agriasic_digital_programming_top`). **`afe_tia_rf_o` is RV32I-only** --- the
+legacy 2-byte SPI and parallel-programming register maps have no `AFE_CTRL`
+register to set it from, so on those variants the TIA gain is not controllable
+at all. These are die-internal to the AFE, not pads, except where the AFE is
+off-chip in a test configuration.
 
 | Signal | Dir | Meaning |
 |---|---|---|
@@ -428,8 +432,8 @@ except where the AFE is off-chip in a test configuration.
 | `afe_adc_enable_o` | out | High for the duration of each conversion (comparator bias/power gate). |
 | `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. |
 | `afe_adc_comp_i` | in | One comparator decision: 1 = input >= trial code. Timed, unsynchronized — `REG_CONV` must cover regeneration at the worst corner. |
-| `afe_conv_start_o` | out | One-cycle pulse at the start of each conversion. |
-| `afe_tia_rf_o[2:0]` | out | TIA feedback resistor: **three switch wires**, same decode. |
+| `afe_conv_start_o` | out | One-cycle pulse marking the start of each conversion, issued **after** the `mux_settle` wait rather than at request acceptance, so it lands once the mux and S/H have settled onto the ADC input. One per conversion, so two per `afe_sample_o` strobe. |
+| `afe_tia_rf_o[2:0]` | out | TIA feedback resistor: **three switch wires**, same decode. **RV32I top only** --- see the note above. |
 
 **The differential PGA has a FIXED gain** and no digital control. In a
 voltage-driven tetrapolar measurement dV is a fixed fraction of the drive set by

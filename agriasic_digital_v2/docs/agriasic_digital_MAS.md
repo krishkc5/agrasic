@@ -206,10 +206,8 @@ understand the mechanism, not read Verilog.
 
 **As of Rev 4.3 Phase 1, exactly six wires cross the boundary** — five
 carrying digital's instructions out, one carrying analog's answer back. (A
-seventh output, `conv_start_o`, is kept on the pin list for compatibility and
-host-side monitoring, but it fires in the exact same instant as one of the
-six below and carries no information of its own — more on that at the end of
-this subsection.)
+seventh output, `conv_start_o`, marks the instant each conversion actually
+begins — more on that at the end of this subsection.)
 
 ![analog_digital_signals](diagrams/analog_digital_signals.svg)
 
@@ -297,14 +295,16 @@ one, is what lets the chip tell water and salt apart (section 3.1) — I and Q
 respond differently to the same soil, the way a wall sounds different when
 you knock at different spots.
 
-**The loose end: `conv_start_o`.** It's a real pin, and it's not one of the
-six — analog doesn't need it. `sar_controller` asserts it in the exact same
-clock cycle as `adc_sample_o`, from the exact same trigger, so it carries no
-information `adc_sample_o` doesn't already carry. It's kept on the interface
-for two reasons: it matches the pin layout of the pre-Phase-1 design, and an
-external host or logic analyzer watching the chip from outside can use it as
-a simple "a conversion just started" marker without needing to know about the
-sample/hold semantics specifically.
+**`conv_start_o` — no longer a loose end.** This pin used to be described
+here as carrying no information, on the grounds that `sar_controller` fired
+it in the same cycle as `adc_sample_o`. That was never quite right: a sample
+strobe fires once per phase point, while `conv_start_o` fires once per
+conversion, so the second conversion of every pair already had a start with
+no strobe. It is now separated in time as well — `conv_start_o` is issued
+when the `mux_settle` wait expires, immediately before the first bit trial,
+so it marks the instant the converter begins work on a settled input. That is
+exactly the event the analog behavioural model's `start` input consumes, and
+it is what an external host or logic analyzer should trigger on.
 
 For the RTL-level version of everything above — exact port names, timing
 diagrams, and what's implemented versus still specified — see sections 4.6,
@@ -559,12 +559,12 @@ from three pre-Phase-1): `exc_drive_p_o`, `exc_drive_n_o`, `adc_enable_o`,
 section 6.3/6.6 for what replaced them, and section 1.2.1 for what each of
 these six signals actually is and does, in plain language.
 
-`conv_start_o` is **not** one of the six. It is still a real output pin, kept
-for pin-compatibility with the pre-Phase-1 interface and for host-side
-monitoring/debug, but it carries no information `adc_sample_o` doesn't
-already carry — `sar_controller` asserts both in the exact same cycle, from
-the exact same trigger (accepting a new sample request). Analog does not need
-to consume it; a monitoring host or logic analyzer might.
+`conv_start_o` is **not** one of the six, but it is not redundant either. It
+fires once per conversion — twice per `adc_sample_o` strobe, since one strobe
+freezes both channels and two conversions follow — and it is issued when the
+`mux_settle` wait expires rather than at request acceptance, so it marks the
+instant the converter starts on a settled input. That is the event the analog
+behavioural model's `start` input consumes (section 1.2.1).
 
 Every other port on this module is either configuration coming in or
 status/result going out, and all of it stays digital.

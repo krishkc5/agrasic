@@ -22,15 +22,20 @@
 //
 // conv_cycles_i meaning changed with the interface:
 //   Previously "total cycles before reading one finished code." Now it is the
-//   regeneration wait PER BIT TRIAL (8 trials per sample, so total conversion
-//   time is 8 * (1 + conv_cycles_i) cycles). Making this a runtime register
+//   regeneration wait PER BIT TRIAL (8 trials per sample; each trial costs
+//   conv_cycles_i + 3 cycles -- SET, WAIT, EVAL -- so total conversion time is
+//   8 * (3 + conv_cycles_i) cycles). Making this a runtime register
 //   rather than a fixed parameter is deliberate: comparator regeneration time
 //   depends on process corner and is not yet characterized (MAS GAP-2) --
 //   REG_CONV lets it be tuned during bring-up without a respin.
 //
 // Functionality:
 //   - Accepts one sample request at a time.
-//   - Asserts conv_start_o for one cycle when a request is accepted.
+//   - Asserts conv_start_o for one cycle when the mux/S-H settling wait
+//     expires, immediately before the first bit trial -- NOT at acceptance.
+//     The analog behavioural model treats its start input as the instant the
+//     selected channel is latched, so a pulse at acceptance would mark a
+//     value the mux has not settled onto yet.
 //   - Asserts adc_enable_o for the full conversion (accept through done).
 //   - Drives mux_sel_o from channel_i and waits mux_settle_cycles_i before the
 //     first bit trial, so the analog mux and the selected sample-and-hold have
@@ -172,7 +177,6 @@ module sar_controller #(
             // digitises the already-held value (take_sample_i = 0).
             adc_sample_o <= take_sample_i;
             mux_sel_o    <= channel_i;
-            conv_start_o <= 1'b1;
             bit_idx_q    <= BIT_IDX_W'(ADC_WIDTH - 1);
             dac_reg_q    <= '0;
             regen_cnt_q  <= mux_settle_cycles_i;
@@ -184,7 +188,13 @@ module sar_controller #(
           // mux_sel_o is already driven; give the mux and the selected S/H
           // time to settle onto the comparator input before the first trial.
           if (regen_cnt_q == 8'd0) begin
-            state_q <= S_TRIAL_SET;
+            // The conversion proper begins HERE, not at acceptance: the mux
+            // and the selected sample-and-hold have settled onto the ADC
+            // input and the first trial follows next cycle. Still a one-cycle
+            // pulse (the default assignment above clears it) and still
+            // exactly one per accepted request -- only its position moved.
+            conv_start_o <= 1'b1;
+            state_q      <= S_TRIAL_SET;
           end else begin
             regen_cnt_q <= regen_cnt_q - 8'd1;
           end

@@ -1,0 +1,57 @@
+# Measurement engine on its own -- the clearest view of one conversion, with
+# no Ibex, no boot and no bus traffic in the way.
+#
+#   surfer -c tb/surfer/measurement_detail.surfer waves/smoke.fst
+#
+# Paths match a trace from tb/rv32i_regression/smoke.sh (WAVES=1).
+# Generated for Surfer 0.7.0.
+
+divider_add clock_and_run
+variable_add TOP.tb_agriasic_digital_top.clk
+variable_add TOP.tb_agriasic_digital_top.rst_n
+variable_add TOP.tb_agriasic_digital_top.start
+variable_add TOP.tb_agriasic_digital_top.busy_o
+variable_add TOP.tb_agriasic_digital_top.done_o
+
+# phase_q 0..15 free-runs; the four sample points sit at 0, 4, 8 and 12.
+divider_add excitation
+variable_add TOP.tb_agriasic_digital_top.dut.u_excitation_ctrl.phase_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_excitation_ctrl.period_tick_o
+variable_add TOP.tb_agriasic_digital_top.sine_code_o
+
+# One S/H strobe per point, then two conversions -- dV then current.
+divider_add sequencing
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.state_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.point_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.pair_count_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.take_sample_o
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.channel_o
+
+# adc_dac_o is the successive-approximation staircase: put it in analog/step
+# draw mode and adc_comp_i lines up with each step held or dropped.
+divider_add afe_pins
+variable_add TOP.tb_agriasic_digital_top.adc_sample_o
+variable_add TOP.tb_agriasic_digital_top.mux_sel_o
+variable_add TOP.tb_agriasic_digital_top.conv_start_o
+variable_add TOP.tb_agriasic_digital_top.adc_enable_o
+variable_add TOP.tb_agriasic_digital_top.adc_dac_o
+variable_add TOP.tb_agriasic_digital_top.adc_comp_i
+
+divider_add sar_internals
+variable_add TOP.tb_agriasic_digital_top.dut.u_sar_controller.state_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_sar_controller.bit_idx_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_sar_controller.dac_reg_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_sar_controller.regen_cnt_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_sar_controller.code_o
+
+divider_add accumulators
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.dv_i_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.dv_q_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.cur_i_q
+variable_add TOP.tb_agriasic_digital_top.dut.u_measurement_fsm.cur_q_q
+variable_add TOP.tb_agriasic_digital_top.result_dv_i_o
+variable_add TOP.tb_agriasic_digital_top.result_dv_q_o
+variable_add TOP.tb_agriasic_digital_top.result_cur_i_o
+variable_add TOP.tb_agriasic_digital_top.result_cur_q_o
+
+zoom_fit

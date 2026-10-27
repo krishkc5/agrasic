@@ -1,0 +1,118 @@
+# End-to-end digital functionality, in the order the chip actually does it.
+#
+#   surfer -c tb/surfer/e2e_overview.surfer waves/e2e.fst
+#
+# Paths match a trace from tb/rv32i_regression/e2e.sh (WAVES=1). Dividers break
+# the list into the ten things worth showing; collapse the sections you are not
+# talking about. Generated for Surfer 0.7.0.
+
+divider_add 1_clock_reset
+variable_add TOP.tb_agriasic_rv32i_e2e.clk
+variable_add TOP.tb_agriasic_rv32i_e2e.rst_n
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.rst_n_sync
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.sys_rst_n
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.core_rst_n
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_boot_sel_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_start_i
+
+# Golden ROM shadow-load into IMEM. boot_status[3:0] walks to 7 = DONE,
+# [13:12] = 1 says the source was the on-die ROM, and fw_valid gates the core.
+divider_add 2_boot
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_status
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_rom_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.rom_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.fw_valid
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_release
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_boot_fail_o
+
+# instr_addr is the fetch address -- the PC story, at the documented boundary
+# rather than inside Ibex.
+divider_add 3_core
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.instr_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.instr_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.data_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.data_we
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.data_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.data_wdata
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.trap_seen
+
+# Firmware programming the measurement engine. cfg_exc_divider is N, and it
+# steps through the eight sweep points 1,10,32,100,316,1000,3162,10000.
+divider_add 4_mmio_config
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.mmio_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.mmio_we
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.mmio_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.mmio_wdata
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_cfg_exc_divider_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_cfg_pair_log2_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_cfg_conv_cycles_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_cfg_mux_settle_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_tia_rf_o
+
+# Free-running phase counter: phase_q 0..15, period_tick once per revolution.
+divider_add 5_excitation
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_excitation_ctrl.enable_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_excitation_ctrl.divider_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_excitation_ctrl.phase_q
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_excitation_ctrl.period_tick_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_sine_code_o
+
+# point_q visits PT_0, PT_180, PT_90, PT_270; each point is one S/H strobe and
+# two conversions, so pair_count_q advances once per four points.
+divider_add 6_measurement_fsm
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.state_q
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.point_q
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.pair_count_q
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.sample_req_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.take_sample_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.channel_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.sar_done_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_measurement_fsm.code_i
+
+# The analog boundary. afe_adc_dac_o is the successive-approximation staircase;
+# set it to analog/step draw. afe_conv_start_o now lands at the END of the mux
+# settle wait, a few cycles after afe_sample_o rather than on the same edge.
+divider_add 7_afe_pins_and_sar
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_sample_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_mux_sel_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_conv_start_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_adc_enable_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_adc_dac_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.afe_adc_comp_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_sar_controller.state_q
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_measurement_top.u_sar_controller.bit_idx_q
+
+# Shadow registers: they latch only when a run completes, so a mid-run read
+# returns the previous run's value and never a partial sum.
+divider_add 8_results
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_busy_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_done_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_result_dv_i_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_result_dv_q_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_result_cur_i_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.dbg_result_cur_q_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.meas_overrange_dv
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.meas_overrange_cur
+
+# The wfi story: meas_wake_irq pulls the core out of sleep for each point, and
+# once fw_done sets, the gate drops and core_sleep stays high in the park loop.
+divider_add 9_wake_and_park
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.meas_wake_irq
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.core_sleep
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.fw_done
+
+# Host reading results out of DMEM over the M4 SPI port while the core runs.
+divider_add 10_host_spi_readout
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_spi_cs_n_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_spi_sclk_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_spi_mosi_i
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_spi_miso_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_spi_miso_oe_o
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.host_req
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.host_we
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.host_addr
+variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.host_rdata
+
+zoom_fit

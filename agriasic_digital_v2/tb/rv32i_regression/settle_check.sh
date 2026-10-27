@@ -2,15 +2,17 @@
 # Regression for the Rev 4.3 settle-path fixes (defects 1 and 2).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/waves.sh"
 W="$HOME/agriasic_settle"
 rm -rf "$W"; mkdir -p "$W"; cd "$W" || exit 1
+wave_setup tb_settle_timing settle_timing
 
 cp "$BASE/tb/tb_settle_timing.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" \
    "$BASE/rtl/ctrl/sar_controller.sv" .
 
-verilator --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_settle_timing -o sim_settle \
   tb_settle_timing.sv agriasic_digital_top.sv measurement_fsm.sv \
@@ -18,3 +20,4 @@ verilator --binary --timing -j 4 \
   || { echo "BUILD FAILED"; grep -E "^%Error|^%Warning" build.log | head -10; exit 1; }
 
 ./obj_dir/sim_settle 2>&1 | grep -E "^\[TB\]|SETTLE_" | head -12
+wave_report

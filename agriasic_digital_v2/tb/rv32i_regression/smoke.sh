@@ -9,14 +9,17 @@
 # is the only build target now.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/waves.sh"
 W="$HOME/agriasic_smoke"
 rm -rf "$W"; mkdir -p "$W"; cd "$W" || exit 1
+wave_setup tb_agriasic_digital_top smoke
 cp "$BASE/tb/smoke/tb_agriasic_digital_top.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" "$BASE/rtl/ctrl/sar_controller.sv" .
-verilator --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
+verilator $WAVE_ARGS --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_agriasic_digital_top -o sim_smoke \
   tb_agriasic_digital_top.sv agriasic_digital_top.sv measurement_fsm.sv \
   excitation_ctrl.sv sar_controller.sv > build.log 2>&1 \
   || { echo "BUILD FAILED"; tail -15 build.log; exit 1; }
 ./obj_dir/sim_smoke 2>&1 | grep -E "SMOKE_|Error" | head -5
+wave_report

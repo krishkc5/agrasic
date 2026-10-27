@@ -338,3 +338,23 @@ cocotb ISA regression scripts target the retired Penn core.
 
 Files ending in `.orig` are pre-fix snapshots. The smoke comparison scripts build
 against them deliberately, to show the failure each fix removes.
+
+### Waveforms
+
+Every stage script takes `WAVES=1`, which writes an FST into `waves/` that
+Surfer and GTKWave both open directly. Off by default, because tracing costs
+real time on the longer stages and `verify_all.sh` should stay fast.
+
+```bash
+WAVES=1 bash tb/rv32i_regression/smoke.sh            # -> waves/smoke.fst
+WAVES=1 WAVE_FORMAT=vcd bash .../sar_bit_trial.sh    # text, several x larger
+WAVES=1 WAVE_START=50000 bash .../e2e.sh             # skip boot, dump from 50 us
+WAVES=1 WAVE_DEPTH=4 bash .../e2e.sh                 # 4 levels below the TB top
+```
+
+No testbench needed editing: `waves.sh` generates a `wave_dump` module and
+`bind`s it into whichever top the stage names. Two Verilator behaviours are
+worth knowing before reaching for the usual tricks, both measured on 5.020:
+`$dumpvars`' scope and level arguments are **ignored** (use `WAVE_DEPTH`, which
+maps to `--trace-depth`), and `$dumpoff`/`$dumpon` are **ignored**, so a dump
+window can be opened but not closed --- hence `WAVE_START` and no `WAVE_STOP`.

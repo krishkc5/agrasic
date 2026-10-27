@@ -2,16 +2,19 @@
 # Regression for the Rev 4.3 Phase 4 free-running excitation generator.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/waves.sh"
 W="$HOME/agriasic_exc_drive"
 rm -rf "$W"; mkdir -p "$W"; cd "$W" || exit 1
+wave_setup tb_excitation_drive excitation_drive
 
 cp "$BASE/tb/tb_excitation_drive.sv" .
 cp "$BASE/rtl/ctrl/excitation_ctrl.sv" .
 
-verilator --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_excitation_drive -o sim_exc \
   tb_excitation_drive.sv excitation_ctrl.sv > build.log 2>&1 \
   || { echo "BUILD FAILED"; grep -E "^%Error|^%Warning" build.log | head -10; exit 1; }
 
 ./obj_dir/sim_exc 2>&1 | grep -E "^\[TB\]|EXCITATION_|ASSERT_FAIL|FREQ_FAIL|PERIOD_FAIL|CODE_MAP_FAIL|SYMMETRY_FAIL|SAMPLE_POINT_FAIL|AMPLITUDE_FAIL|IDLE_FAIL" | head -20
+wave_report

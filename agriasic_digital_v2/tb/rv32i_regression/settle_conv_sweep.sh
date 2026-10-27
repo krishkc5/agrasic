@@ -4,14 +4,17 @@
 # reasoning.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/waves.sh"
 W="$HOME/agriasic_settle_conv_sweep"
 rm -rf "$W"; mkdir -p "$W"; cd "$W" || exit 1
+wave_setup tb_settle_conv_sweep settle_conv_sweep
 cp "$BASE/tb/tb_settle_conv_sweep.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" "$BASE/rtl/ctrl/sar_controller.sv" .
-verilator --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
+verilator $WAVE_ARGS --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_settle_conv_sweep -o sim_settle_conv_sweep \
   tb_settle_conv_sweep.sv agriasic_digital_top.sv measurement_fsm.sv \
   excitation_ctrl.sv sar_controller.sv > build.log 2>&1 \
   || { echo "BUILD FAILED"; tail -20 build.log; exit 1; }
 ./obj_dir/sim_settle_conv_sweep 2>&1 | grep -E "^\[TB\]|SETTLE_CONV_" | head -10
+wave_report

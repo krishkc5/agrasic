@@ -4,6 +4,7 @@
 #   .\tb\surfer\open_waves.ps1                 # list the views
 #   .\tb\surfer\open_waves.ps1 e2e             # e2e_overview.surfer on waves\e2e.fst
 #   .\tb\surfer\open_waves.ps1 detail          # measurement_detail.surfer on waves\smoke.fst
+#   .\tb\surfer\open_waves.ps1 jtag            # jtag_debug.surfer on waves\jtag.fst
 #   .\tb\surfer\open_waves.ps1 e2e -Wave waves\e2e_ref.fst
 #
 # Works from any directory: paths resolve from this script's location. The
@@ -25,6 +26,7 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Views = [ordered]@{
   e2e    = @{ Commands = 'e2e_overview.surfer';       Wave = 'waves\e2e.fst';   Stage = 'e2e.sh' }
   detail = @{ Commands = 'measurement_detail.surfer'; Wave = 'waves\smoke.fst'; Stage = 'smoke.sh' }
+  jtag   = @{ Commands = 'jtag_debug.surfer';         Wave = 'waves\jtag.fst';  Stage = 'jtag.sh' }
 }
 
 if (-not $View) {

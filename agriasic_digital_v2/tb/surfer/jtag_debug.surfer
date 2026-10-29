@@ -1,0 +1,102 @@
+# JTAG / RISC-V debug session, grouped the way tb_agriasic_jtag.sv runs it:
+# TAP identification, DM status, halt into a LIVE sweep, abstract register
+# reads, system-bus access, resume, ndmreset, then boot control over the SBA.
+#
+#   .\tb\surfer\open_waves.ps1 jtag
+#   surfer -c tb/surfer/jtag_debug.surfer waves/jtag.fst
+#
+# Paths match a trace from tb/rv32i_regression/jtag.sh (WAVES=1 WAVE_DEPTH=4).
+# Generated for Surfer 0.7.0.
+
+# The five bonded pins. Everything else here is the consequence of these.
+divider_add 1_jtag_pins
+variable_add TOP.tb_agriasic_jtag.dut.gpio_jtag_tck_i
+variable_add TOP.tb_agriasic_jtag.dut.gpio_jtag_tms_i
+variable_add TOP.tb_agriasic_jtag.dut.gpio_jtag_tdi_i
+variable_add TOP.tb_agriasic_jtag.dut.gpio_jtag_tdo_o
+variable_add TOP.tb_agriasic_jtag.dut.gpio_jtag_trst_ni
+
+# TAP state and the 41-bit shift register. dtmcs_select / dmi_select say which
+# register the current scan is aimed at -- IDCODE, DTMCS or DMI.
+divider_add 2_tap
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.state_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.dr_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.dtmcs_select
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.dmi_select
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.capture
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.shift
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.update
+
+# The TCK -> clk crossing. address_q/data_q are the DMI request the TAP
+# assembled; error_q is how a busy or failed DMI op gets reported back.
+divider_add 3_dmi_link
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.address_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.data_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dtm.error_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dmi_rst_n
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dmi_req_valid
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dmi_req_ready
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dmi_resp_valid
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dmi_resp_ready
+
+divider_add 4_debug_module
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dm.dmactive_o
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dm.debug_req_o
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dm.unavailable_i
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.u_dm.ndmreset_o
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.debug_req
+
+# The halt lands while a measurement is in flight and the core is asleep in
+# wfi, so watch core_sleep and instr_req go quiet together.
+divider_add 5_core_halt_resume
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.core_sleep
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.core_rst_n
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.instr_req
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.instr_addr
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.trap_seen
+
+# Abstract commands run through the debug ROM and program buffer on the DM's
+# own slave port -- the instruction side of the bus, not the SBA.
+divider_add 6_dm_slave_port
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dm_req
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dm_we
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dm_addr
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dm_wdata
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.dm_rdata
+
+# System bus access: bus master M2. sba_err is what an unmapped address
+# returns, and it is how sberror gets set rather than garbage coming back.
+divider_add 7_system_bus_access
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_req
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_gnt
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_rvalid
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_we
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_addr
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_wdata
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_rdata
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sba_err
+
+# ndmreset resets the core and the MMIO bridge but NOT the DM or the TAP,
+# which is why the debugger stays attached across it.
+divider_add 8_ndmreset
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.ndmreset
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.ndmreset_q
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.ndmreset_ack
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.sys_rst_n
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.fw_valid
+
+# Boot control driven over the SBA: a retry with no flash attached must end in
+# FAIL on bad magic, hold the core, and still be recoverable by release.
+divider_add 9_boot_control
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.boot_status
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.boot_release
+variable_add TOP.tb_agriasic_jtag.dut.u_control_shell.boot_retry
+variable_add TOP.tb_agriasic_jtag.dut.gpio_boot_fail_o
+
+# Proof the halt really did land mid-sweep rather than between runs.
+divider_add 10_measurement_in_flight
+variable_add TOP.tb_agriasic_jtag.dut.dbg_busy_o
+variable_add TOP.tb_agriasic_jtag.dut.afe_sample_o
+variable_add TOP.tb_agriasic_jtag.dut.u_measurement_top.u_measurement_fsm.state_q
+
+zoom_fit

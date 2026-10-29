@@ -9,8 +9,19 @@
 //      IMEM and the debug module are both refused, and the refusal is visible
 //      as a sticky error bit rather than silently returning garbage.
 //   D. The sticky error survives until the host reads status, then clears.
-//   E. Once firmware finishes, the host reads a REAL measurement result out of
-//      DMEM -- the capability GAP-11 was about.
+//   E. The host learns the sweep is finished the ONLY way the chip allows --
+//      by polling STATUS[6] (fw_done) over SPI -- and then reads a REAL
+//      measurement result out of DMEM, the capability GAP-11 was about. The
+//      poll is the mechanism by decision, not by omission: see the comment at
+//      scenario E and "Completion signalling" in docs/interface_contract.md.
+//   F. The TIA gain code decodes to three switch wires, and the retired
+//      AFE_CTRL[1:0] field reads back as zero.
+//   G. Abort and start-while-busy are handled, and abort wins when one write
+//      asserts both.
+//   H. The host can recover the WHOLE sweep, not just one word of it: every
+//      point of every result array, read with the address auto-increment the
+//      protocol specifies rather than one transaction per word. E proves the
+//      path exists; H proves it carries the data a host actually needs.
 //
 // SPI timing follows the proven pattern in tb_agriasic_digital_spi_top: mode 0,
 // MSB first, one bit per 240 ns against a 10 ns core clock, which is well
@@ -23,6 +34,19 @@ module tb_agriasic_spi_host;
   localparam int unsigned ADC_WIDTH = 8;
   localparam logic [31:0] DMEM_BASE = 32'h0001_0000;
   localparam int unsigned NUM_FREQ_POINTS = 8;   // must match fw/fw.c
+  // The sweep ladder fw.c walks, in the order it produces points. Scenario H
+  // reads this back over SPI: without it a host has results but no idea which
+  // frequency each one belongs to.
+  localparam int EXP_DIV [0:7] = '{1, 10, 32, 100, 316, 1000, 3162, 10000};
+  // Firmware's measurement configuration, mirrored from fw/fw.c main().
+  // These exist only to DERIVE the completion timeout in scenario E, so the
+  // bench does not carry a hard-coded cycle count that quietly stops
+  // bounding anything the moment the sweep is re-banded or averaging raised.
+  localparam int unsigned FW_MEASUREMENTS  = 2;        // NUM_MEASUREMENTS
+  localparam int unsigned FW_SETTLE        = 2;        // REG_SETTLE
+  localparam int unsigned FW_PAIR_LOG2     = 2;        // REG_PAIR_LOG2
+  localparam int unsigned CLK_PERIOD_NS    = 10;
+  localparam int unsigned POLL_INTERVAL_NS = 500_000;  // 0.5 ms, as a host would
   // Scratch for the concurrent-access probe, in the guard region between
   // the firmware's result block (0x000-0x0DF) and the stack (from 0x150),
   // so the firmware never writes it. Not 0x080 (now OUT_CUR_I[0]) and not
@@ -133,6 +157,29 @@ module tb_agriasic_spi_host;
     end
   endtask
 
+  // Several words in ONE transaction, leaning on the bridge's address
+  // auto-increment (agriasic_spi_host.sv: addr_q <= addr_q + 4 at the end of
+  // every data word). host_read32 opens a fresh transaction per word and so
+  // never exercises that increment -- which is the documented protocol and
+  // the only sane way for a host to pull 40 result words off the chip.
+  logic [31:0] burst [0:7];
+  task automatic host_read_burst(input logic [31:0] addr, input int unsigned n);
+    logic [7:0] rx, b0, b1, b2, b3;
+    begin
+      cs_n = 1'b0; #480;
+      spi_byte(8'h03, rx);
+      send_addr(addr);
+      for (int unsigned i = 0; i < n; i++) begin
+        spi_byte(8'h00, b0);
+        spi_byte(8'h00, b1);
+        spi_byte(8'h00, b2);
+        spi_byte(8'h00, b3);
+        burst[i] = {b3, b2, b1, b0};
+      end
+      cs_n = 1'b1; #800;
+    end
+  endtask
+
   task automatic host_write32(input logic [31:0] addr, input logic [31:0] data);
     logic [7:0] rx;
     begin
@@ -157,6 +204,71 @@ module tb_agriasic_spi_host;
     end
   endtask
 
+  // The real host completion poll, and the only mechanism the chip offers:
+  // a 0x03 READ of MMIO STATUS, truncated after ONE data byte.
+  //
+  // Not RDSR (0x05) -- that status byte is [0] bridge busy and [1] sticky
+  // error only (agriasic_spi_host.sv header). It says nothing about the
+  // measurement, so fw_done is reachable only through the MMIO word.
+  //
+  // Truncating is deliberate and legal. Data is little-endian within a word,
+  // so STATUS[7:0] -- and with it bit 6, fw_done -- arrives FIRST; the other
+  // three bytes carry nothing a host waiting on completion needs. Dropping
+  // CS_N early ends the transaction and resets the framing, and a read
+  // commits nothing, so six bytes on the wire replace nine. That every
+  // transaction AFTER this one still works is itself the proof that ending a
+  // read mid-word leaves the bridge clean.
+  //
+  // Spinning on it is safe: fw_done_q is cleared only by reset, by
+  // run_clear_i (core_rst) or by a CTRL write (agriasic_rv32i_mmio.sv), never
+  // by a read -- unlike the RDSR sticky-error bit, which clears when read.
+  task automatic host_poll_fw_done(output logic [7:0] status_lsb);
+    logic [7:0] rx;
+    begin
+      cs_n = 1'b0; #480;
+      spi_byte(8'h03, rx);
+      send_addr(32'h8000_0014);
+      spi_byte(8'h00, status_lsb);
+      cs_n = 1'b1; #800;
+    end
+  endtask
+
+  // Check the 8 words of the last burst against one expected value. Prints a
+  // SINGLE line when they all agree -- 40 individual OK lines would drown the
+  // rest of the regression log -- but names every point that disagrees.
+  task automatic expect_burst_all(input string name, input logic [31:0] exp);
+    int bad;
+    begin
+      bad = 0;
+      for (int unsigned k = 0; k < NUM_FREQ_POINTS; k++) begin
+        if (burst[k] !== exp) begin
+          $error("%s[%0d] = 0x%08x, expected 0x%08x", name, k, burst[k], exp);
+          errors++; bad++;
+        end
+      end
+      if (bad == 0)
+        $display("[TB]   H: %s[0..%0d] all = 0x%08x OK",
+                 name, NUM_FREQ_POINTS - 1, exp);
+    end
+  endtask
+
+  // Same, against the per-point sweep ladder rather than one constant.
+  task automatic expect_burst_ladder();
+    int bad;
+    begin
+      bad = 0;
+      for (int unsigned k = 0; k < NUM_FREQ_POINTS; k++) begin
+        if (burst[k] !== 32'(EXP_DIV[k])) begin
+          $error("OUT_DIV[%0d] = 0x%08x, expected %0d", k, burst[k], EXP_DIV[k]);
+          errors++; bad++;
+        end
+      end
+      if (bad == 0)
+        $display("[TB]   H: OUT_DIV[0..%0d] = the fw sweep ladder %0d..%0d OK",
+                 NUM_FREQ_POINTS - 1, EXP_DIV[0], EXP_DIV[NUM_FREQ_POINTS-1]);
+    end
+  endtask
+
   task automatic expect_eq(input string name, input logic [31:0] got,
                            input logic [31:0] exp);
     begin
@@ -172,7 +284,7 @@ module tb_agriasic_spi_host;
   // ---------------------------------------------------------------------------
   logic [31:0] v;
   logic [7:0]  st;
-  int unsigned waited;
+  int unsigned sweep_cycles_est, max_polls, polls, early_idle;
 
   initial begin
     // 1->0->1 on reset: Ibex gates its own clock, so its async-reset flops need
@@ -225,14 +337,65 @@ module tb_agriasic_spi_host;
     expect_eq("D: DMEM intact after refusals", v, 32'hDEAD_BEEF);
 
     // ---- E. read a real result once the sweep finishes ----------------------
-    waited = 0;
-    while (!fw_halted && waited < 8_000_000) begin   // 8-point sweep is ~4.6 Mcycles
-      @(posedge clk); waited++;
-    end
-    if (!fw_halted) begin
-      $error("firmware did not finish within %0d cycles", waited); errors++;
+    // The host waits the way a real host must: by POLLING STATUS[6] (fw_done)
+    // over SPI. Polling is the chip's completion mechanism by decision, not
+    // by omission (2026-10-28): a bonded done pin was considered and declined,
+    // since dbg_done_o is `dbg_`-prefixed -- testbench observability, never a
+    // pad, per the MAS prefix table -- and promoting it would have cost pad 19.
+    //
+    // This loop used to spin on the hierarchical probe `fw_halted`, an oracle
+    // no host has, which gated the entire result readout on a signal silicon
+    // cannot see. The probe is still read below, but as a CROSS-CHECK that the
+    // host-visible bit tells the truth -- never again as the gate.
+    //
+    // The bound is derived, not guessed. One pair is 4 phase points x 2
+    // channels, and the phase order 0->180->90->270 wraps past the end of an
+    // excitation period, so a pair costs about 2 periods of 16N cycles:
+    //
+    //   cycles ~= 16 * sum(N) * measurements * (settle + 2 * 2**pair_log2)
+    //
+    // At the firmware's settings that is 320 * 14621 = 4.68 Mcycles, against
+    // the ~4.6 M the MAS records as measured -- close enough to trust. The
+    // old hard-coded 8 M was fine for THIS sweep and nothing else: one more
+    // decade point (N=10000) lands at 7.9 M and would have passed by 1%,
+    // and pair_log2 = 4 overruns it outright.
+    sweep_cycles_est = 0;
+    for (int unsigned k = 0; k < NUM_FREQ_POINTS; k++)
+      sweep_cycles_est += 16 * EXP_DIV[k] * FW_MEASUREMENTS *
+                          (FW_SETTLE + 2 * (1 << FW_PAIR_LOG2));
+    max_polls  = (2 * sweep_cycles_est * CLK_PERIOD_NS) / POLL_INTERVAL_NS;
+    polls      = 0;
+    early_idle = 0;
+    do begin
+      host_poll_fw_done(st);
+      polls++;
+      // STATUS[0] is the ENGINE's per-measurement busy, which returns to idle
+      // 16 times during one sweep. This counts the polls that caught it idle
+      // while the sweep was unfinished -- the polls at which a host watching
+      // bit 0 would have declared victory and read a half-written block.
+      //
+      // Measured: 0 of 90 polls at a 0.5 ms interval. That makes bit 0 a
+      // WORSE trap than a noisy count would, not a safer one: the gaps
+      // between measurements are microseconds wide against a millisecond
+      // poll, so a host polling bit 0 looks correct on the bench and fails
+      // intermittently in the field. Reported, never asserted on in either
+      // direction -- the count is a property of poll phasing, not of the RTL.
+      if (!st[6] && !st[0]) early_idle++;
+      if (!st[6]) #(POLL_INTERVAL_NS);
+    end while (!st[6] && polls < max_polls);
+    if (!st[6]) begin
+      $error("E: fw_done never set -- %0d polls, bound %0d (~%0d ms of sweep)",
+             polls, max_polls, (polls * POLL_INTERVAL_NS) / 1_000_000);
+      errors++;
     end else begin
-      $display("[TB]   E: firmware finished after %0d cycles", waited);
+      $display("[TB]   E: host polled STATUS[6] fw_done, set after %0d polls (~%0d ms), bound %0d",
+               polls, (polls * POLL_INTERVAL_NS) / 1_000_000, max_polls);
+      $display("[TB]   E: polls that caught the engine idle mid-sweep = %0d of %0d",
+               early_idle, polls);
+      // If the host-visible bit ever disagreed with the internal flag, the
+      // host would be lied to -- worse than having no flag at all.
+      expect_eq("E: STATUS[6] agrees with the internal fw_done",
+                {31'd0, fw_halted}, 32'd1);
       host_read32(DMEM_BASE + 32'h000, v);
       expect_eq("E: OUT_COUNT read over SPI", v, 32'd2);
       host_read32(DMEM_BASE + 32'h004, v);
@@ -241,6 +404,39 @@ module tb_agriasic_spi_host;
       expect_eq("E: OUT_DV_I[0] read over SPI", v, 32'd400);
       host_read32(DMEM_BASE + 32'h080, v);
       expect_eq("E: OUT_CUR_I[0] read over SPI", v, 32'd240);
+    end
+
+    // ---- H. read the ENTIRE result block over SPI, in bursts ---------------
+    // Runs here, after E and before F: F rewrites AFE_CTRL (and with it
+    // mux_settle) and G aborts the engine, so both would disturb the results
+    // this reads. Every sweep point sees the same four hold values from the
+    // AFE model above, so every point must yield the same accumulators -- a
+    // per-point indexing bug, a dropped point, or a burst that stops
+    // incrementing shows up here and in none of A-E.
+    if (st[6]) begin
+      host_read_burst(DMEM_BASE + 32'h020, NUM_FREQ_POINTS);   // OUT_DIV[8]
+      expect_burst_ladder();
+
+      host_read_burst(DMEM_BASE + 32'h040, NUM_FREQ_POINTS);   // OUT_DV_I[8]
+      expect_burst_all("OUT_DV_I", 32'd400);
+
+      host_read_burst(DMEM_BASE + 32'h060, NUM_FREQ_POINTS);   // OUT_DV_Q[8]
+      expect_burst_all("OUT_DV_Q", 32'd280);
+
+      host_read_burst(DMEM_BASE + 32'h080, NUM_FREQ_POINTS);   // OUT_CUR_I[8]
+      expect_burst_all("OUT_CUR_I", 32'd240);
+
+      host_read_burst(DMEM_BASE + 32'h0A0, NUM_FREQ_POINTS);   // OUT_CUR_Q[8]
+      expect_burst_all("OUT_CUR_Q", 32'd200);
+
+      // Temperature is not implemented. The sentinel must survive the trip so
+      // a host can tell "not implemented" from "zero degrees".
+      host_read32(DMEM_BASE + 32'h008, v);
+      expect_eq("H: OUT_TEMP sentinel reads -1, not 0", v, 32'hFFFF_FFFF);
+
+      // A 40-word readout must not have tripped a bus error on the way.
+      host_status(st);
+      expect_eq("H: no sticky error across the whole readout", {24'd0, st[1]}, 32'd0);
     end
 
     // ---- F. TIA gain: a 2-bit code decodes to 3 switch wires ---------------

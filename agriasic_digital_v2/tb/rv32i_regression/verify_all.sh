@@ -144,7 +144,7 @@ stage "14. BOOT: GOLDEN ROM + SPI FLASH (header/CRC into IMEM, fail-hold, retry,
   flash_boot.sh "^\[TB\] [A-G]:|FLASH_BOOT_" 12 "FLASH_BOOT_PASS"
 
 stage "15. HOST SPI PORT (M4: read/write while the core runs, permissions, gain decode, abort/restart)" \
-  spi_host.sh "^\[TB\]   [A-G]:|SPI_HOST_" 22 "SPI_HOST_PASS"
+  spi_host.sh "^\[TB\]   [A-H]:|SPI_HOST_" 50 "SPI_HOST_PASS"
 
 stage "16. ABORT WAKES THE CORE (a host abort must not strand firmware in wfi)" \
   abort_wake.sh "^\[TB\]|ABORT_WAKE_" 16 "ABORT_WAKE_PASS"

@@ -72,6 +72,20 @@ top the same signals appear as `gpio_start_i` (in) and `dbg_busy_o` /
 - `done_o`: pulses high for one core cycle when the run completes (the SPI
   wrapper latches this into a sticky `REG_STATUS` bit — see below — because a
   host polling over SPI cannot reliably catch a single-cycle pulse)
+
+  > **`dbg_done_o` at `agriasic_digital_rv32i_top` is a different signal with
+  > the same name shape, and the pulse semantics above do NOT apply to it.**
+  > The control shell assigns `done_o = fw_done`
+  > (`agriasic_rv32i_control_shell.sv`): a **sticky level**, raised when the
+  > firmware writes `CTRL.FW_DONE` after the last sweep point, cleared only by
+  > a core reset via `run_clear_i`. It means *the whole sweep is finished and
+  > the DMEM result block is stable*, not *one measurement completed*.
+  > `dbg_busy_o` is likewise `!core_rst && !fw_done` — program running, not
+  > engine running. Reading this section as written and building edge
+  > detection for a host would be wrong twice over: the signal is a level,
+  > and per the MAS prefix table a `dbg_` port is testbench observability and
+  > **never reaches a pad**. See "Completion signalling" under the host SPI
+  > port for what a host actually uses.
 - `result_dv_i_o` / `result_dv_q_o` / `result_cur_i_o` / `result_cur_q_o`,
   all `[15:0]` (Rev 5; these replaced the Rev 4.3 `result_i_o`/`result_q_o`
   pair, which in turn replaced a single `result_o`): the voltage and current
@@ -110,6 +124,76 @@ still carries it.
 **Reach:** DMEM and the peripheral window only. IMEM and the debug module are
 refused by the interconnect and raise the sticky error. Writes commit whole
 32-bit words; a transaction cut short mid-word commits nothing.
+
+### Completion signalling — the host polls (decided 2026-10-28)
+
+**The chip never initiates.** There is no interrupt line, no attention pin and
+no done pad. A host learns that a sweep has finished by polling, and that is a
+decision rather than an omission: promoting `dbg_done_o` to a real pin was
+considered and declined. It would have taken the digital side to 19 pads to
+save traffic that measures, at a 0.5 ms poll interval over a 29 ms sweep,
+about 139 µs of SPI time — roughly 0.5 % bus duty, against a core that is
+parked in `wfi` for nearly all of it. Bandwidth was never the argument.
+
+**Poll `STATUS[6]` (`fw_done`), not `RDSR`.** The `RDSR` byte carries `[0]`
+bridge busy and `[1]` sticky error — the bridge's own state, nothing about the
+measurement. `fw_done` lives only in the MMIO word at `0x8000_0014`, so the
+poll is a `0x03` READ:
+
+```
+CS_N ↓
+  0x03                    READ
+  0x80 0x00 0x00 0x14     address, big endian
+  0x00                    one dummy byte; STATUS[7:0] streams back
+CS_N ↑
+→ done when (byte & 0x40)
+```
+
+Six bytes, not nine: data is little endian within a word, so `STATUS[7:0]` —
+and with it bit 6 — arrives first, and dropping `CS_N` early ends the
+transaction cleanly because a read commits nothing. Reading `STATUS` has no
+side effects (`fw_done_q` clears only on reset, `run_clear_i` or a `CTRL`
+write, never on a read, unlike the `RDSR` sticky bit), so the poll is
+idempotent.
+
+**Do not poll `STATUS[0]`.** That is the engine's per-measurement busy, which
+returns to idle 16 times during one 8-point sweep, so a host watching it can
+declare victory on a half-written result block. Bit 6 is the only flag with
+whole-sweep meaning.
+
+This one deserves emphasis because it does **not** fail loudly. Scenario E
+counts the polls that catch the engine idle mid-sweep and measured **0 of 90**
+at a 0.5 ms interval: the gaps between measurements are microseconds wide
+against a millisecond poll, so a host polling bit 0 passes on the bench and
+then fails intermittently in the field, at a rate that depends on nothing but
+poll phasing. A bit that is wrong 1 % of the time is harder to find than one
+that is wrong always.
+
+For the same reason, do not poll a DMEM word either — `OUT_NUM_POINTS`
+is written last and is tempting, but DMEM is a latch array with undefined
+power-up content, so no value distinguishes "not written yet".
+
+**Why the flag can be trusted.** Every result store precedes the
+`CTRL.FW_DONE` store in program order, and Ibex's LSU is strictly in-order
+with one outstanding request — there is no store buffer that could let the
+MMIO write retire ahead of the DMEM writes. Waiting for bit 6 is also what
+prevents a **torn read**: the bus arbitrates per word, so a burst taken
+mid-sweep can mix one point's `OUT_DV_I` with the previous sweep's
+`OUT_DV_Q`. Nothing in the chip prevents that, by design — the host SPI port
+is deliberately allowed to read DMEM while the core runs.
+
+**Host-side timeout.** Size it for the worst configuration, not the measured
+one. Sweep duration is
+`cycles ≈ 16 · ΣN · measurements · (settle + 2·2^pair_log2)`, which is 4.68 M
+cycles (29 ms at 160 MHz) at the firmware's defaults but 60.8 M (**380 ms**) at
+`pair_log2 = 6`. `tb_agriasic_spi_host.sv` scenario E derives its bound from
+this formula rather than hard-coding one, and runs exactly the poll sequence
+above.
+
+**Re-arming** is a `gpio_start_i` pulse: that resets the core, which clears
+`fw_done` through `run_clear_i` in the same event, so there is no stale-done
+race on a second sweep. A host cannot re-trigger the firmware over SPI — M4
+is denied the debug module, and the firmware parks in `wfi` after one sweep.
 
 ---
 
@@ -471,11 +555,29 @@ taken when `busy` falls):
 
 Impedance is computed off-die: Z(f) = (dv_i + j*dv_q) / (cur_i + j*cur_q).
 
-Open analog decision, not fixed in RTL: the design assumes **simultaneous**
-sample-and-hold on both channels (two matched switches). The alternative —
-measuring dV on one excitation period and I on the next, phase-locked to the
-same counter — needs one fewer S/H but doubles the measurement time and
-assumes stationarity across adjacent periods.
+**Simultaneous sample-and-hold is confirmed, not an assumption.** This
+paragraph previously listed it as an open analog decision. The ADC progress
+report of 2026-10-26 (Q4) states that two matched S/H schematics share
+sampling phases and capture together, which is what the RTL has always
+assumed; skew and mismatch between them are characterized but not yet
+verified over corners. The alternative that was under consideration —
+measuring dV on one excitation period and I on the next — is dropped: it
+needs one fewer S/H but doubles the measurement time and assumes
+stationarity across adjacent periods.
+
+**The SAR bit trials stay in digital.** Confirmed with the ADC owner on
+2026-10-27. The behavioural model shipped alongside that report
+(`agrasic_adc_behavioral.sv`, a complete converter with an
+`enable`/`capture`/`start`/`code`/`done` interface) is a **simulation aid
+only** and is not the integration contract — its own README says it "does
+not replace the final SAR controller." The boundary is therefore the one
+in the table above and nowhere else: digital drives `afe_adc_dac_o` and reads
+one `afe_adc_comp_i` decision per trial, and no `afe_adc_code_i` or
+`afe_adc_done_i` port is being added. Two items on the analog side are still
+open and would each cost a handful of gates if they land on digital: a
+per-trial DAC / reference-switch enable, because the report's Q7 measures
+settling from reference-switch enable rather than from the code edge, and the
+binary-to-one-hot mux decode that its Q3 calls "external".
 
 The golden ROM image is generated from `fw/golden/agriasic_fw_golden.hex` by
 `fw/gen_boot_rom.py` into `rtl/rv32i/agriasic_boot_rom.sv`. It is frozen at

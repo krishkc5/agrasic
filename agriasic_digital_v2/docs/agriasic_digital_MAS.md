@@ -29,7 +29,7 @@
 - **Post-v0.14 note — SPI-flash boot (Phase 3, Option C).** `agriasic_spi_boot.sv` boots the core from an external SPI NOR: header (`AGRA`, length, version, CRC-32) + payload streamed into program memory over the bus; the core is released only when `fw_valid && gpio_start_i`. Failure holds the core and raises `boot_fail_o`; `BOOT_CTRL.release/retry` and a post-boot SPI-master peripheral live at `0x8000_0020..0x30` (interface_contract.md). Pins: `boot_sel_i`, `flash_sck/cs_n/mosi/miso`, `boot_fail_o`. Program memory is therefore writable SRAM, not a synthesized ROM. Verified by `tb_agriasic_flash_boot.sv` (stage 14).
 - **Post-v0.14 note — golden boot ROM (default boot source).** The IMEM SRAM is shadow-loaded at reset from one of two sources selected by the `BOOT_SEL` strap (latched on the first cycle out of reset): **0 = on-die synthesized golden ROM** (`agriasic_boot_rom.sv`, generated from `fw/golden/agriasic_fw_golden.hex`, ~150 cycles), 1 = external SPI flash (~80k cycles, header + CRC-32). The core always fetches from the SRAM, never from the ROM: nothing is added to the fetch path's timing, firmware is linked once for both sources, and **IMEM stays writable after a ROM boot** so a debugger can patch constants over JTAG without a rebuild or reflash — the reason this is a shadow-load rather than a fetch-path mux. `BOOT_CTRL[2]` re-boots from ROM, `[1]` from flash; `BOOT_STATUS[13:12]` reports the source actually used. ROM cost: +1,027 combinational primitives, +6 flops (a writable array of the same depth would be 4,736 storage bits). The golden image is promoted explicitly (`gen_boot_rom.py --promote`), never by `build.sh`, and its provenance is recorded in `fw/golden/GOLDEN.md`. Option A of the memory recommendation (fixed firmware in ROM) and Option C (flash boot) therefore both exist, strap-selectable.
 - **Post-v0.14 note — voltage-sense gain fixed, PGA control removed.** Analog review concluded the diff PGA does not need programmable gain. In a voltage-driven tetrapolar measurement dV = V_drive x (R23/R_total), and both resistances scale with soil resistivity, so the ratio is set by **electrode geometry, not conductivity** — the voltage channel has little dynamic range. The **current** channel carries it (I = V_drive/R_total, 3-4 decades across the soil range), so the TIA keeps its programmable Rf and its three switch wires. `afe_pga_gain_o` is deleted from the MMIO, shell and chip top, and **`AFE_CTRL[1:0]` is retired with it** rather than left as an inert field — a register bit that does nothing is the placeholder problem GAP-10 exists to clean up. `AFE_CTRL[1:0]` now reads 0 and writes are ignored. These were die-internal wires, not pads, so the pad count is unchanged at 18; the saving is on the analog side (no switched gain network in the PGA). One coupling to watch: dV is a fixed fraction of the drive, so if `AFE_CTRL.amplitude` is ever reduced the voltage channel loses resolution with no gain to recover it. Verified by `tb_agriasic_spi_host.sv` scenario F, which now also confirms the retired field reads back as zero when written non-zero.
-- **Post-v0.14 note — Rev 5 tetrapolar analog interface.** The measurement engine was adapted to the four-electrode front end. Excitation: `excitation_ctrl` emits `sine_code_o[7:0]` from a 16-point COSINE table to the sine DAC on E1, replacing `exc_drive_p_o`/`exc_drive_n_o`; peaks land on the I sample points (phase 0/8) and mid-code on the Q points (4/12), and `code[k]+code[k+8]=256` preserves the +/- chop. There is no dead time any more, so **GAP-6 (break-before-make sizing) is retired**. Sensing: two channels (diff PGA on E2/E3, TIA on E4) share one SAR ADC through `mux_sel_o`; one `adc_sample_o` strobe freezes both S/H at each phase point and two conversions follow, so V/I phase is preserved by construction. Four accumulators (`dv_i/dv_q/cur_i/cur_q`, same +/-16320 bound each) replace the single I/Q pair; `RESULT_I`/`RESULT_Q` now carry dV and `RESULT_CUR_I`/`RESULT_CUR_Q` (`0x34`/`0x38`) the current, with `AFE_CTRL` (`0x3C`) carrying tia_rf/amplitude/mux_settle (it carried a pga_gain field too until the note above retired it). Section 3.1's I/Q definition applies per channel; impedance Z(f)=dV/I stays host-side. Verified by the rewritten `tb_excitation_drive.sv` and by two-channel ADC models in every measurement testbench (distinct per-channel targets, so a swapped mux fails). Open: simultaneous vs alternating S/H (RTL assumes simultaneous).
+- **Post-v0.14 note — Rev 5 tetrapolar analog interface.** The measurement engine was adapted to the four-electrode front end. Excitation: `excitation_ctrl` emits `sine_code_o[7:0]` from a 16-point COSINE table to the sine DAC on E1, replacing `exc_drive_p_o`/`exc_drive_n_o`; peaks land on the I sample points (phase 0/8) and mid-code on the Q points (4/12), and `code[k]+code[k+8]=256` preserves the +/- chop. There is no dead time any more, so **GAP-6 (break-before-make sizing) is retired**. Sensing: two channels (diff PGA on E2/E3, TIA on E4) share one SAR ADC through `mux_sel_o`; one `adc_sample_o` strobe freezes both S/H at each phase point and two conversions follow, so V/I phase is preserved by construction. Four accumulators (`dv_i/dv_q/cur_i/cur_q`, same +/-16320 bound each) replace the single I/Q pair; `RESULT_I`/`RESULT_Q` now carry dV and `RESULT_CUR_I`/`RESULT_CUR_Q` (`0x34`/`0x38`) the current, with `AFE_CTRL` (`0x3C`) carrying tia_rf/amplitude/mux_settle (it carried a pga_gain field too until the note above retired it). Section 3.1's I/Q definition applies per channel; impedance Z(f)=dV/I stays host-side. Verified by the rewritten `tb_excitation_drive.sv` and by two-channel ADC models in every measurement testbench (distinct per-channel targets, so a swapped mux fails). **Simultaneous S/H is now confirmed, not assumed** — the 2026-10-26 ADC progress report (Q4) has two matched S/H schematics sharing sampling phases and capturing together, matching the RTL; their skew and mismatch are not yet verified over corners, so that is what remains, not the architecture choice.
 - **Post-v0.14 note — eight-point log sweep, the DMEM relayout, and the DONE half of the wake gate.** Three frequencies could not resolve the impedance feature the analog side is looking for, so the sweep is now **eight log-spaced points**, walked by `sweep_divider()` in `fw.c` as raw `N` into `REG_DIVIDER`: N = 1, 10, 32, 100, 316, 1000, 3162, 10000, giving 10 MHz, 1 MHz, 312.5 kHz, 100 kHz, 31.6 kHz, 10 kHz, 3.16 kHz and 1 kHz from `f_exc = f_clk/(16N)`. Log spacing is the right default only while f_c is unknown; if the analog work names the decade, clustering inside it beats even spacing, and that is a one-function edit. Cost is dominated by the low end: measurement time is **1229 + 156·N cycles** (0.12 % against measured), so sum(N) = 14,621 against the 3-point sweep's 10,101 and the full sweep takes **4,564,339 cycles** (~29 ms at 160 MHz) against 4.58 M predicted. **The result block moved to DMEM offset 0** and each array now has a full 8-word stride: `OUT_COUNT` `0x000`, `OUT_NUM_POINTS` `0x004`, `OUT_TEMP` `0x008`, then `OUT_DIV` `0x020`, `OUT_DV_I` `0x040`, `OUT_DV_Q` `0x060`, `OUT_CUR_I` `0x080`, `OUT_CUR_Q` `0x0A0`, `OUT_AFE` `0x0C0`, ending at `0x0DF`. The old layout packed the arrays 4 words apart while advertising `[3]`, so at five points `OUT_DIV[4]` would have overwritten `OUT_DV_I[0]` silently; `fw.c` now carries `_Static_assert`s on the stride and on `OUT_END + STACK_RESERVE <= DMEM_BYTES`, which is why the 8-point move could not land quietly wrong. Relocating the block off `0x100` freed 32 words, so **DMEM dropped from 128 to 96 words** (512 B -> 384 B): 1024 fewer latch bits and a 128:1 -> 96:1 read mux, against roughly +91 combinational cells for the 12 extra golden-ROM words (136 -> 148), derived from this document's own measured 1,027 cells / 136 words. 96 is not a power of two, which is safe because `ram_sel` is an arithmetic compare, not an address mask. The stack pointer now comes from `link.ld`'s `_stack_top` (`0x0001_0180`) rather than a hardcoded `li`, and `-fno-jump-tables` is **load-bearing**: gcc tabled the 8-way divider if-chain into `.rodata`, which the Harvard `link.ld` ASSERTs empty — the 3-point version only passed because it was too small to table. **The wake's DONE term needed the same gate as ABORTED.** `meas_done_q` is cleared only by reset or by a fresh `CTRL.START`, so after the last point it survived into the park loop and held the level-sensitive `irq_fast[0]` high with nothing left to clear it: measured `core_sleep` **0 of 2000** cycles and `instr_req` 1143 of 2000 after `FW_DONE` — the park loop spinning at full clock after *every successful sweep*, not just after an abort. `meas_wake_irq_o` is now `(meas_done_q || meas_aborted_q) && !fw_done_q && !trap_seen_q`; the comment above that line had described exactly this failure mode for ABORTED and missed that DONE is equally sticky. Post-fix the core sleeps **2000 of 2000** cycles after parking, checked permanently in `tb_agriasic_rv32i_e2e` rather than once by hand. Verified by the full 16-stage regression (`VERIFY_ALL_PASS`), including all eight dividers read back from DMEM in the **no-preload** flash-boot test, 16 measurements, and an aborted sweep reporting 5 of 8 points.
 - MAS version: v0.14 (Rev 4.3 Phases 7-8 complete, with two items honestly left open: firmware now sweeps eight log-spaced frequency points and stores per-point I/Q in scratch RAM (Phase 7.1/7.2), but temperature sensing has no digital or analog RTL to read yet (Phase 7.3, blocked). **GAP-11 — no host-facing path for the swept results — was found here and has since been CLOSED** by `agriasic_spi_host` (see the note above and section 6.24). Verification plan items V-1, V-2, V-4, V-5 closed with real regression coverage (a practical, documented, non-exhaustive settle x conv grid; edge-case accumulator checks including the true M=64 saturating case; formal `assert property` for the shadow-register and phase-match contracts); V-3 confirmed superseded. Sections 7.1, 10, 11, 12, 13, 14 updated)
 - Date: 2026-09-06
@@ -1016,12 +1016,28 @@ input — verified for every code 0–255 including both endpoints, by
 spec. The controller guarantees regeneration time by waiting `conv_cycles_i`
 cycles between presenting a trial and sampling the decision.
 
-**Design decision on `conv_cycles_i`:** the comparator regeneration time is not
-yet characterized (GAP-2, unresolved — no number from analog as of this
-writing). Rather than hardcode a guessed value as an RTL parameter,
-`conv_cycles_i` — already a runtime register (`REG_CONV`) — was **reinterpreted**
-as the regeneration wait *per bit trial* rather than *total latency before
-reading one finished code*. This means the real regeneration time can be tuned
+**Partition confirmed (2026-10-27).** The bit-trial sequencing stays on the
+digital side. The ADC owner's behavioural model (`agrasic_adc_behavioral.sv`,
+delivered with the 2026-10-26 progress report) presents a complete converter
+with an `enable`/`capture`/`start`/`code`/`done` interface, which would move
+the search to the analog side; it is a **simulation aid only** and explicitly
+"does not replace the final SAR controller." So the ports in the table above
+are the interface, `adc_code_i` stays gone, and the `S_TRIAL_*` loop stays.
+
+**GAP-2 has nominal numbers now, but not worst-case ones.** The progress
+report gives 3.125 ns of CDAC settling to 8-bit agreement (Q7, measured from
+reference-switch enable, not from the digital code edge) and roughly 0.4034 ns
+of comparator decision time at +1 mV, 0.9 V common mode and 1.8 V supply
+(Q8) — about 3.53 ns in total against the 12.5 ns the controller already
+provides at `conv_cycles_i = 0`, so the register has roughly 3.5x margin at
+nominal. Both figures are tested operating points rather than specifications:
+worst-case code transitions, reference impedance, corners and extracted
+parasitics are all still outstanding, so GAP-2 stays open for the number that
+matters. That is precisely why the wait is a register: rather than hardcode
+a guessed value as an RTL parameter, `conv_cycles_i`
+— already a runtime register (`REG_CONV`) — was **reinterpreted** as the
+regeneration wait *per bit trial* rather than *total latency before reading
+one finished code*. This means the real regeneration time can be tuned
 during bring-up by writing a register, with no respin required, once
 characterized. Total conversion time is `8 × (3 + conv_cycles_i)` clock cycles;
 verified empirically (24 cycles at `conv_cycles_i=0`, 40 at `conv_cycles_i=2`).
@@ -1984,12 +2000,67 @@ when the command byte lands — clearing on the command would wipe the bit befor
 the host had clocked out the byte reporting it, so the host could never observe
 an error. A set always beats a simultaneous clear.
 
+**Completion signalling — polling, decided 2026-10-28.** The chip never
+initiates: there is no interrupt line, no attention pin and no done pad, so a
+host learns a sweep has finished by polling `STATUS[6]` (`fw_done`) at
+`0x8000_0014` with a `0x03` read. Bonding a done pin was considered and
+declined. `dbg_done_o` carries exactly the right signal — the control shell
+assigns it `fw_done`, a sticky whole-sweep level — but `dbg_` means
+testbench observability per the section 6 prefix table, so promoting it would
+have taken the digital side to **19 pads**. What that pad would have bought is
+small: at a 0.5 ms poll interval over a 29 ms sweep the host spends about
+**139 µs** on the wire, roughly 0.5 % bus duty, against a core parked in `wfi`
+for nearly all of it, and M4 sits below the core's data port in the
+arbitration anyway. The real cost of polling is not bandwidth but that the
+host must hold its own timeout and cannot sleep while waiting — acceptable
+for a host MCU that is awake regardless.
+
+Three details make the poll correct rather than merely workable, and each is
+a way a host could get it wrong:
+
+- **`RDSR` is the wrong register.** Its byte is `[0]` bridge busy and `[1]`
+  sticky error — this block's own state, nothing about the measurement. It is
+  the cheap poll (2 bytes) and the useless one.
+- **`STATUS[0]` is the wrong bit, and fails quietly.** That is the engine's
+  per-measurement busy, which returns to idle 16 times during an 8-point
+  sweep, so a host watching it can read a half-written result block. Scenario
+  E instruments this: it counts the polls that catch the engine idle
+  mid-sweep and measured **0 of 90** at a 0.5 ms interval, because the
+  inter-measurement gaps are microseconds wide against a millisecond poll.
+  So bit 0 is not a trap that announces itself — it passes on the bench and
+  fails intermittently in the field on poll phasing alone, which is strictly
+  harder to diagnose than a bit that is always wrong. Only bit 6 means
+  whole-sweep. Polling a DMEM word instead is worse still: `OUT_NUM_POINTS`
+  is written last, but DMEM is a latch array with undefined power-up content,
+  so no value distinguishes "not written yet".
+- **The flag is trustworthy for a structural reason.** Every result store
+  precedes the `CTRL.FW_DONE` store in program order and Ibex's LSU is
+  strictly in-order with one outstanding request, so no store buffer can let
+  the MMIO write retire ahead of the DMEM writes. Waiting on bit 6 is also
+  what prevents a **torn read**: the bus arbitrates per word, so a burst taken
+  mid-sweep can mix one point's `OUT_DV_I` with the previous sweep's
+  `OUT_DV_Q`. That is by design — reading DMEM while the core runs is the
+  capability, and the flag is how a host avoids using it wrongly.
+
+A host timeout must be sized for the worst **configuration**, not the measured
+one: `cycles ≈ 16 · ΣN · measurements · (settle + 2·2^pair_log2)` gives 4.68 M
+cycles (29 ms at 160 MHz) at the firmware's defaults and 60.8 M (**380 ms**) at
+`pair_log2 = 6`. Re-arming is a `gpio_start_i` pulse, which resets the core and
+clears `fw_done` through `run_clear_i` in the same event, so there is no
+stale-done race on a second sweep.
+
 Verified by `tb_agriasic_spi_host.sv` (stage 15 of `verify_all.sh`): the host
 writes and reads DMEM **while the core is mid-sweep**, reads the peripheral
 window, is refused on both IMEM and the debug module with the refusal visible as
-a sticky error, finds memory undisturbed by the refusals, and finally reads real
-measurement results (`OUT_COUNT`, `OUT_NUM_POINTS`, `OUT_DV_I[0]`,
-`OUT_CUR_I[0]`) out of DMEM once firmware completes.
+a sticky error, finds memory undisturbed by the refusals, then waits for the
+sweep by polling `STATUS[6]` over SPI exactly as a field host must — against a
+bound derived from the formula above rather than a hard-coded cycle count — and
+reads the **whole** result block back through the address auto-increment: all
+eight points of `OUT_DIV`, `OUT_DV_I`, `OUT_DV_Q`, `OUT_CUR_I` and `OUT_CUR_Q`,
+plus the `OUT_TEMP` sentinel, with no sticky error across the 40-word readout.
+Scenario E also cross-checks the host-visible bit against the internal
+`fw_done` flag, so a bridge that reported completion the firmware had not
+signalled would fail rather than pass quietly.
 
 ---
 

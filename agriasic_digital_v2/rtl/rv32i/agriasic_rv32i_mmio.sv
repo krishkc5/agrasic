@@ -299,6 +299,7 @@ module agriasic_rv32i_mmio #(
       cfg_amplitude_q  <= 2'd0;
       cfg_tia_rf_q     <= 2'd0;
       start_pulse_o   <= 1'b0;
+      abort_pulse_o   <= 1'b0;
       clear_errors_o  <= 1'b0;
       fw_done_q       <= 1'b0;
       trap_seen_q     <= 1'b0;

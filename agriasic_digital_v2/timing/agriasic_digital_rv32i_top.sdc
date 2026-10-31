@@ -145,7 +145,8 @@ set_false_path -to [get_ports dbg_*]
 #    area (992 extra flop bits).
 #
 # b. MEMORY READ MUX IS IN THE FETCH PATH. There is no SRAM compiler, so IMEM
-#    and DMEM are standard-cell flop arrays. A 256-deep array means a 256:1
+#    and DMEM are standard-cell arrays -- LATCH arrays by default, with
+#    AGRIASIC_FLOP_MEM selecting flops instead. A 256-deep array means a 256:1
 #    32-bit read mux between the array and the fetch data register, where a
 #    macro would have had a specified access time. See timing/path_depth.py for
 #    the structural measurement. This is the expected critical path; check it

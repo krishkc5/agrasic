@@ -1,5 +1,26 @@
 # AGRASIC firmware and physical memory requirements
 
+> **SUPERSEDED. Written 2026-09-20; do not size memories from this document.**
+>
+> The methodology here -- how to derive a required extent from the linker map
+> and the ELF, and the runtime address audit -- is still correct. The *numbers*
+> and several architectural statements are not. Known to be wrong below:
+>
+> | This document says | Current design |
+> |---|---|
+> | IMEM 4 KiB, 1,024 words | **1 KiB, 256 words** (`IMEM_WORDS`) |
+> | DMEM 2 KiB, 512 words | **384 B, 96 words** (`DMEM_WORDS`) |
+> | IMEM has no write port | **IMEM is writable** -- loaded over debug SBA and by the SPI boot loader, so it needs an RW SRAM, not a ROM |
+> | "Boot ROM: none" | `agriasic_boot_rom.sv` and `agriasic_spi_boot.sv` both exist; option B was implemented |
+> | SP = `0x800`, RAM based at 0 | `_stack_top` = `0x0001_0180`, RAM at `0x0001_0000` (`fw/link.ld`) |
+> | The SPI slave cannot read a flash | There is now an SPI **master** boot path |
+>
+> For current memory sizing, interfaces and the SRAM-macro swap, read **MAS
+> section 6.16** and the line-28 post-v0.14 note in
+> [`docs/agriasic_digital_MAS.md`](../docs/agriasic_digital_MAS.md), plus the
+> headers of [`agriasic_imem.sv`](../rtl/rv32i/agriasic_imem.sv) and
+> [`agriasic_dmem.sv`](../rtl/rv32i/agriasic_dmem.sv).
+
 The rebuilt application occupies **IMEM bytes `0x00000000–0x0000017F`**;
 the exclusive end is **`0x00000180`**, so its linked address extent is **384 bytes**.
 The generated [linker map](../fw/agriasic_fw.map) and

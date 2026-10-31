@@ -739,8 +739,9 @@ well as area.
 The golden boot ROM contributes ~1,027 of those combinational primitives and
 almost no registers — it is a constant table, not storage (section 6.21).
 
-**Both figures predate the 8-point relayout and have NOT been re-synthesized.**
-Two changes pull in opposite directions:
+**Both figures predate the 8-point relayout.** They were re-synthesized on
+2026-10-31 and the prediction below held; the measured results are in section
+6.16. Two changes pulled in opposite directions:
 
 - DMEM 128 -> 96 words: **-1024 latch bits**, and the read mux goes 128:1 ->
   96:1. The mux is in the instruction-fetch path, so this is a timing saving as
@@ -749,10 +750,12 @@ Two changes pull in opposite directions:
   measured 1,027 cells for 136 words, that is ~7.6 cells per word, so roughly
   **+91 combinational cells** — about 0.2 % of the 43,967 above.
 
-So the relayout is expected to be net favourable, with the storage saving
-dominating a sub-percent logic cost. That is arithmetic on the old numbers, not
-a measurement: re-run `power/run_synthesis.py` before quoting an area figure
-from this section.
+So the relayout was expected to be net favourable, with the storage saving
+dominating a sub-percent logic cost. **Measured 2026-10-31, it was better than
+that**: storage fell by exactly the predicted 1,024 bits, and combinational
+cells fell ~1,100 as well, because the 128:1 -> 96:1 mux saving outweighed the
+golden ROM's +12 words. Re-run `power/run_synthesis.py` after any depth change
+before quoting an area figure from this section.
 
 ## 5. Defect Register
 
@@ -1493,8 +1496,19 @@ the flop array instead.
 
 | | Registers | Latches | Comb. | Gate-equiv |
 |---|---:|---:|---:|---:|
-| Flop array | 16,299 | — | 44,078 | **181 kGE** |
-| **Latch array (default)** | 4,083 | 12,675 | 44,783 | **153 kGE** |
+| Flop array | 15,277 | 1 | 42,951 | <=181 kGE |
+| **Latch array (default)** | 4,085 | 11,619 | 43,657 | **<=153 kGE** |
+
+Cell counts measured 2026-10-31 on the post-relayout RTL (58,229 and 59,361
+cells in total). The gate-equivalent column is **not** re-measured: converting
+counts to GE needs the per-cell-type area weighting that produced the original
+figures, which this repository does not record. Every count fell, so both kGE
+values are upper bounds rather than estimates.
+
+Note the latch build has *more* total cells than the flop build yet less area.
+That is the whole point: a latch is much smaller than a flop, so 11,619 latches
+beat 11,753 flops despite the extra clock-gating logic around them. Cell count
+is not area, which is exactly why the kGE row is the one that needs a library.
 
 **28 kGE saved, about 0.24–0.41 mm² placed.** Against a 5 mm² die budget that
 moves the estimate from roughly 4.8–6.2 mm² to 4.5–5.7 mm².

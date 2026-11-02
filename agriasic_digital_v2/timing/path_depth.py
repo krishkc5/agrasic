@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Structural critical-path analysis: longest combinational depth between flops.
+"""Structural critical-path analysis: longest combinational depth between
+sequential elements -- flops, and the latches of the memory arrays.
 
 Signoff STA needs a Liberty library we do not have. What we CAN measure without
 one is the *structure* of the timing problem: how many levels of logic sit
@@ -9,8 +10,9 @@ paths, so depth is what identifies the critical path. The library then tells you
 whether it closes.
 
 This exists specifically to answer one question: with no SRAM compiler, IMEM and
-DMEM are standard-cell flop arrays, which puts an N:1 read mux in the
-instruction fetch path. Is that actually the worst path in the design?
+DMEM are standard-cell arrays -- latches by default, flops under
+AGRIASIC_FLOP_MEM -- which puts an N:1 read mux in the instruction fetch path.
+Is that actually the worst path in the design?
 
     python timing/path_depth.py            # reuse an existing netlist
     python timing/path_depth.py --build    # re-synthesise first (minutes)

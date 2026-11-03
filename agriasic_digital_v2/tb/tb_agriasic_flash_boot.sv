@@ -260,9 +260,18 @@ module tb_agriasic_flash_boot;
     wait_boot(cycles);
     $display("[TB] D: boot finished in %0d cycles, state=%0d err=%0d", cycles, boot_state, boot_err);
     expect_eq("D boot state DONE", {28'd0, boot_state}, {28'd0, S_DONE});
+    // core_sleep alone proves nothing here: Ibex reports sleep while it is
+    // held in reset, so it is already high at DONE and a wait on it returns
+    // before the core has run at all. Wait for the release, then for the core
+    // to wake, and only then for its first wfi.
     cycles = 0;
+    while (!core_rst_n && cycles < 100) begin @(posedge clk); cycles++; end
+    expect_eq("D core released (core_rst_n)", {31'd0, core_rst_n}, 32'd1);
+    while (core_sleep && cycles < 20000) begin @(posedge clk); cycles++; end
+    expect_eq("D core awake after release", {31'd0, core_sleep}, 32'd0);
     while (!core_sleep && cycles < 20000) begin @(posedge clk); cycles++; end
     expect_eq("D core running (reached wfi)", {31'd0, core_sleep}, 32'd1);
+    $display("[TB] D: core reached its first wfi %0d cycles after boot", cycles);
 
     // ---- E. golden ROM boot with no flash at all --------------------------
     for (int i = 0; i < 64; i++) flash.mem[i] = 8'hFF;   // blank the image

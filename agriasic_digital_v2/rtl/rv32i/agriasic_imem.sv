@@ -91,13 +91,15 @@ module agriasic_imem #(
     // every word past the image stayed uninitialised -- X in a 4-state
     // simulator, 0 under Verilator, which is why this never showed up here.
     //
-    // Why it matters, measured rather than assumed. The firmware image is 136
-    // words; main's `ret` is the last instruction, at 0x21c. Ibex prefetches
-    // linearly and speculatively, so it reads past `ret` before the return
-    // resolves. Instrumenting the e2e fetch bus shows EXACTLY two such
-    // fetches, at 0x220 and 0x224, and no more -- the prefetch buffer is
-    // NUM_REQS=2 / FIFO DEPTH=3, so it cannot run further ahead than that.
-    // Both are discarded by the branch flush.
+    // Why it matters, measured rather than assumed. The firmware image is 148
+    // words; main's `ret` is the last instruction, at 0x24e, so the image ends
+    // at 0x250. Ibex prefetches linearly and speculatively, so it reads past
+    // `ret` before the return resolves. The overrun is bounded at EXACTLY two
+    // words -- the prefetch buffer is NUM_REQS=2 / FIFO DEPTH=3, so it cannot
+    // run further ahead than that -- and both are discarded by the branch
+    // flush. Instrumenting the e2e fetch bus confirmed this when the image was
+    // 136 words: exactly two fetches, at the two words immediately past it,
+    // and no more. For the current image those are 0x250 and 0x254.
     //
     // With X in those two words, though, the overrun stops being bounded.
     // ibex_fetch_fifo derives aligned_is_compressed from rdata[1:0], and that
@@ -112,15 +114,15 @@ module agriasic_imem #(
     // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
     //
     // NOTE this is a SIMULATION fix only, and it does not imply a silicon hole.
-    // On the die these latches power up undefined and the boot copier writes
-    // only ROM_USED_WORDS (136) of the 256 words, so words 136..255 hold
+    // On the die these cells power up undefined and the boot copier writes
+    // only ROM_USED_WORDS (148) of the 256 words, so words 148..255 hold
     // garbage and the prefetcher still peeks at two of them -- but garbage in
     // hardware is a DEFINITE bit pattern, not X. aligned_is_compressed and
     // pop_fifo therefore resolve to real values, the branch flush discards the
     // two words as designed, and the runaway above cannot happen. The runaway
     // is an artifact of 4-state X propagation, i.e. of simulation only. The
     // copier is deliberately left stopping at ROM_USED_WORDS; zero-filling the
-    // 120-word tail would buy nothing and cost boot time. See
+    // 108-word tail would buy nothing and cost boot time. See
     // agriasic_spi_boot.sv.
     for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);
@@ -263,13 +265,15 @@ module agriasic_imem #(
     // every word past the image stayed uninitialised -- X in a 4-state
     // simulator, 0 under Verilator, which is why this never showed up here.
     //
-    // Why it matters, measured rather than assumed. The firmware image is 136
-    // words; main's `ret` is the last instruction, at 0x21c. Ibex prefetches
-    // linearly and speculatively, so it reads past `ret` before the return
-    // resolves. Instrumenting the e2e fetch bus shows EXACTLY two such
-    // fetches, at 0x220 and 0x224, and no more -- the prefetch buffer is
-    // NUM_REQS=2 / FIFO DEPTH=3, so it cannot run further ahead than that.
-    // Both are discarded by the branch flush.
+    // Why it matters, measured rather than assumed. The firmware image is 148
+    // words; main's `ret` is the last instruction, at 0x24e, so the image ends
+    // at 0x250. Ibex prefetches linearly and speculatively, so it reads past
+    // `ret` before the return resolves. The overrun is bounded at EXACTLY two
+    // words -- the prefetch buffer is NUM_REQS=2 / FIFO DEPTH=3, so it cannot
+    // run further ahead than that -- and both are discarded by the branch
+    // flush. Instrumenting the e2e fetch bus confirmed this when the image was
+    // 136 words: exactly two fetches, at the two words immediately past it,
+    // and no more. For the current image those are 0x250 and 0x254.
     //
     // With X in those two words, though, the overrun stops being bounded.
     // ibex_fetch_fifo derives aligned_is_compressed from rdata[1:0], and that
@@ -284,15 +288,15 @@ module agriasic_imem #(
     // [1:0] == 2'b11, so aligned_is_compressed reads a clean 0.
     //
     // NOTE this is a SIMULATION fix only, and it does not imply a silicon hole.
-    // On the die these latches power up undefined and the boot copier writes
-    // only ROM_USED_WORDS (136) of the 256 words, so words 136..255 hold
+    // On the die these cells power up undefined and the boot copier writes
+    // only ROM_USED_WORDS (148) of the 256 words, so words 148..255 hold
     // garbage and the prefetcher still peeks at two of them -- but garbage in
     // hardware is a DEFINITE bit pattern, not X. aligned_is_compressed and
     // pop_fifo therefore resolve to real values, the branch flush discards the
     // two words as designed, and the runaway above cannot happen. The runaway
     // is an artifact of 4-state X propagation, i.e. of simulation only. The
     // copier is deliberately left stopping at ROM_USED_WORDS; zero-filling the
-    // 120-word tail would buy nothing and cost boot time. See
+    // 108-word tail would buy nothing and cost boot time. See
     // agriasic_spi_boot.sv.
     for (int i = 0; i < NUM_WORDS; i++) mem_array[i] = 32'h0000_0013;  // NOP
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem_array);

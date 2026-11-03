@@ -1,0 +1,70 @@
+# The real boot path: IMEM starts empty and the boot FSM fills it, from SPI
+# flash in scenarios A-D and from the on-die golden ROM in E (and again at the
+# end of G).
+#
+#   surfer -c tb/surfer/flash_boot.surfer waves/flash_boot.fst
+#
+# Paths match a trace from tb/rv32i_regression/flash_boot.sh (WAVES=1). Use
+# this trace, not e2e.fst, to see a copy: the e2e bench preloads IMEM with
+# $readmemh and its boot FSM sits in S_SKIP (9). Generated for Surfer 0.7.0.
+#
+# Finding the ROM copy: boot_sel drops 1 -> 0 exactly once, just before E's
+# chip reset, and the copy starts a few cycles after rst_n rises. It is only
+# ~300 cycles against ~65,000 for each SPI boot, so zoom in hard.
+
+divider_add 1_reset_and_strap
+variable_add TOP.tb_agriasic_flash_boot.clk
+variable_add TOP.tb_agriasic_flash_boot.rst_n
+variable_add TOP.tb_agriasic_flash_boot.boot_sel
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_boot.strap_q
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.fw_valid
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.core_rst_n
+variable_add TOP.tb_agriasic_flash_boot.dut.gpio_boot_fail_o
+
+# state_q: 0 DELAY, 1 CMD, 2 HDR, 3 CHECK, 4 DATA, 5 WRITE, 6 VERIFY, 7 DONE,
+# 8 FAIL, 9 SKIP, 10 ROM. source_q: 0 none, 1 golden ROM, 2 SPI flash.
+# err_q: 1 bad magic, 2 bad length, 3 CRC mismatch, 4 bus error.
+divider_add 2_boot_fsm
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_boot.state_q
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_boot.source_q
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_boot.err_q
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_boot.off_q
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_status
+
+# The ROM is combinational and rom_addr is off_q, so the word on rom_data is
+# the one written to the same IMEM address on the same grant.
+divider_add 3_golden_rom
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.rom_addr
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.rom_data
+
+# Boot FSM as bus master M3, one word per grant. On the ROM path boot_addr
+# equals rom_addr; on the flash path it lags a word (off_q - 4).
+divider_add 4_boot_bus_m3
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_req
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_gnt
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_we
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_addr
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.boot_wdata
+
+# The IMEM SRAM port itself: what actually lands in program memory.
+divider_add 5_imem_write
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_imem.ce_i
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_imem.we_i
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_imem.addr_i
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.u_imem.din_i
+
+# SPI NOR pins: busy through A-D, idle for the whole ROM copy in E.
+divider_add 6_flash_spi
+variable_add TOP.tb_agriasic_flash_boot.dut.gpio_flash_cs_n_o
+variable_add TOP.tb_agriasic_flash_boot.dut.gpio_flash_sck_o
+variable_add TOP.tb_agriasic_flash_boot.dut.gpio_flash_mosi_o
+variable_add TOP.tb_agriasic_flash_boot.dut.gpio_flash_miso_i
+
+# Core released by fw_valid and fetching from the IMEM it was just given.
+divider_add 7_core_fetch
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.instr_req
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.instr_addr
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.core_sleep
+variable_add TOP.tb_agriasic_flash_boot.dut.u_control_shell.done_o
+
+zoom_fit

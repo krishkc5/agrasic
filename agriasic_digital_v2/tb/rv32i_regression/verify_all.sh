@@ -149,6 +149,12 @@ stage "15. HOST SPI PORT (M4: read/write while the core runs, permissions, gain 
 stage "16. ABORT WAKES THE CORE (a host abort must not strand firmware in wfi)" \
   abort_wake.sh "^\[TB\]|ABORT_WAKE_" 16 "ABORT_WAKE_PASS"
 
+stage "17. POWER-UP END TO END, GOLDEN ROM BOOT (one reset: ROM -> empty IMEM -> sweep -> park)" \
+  boot_rom_e2e.sh "^\[TB\] (BOOT|RUN|PARK):|ROM_BOOT_E2E_" 8 "ROM_BOOT_E2E_PASS"
+
+stage "18. POWER-UP END TO END, SPI FLASH BOOT (one reset: flash -> empty IMEM -> sweep -> park)" \
+  boot_flash_e2e.sh "^\[TB\] (BOOT|RUN|PARK):|FLASH_BOOT_E2E_" 8 "FLASH_BOOT_E2E_PASS"
+
 _hdr "SUMMARY"
 TOTAL=$((PASSED + ${#FAILED[@]}))
 if [ ${#FAILED[@]} -eq 0 ]; then

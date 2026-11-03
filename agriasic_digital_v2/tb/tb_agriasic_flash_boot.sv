@@ -10,8 +10,9 @@
 //      firmware then runs the full three-point sweep with correct results.
 //      IMEM contents are compared word-for-word with fw/agriasic_fw.hex.
 //
-//   This is the ONLY testbench that exercises the real boot path: it sets
-//   IMEM_PRELOADED=0 and IMEM_INIT_FILE="", so program memory starts empty
+//   This and tb_agriasic_boot_e2e (one clean power-up per boot source, no
+//   fault scenarios) are the only testbenches that exercise the real boot
+//   path: they set IMEM_PRELOADED=0 and IMEM_INIT_FILE="", so program memory starts empty
 //   and every instruction the core executes was put there by the boot FSM
 //   over SPI (A-D) or from the on-die golden ROM (E-G). Every other bench
 //   (e2e, jtag, spi_host, abort_wake) sets IMEM_PRELOADED=1 and relies on

@@ -5,6 +5,9 @@
 #   .\tb\surfer\open_waves.ps1 e2e             # e2e_overview.surfer on waves\e2e.fst
 #   .\tb\surfer\open_waves.ps1 detail          # measurement_detail.surfer on waves\smoke.fst
 #   .\tb\surfer\open_waves.ps1 jtag            # jtag_debug.surfer on waves\jtag.fst
+#   .\tb\surfer\open_waves.ps1 boot            # flash_boot.surfer on waves\flash_boot.fst
+#   .\tb\surfer\open_waves.ps1 rom             # boot_e2e.surfer on waves\boot_rom_e2e.fst
+#   .\tb\surfer\open_waves.ps1 flash           # boot_e2e.surfer on waves\boot_flash_e2e.fst
 #   .\tb\surfer\open_waves.ps1 e2e -Wave waves\e2e_ref.fst
 #
 # Works from any directory: paths resolve from this script's location. The
@@ -27,6 +30,9 @@ $Views = [ordered]@{
   e2e    = @{ Commands = 'e2e_overview.surfer';       Wave = 'waves\e2e.fst';   Stage = 'e2e.sh' }
   detail = @{ Commands = 'measurement_detail.surfer'; Wave = 'waves\smoke.fst'; Stage = 'smoke.sh' }
   jtag   = @{ Commands = 'jtag_debug.surfer';         Wave = 'waves\jtag.fst';  Stage = 'jtag.sh' }
+  boot   = @{ Commands = 'flash_boot.surfer';         Wave = 'waves\flash_boot.fst'; Stage = 'flash_boot.sh' }
+  rom    = @{ Commands = 'boot_e2e.surfer';           Wave = 'waves\boot_rom_e2e.fst';   Stage = 'boot_rom_e2e.sh' }
+  flash  = @{ Commands = 'boot_e2e.surfer';           Wave = 'waves\boot_flash_e2e.fst'; Stage = 'boot_flash_e2e.sh' }
 }
 
 if (-not $View) {

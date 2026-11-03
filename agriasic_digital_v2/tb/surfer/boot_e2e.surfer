@@ -1,0 +1,98 @@
+# Power-up end to end, one reset release: boot -> IMEM -> core -> firmware
+# sweep -> results -> park. One signal list for both boot sources -- the bench
+# is the same, only the strap and the flash part differ:
+#
+#   surfer -c tb/surfer/boot_e2e.surfer waves/boot_rom_e2e.fst     # golden ROM
+#   surfer -c tb/surfer/boot_e2e.surfer waves/boot_flash_e2e.fst   # SPI flash
+#
+# Traces come from tb/rv32i_regression/boot_rom_e2e.sh and boot_flash_e2e.sh
+# (WAVES=1). Generated for Surfer 0.7.0.
+#
+# The boot is a sliver at the left edge at zoom_fit -- ~150 cycles from the
+# ROM, ~80,000 from flash, against a ~4.5 M-cycle sweep -- so zoom into the
+# start to see the copy.
+
+# state_q: 0 DELAY, 1 CMD, 2 HDR, 3 CHECK, 4 DATA, 5 WRITE, 6 VERIFY, 7 DONE,
+# 8 FAIL, 10 ROM. ROM boot: 0 -> 10 -> 6 -> 7. Flash boot: 0 (64-cycle power-up
+# wait) -> 1 -> 2 -> 3 -> {4, 5} once per word -> 6 (CRC) -> 7.
+# source_q: 1 = golden ROM, 2 = SPI flash. fw_valid rises at DONE and
+# core_rst_n follows a cycle later.
+divider_add 1_reset_and_boot
+variable_add TOP.tb_agriasic_boot_e2e.clk
+variable_add TOP.tb_agriasic_boot_e2e.rst_n
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_boot_sel_i
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_boot.state_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_boot.source_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_boot.err_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.boot_status
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.fw_valid
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.core_rst_n
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_boot_fail_o
+
+# Flash boot only: READ 0x03 + address 0, then header and payload clocked in
+# on MISO. All four pins stay idle for a ROM boot.
+divider_add 2_flash_spi
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_flash_cs_n_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_flash_sck_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_flash_mosi_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.gpio_flash_miso_i
+
+# Where each IMEM word comes from. ROM: rom_addr is off_q and the ROM answers
+# combinationally, so rom_data is the word written on the same grant. Flash:
+# four bytes are assembled from MISO and written at off_q - 4. Either way
+# boot_addr steps 0x000, 0x004, ... 0x24C, one write per word.
+divider_add 3_image_to_imem
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_boot.off_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.rom_addr
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.rom_data
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.boot_req
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.boot_gnt
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.boot_addr
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.boot_wdata
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_imem.we_i
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_imem.addr_i
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.u_imem.din_i
+
+# Core fetching from the IMEM it was just given, from the reset vector.
+divider_add 4_core
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.instr_req
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.instr_addr
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.data_req
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.data_we
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.data_addr
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.data_wdata
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.trap_seen
+
+# Firmware programming the engine; cfg_exc_divider steps 1, 10, 32, 100, 316,
+# 1000, 3162, 10000 across the sweep.
+divider_add 5_mmio_config
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.mmio_req
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.mmio_we
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.mmio_addr
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.mmio_wdata
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_cfg_exc_divider_o
+
+divider_add 6_measurement
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_measurement_top.u_measurement_fsm.state_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_measurement_top.u_measurement_fsm.point_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_measurement_top.u_measurement_fsm.pair_count_q
+variable_add TOP.tb_agriasic_boot_e2e.dut.afe_sample_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.afe_mux_sel_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.afe_adc_dac_o
+
+divider_add 7_results
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_busy_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_done_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_result_dv_i_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_result_dv_q_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_result_cur_i_o
+variable_add TOP.tb_agriasic_boot_e2e.dut.dbg_result_cur_q_o
+
+# Each measurement's done wakes the core out of wfi; after FW_DONE it parks
+# with core_sleep high for good.
+divider_add 8_wake_and_park
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.meas_wake_irq
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.core_sleep
+variable_add TOP.tb_agriasic_boot_e2e.dut.u_control_shell.fw_done
+
+zoom_fit

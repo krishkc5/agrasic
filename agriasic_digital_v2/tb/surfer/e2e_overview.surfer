@@ -15,8 +15,10 @@ variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.core_rst_n
 variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_boot_sel_i
 variable_add TOP.tb_agriasic_rv32i_e2e.dut.gpio_start_i
 
-# Golden ROM shadow-load into IMEM. boot_status[3:0] walks to 7 = DONE,
-# [13:12] = 1 says the source was the on-die ROM, and fw_valid gates the core.
+# This bench preloads IMEM ($readmemh), so the boot FSM goes straight to
+# S_SKIP: boot_status[3:0] = 9, [13:12] = 0, and nothing is copied. For the
+# real boot into IMEM, use boot_e2e.surfer on boot_rom_e2e.fst (golden ROM)
+# or boot_flash_e2e.fst (SPI flash).
 divider_add 2_boot
 variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_status
 variable_add TOP.tb_agriasic_rv32i_e2e.dut.u_control_shell.boot_rom_req

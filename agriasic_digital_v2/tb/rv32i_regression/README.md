@@ -87,9 +87,15 @@ bash tb/rv32i_regression/e2e.sh
 | 14 | `flash_boot.sh` | Golden ROM + SPI flash boot | `FLASH_BOOT_PASS` |
 | 15 | `spi_host.sh` | Host SPI port, reads while the core runs | `SPI_HOST_PASS` |
 | 16 | `abort_wake.sh` | Abort must wake firmware out of `wfi` | `ABORT_WAKE_PASS` |
+| 17 | `boot_rom_e2e.sh` | **Power-up end to end, golden ROM boot: one reset → empty IMEM → sweep → park** | `ROM_BOOT_E2E_PASS` |
+| 18 | `boot_flash_e2e.sh` | **Power-up end to end, SPI flash boot: one reset → empty IMEM → sweep → park** | `FLASH_BOOT_E2E_PASS` |
 
 `e2e.sh` is the one to run if you only run one — it exercises the real firmware
-against the real engine through the real bus.
+against the real engine through the real bus. It preloads IMEM, though, so it
+never boots. `boot_rom_e2e.sh` and `boot_flash_e2e.sh` are the same sweep
+reached the way the chip reaches it -- one reset release, IMEM filled by the
+boot FSM from the golden ROM or from SPI flash -- and are the two to show in a
+demo (`tb/surfer/open_waves.ps1 rom` / `flash`).
 
 Not part of the sweep, but useful:
 
@@ -145,7 +151,7 @@ verilator --binary --timing -j 4 \
 `--timing` is required: the testbenches use delays and event controls that
 Verilator will not accept otherwise.
 
-Full-chip builds (`e2e`, `jtag`, `flash_boot`, `spi_host`) additionally need the
+Full-chip builds (`e2e`, `jtag`, `flash_boot`, `spi_host`, `boot_rom_e2e`, `boot_flash_e2e`) additionally need the
 vendored Ibex core and RISC-V debug module staged with their include paths and
 lint waivers. That is what [`ibex_sources.sh`](ibex_sources.sh) does — source it
 and use `$IBEX_ARGS` and `$AGRIASIC_RV32I_SOURCES` rather than assembling the

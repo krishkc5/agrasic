@@ -26,7 +26,15 @@
     waves: Some((
         source: File("C:\\Users\\taara\\UPENN SR FALL\\SR DESIGN\\agrasic\\agriasic_digital_v2\\waves\\boot_flash_e2e.fst"),
         format: Fst,
-        active_scope: None,
+        active_scope: Some(WaveScope((
+            strs: [
+                "TOP",
+                "tb_agriasic_boot_e2e",
+                "dut",
+                "u_measurement_top",
+            ],
+            id: Wellen((1273)),
+        ))),
         items_tree: (
             items: [
                 (
@@ -277,6 +285,12 @@
                 ),
                 (
                     item_ref: (42),
+                    level: 0,
+                    unfolded: true,
+                    selected: false,
+                ),
+                (
+                    item_ref: (68),
                     level: 0,
                     unfolded: true,
                     selected: false,
@@ -1324,6 +1338,31 @@
                 background_color: None,
                 name: Some("6_measurement"),
             )),
+            (68): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "TOP",
+                            "tb_agriasic_boot_e2e",
+                            "dut",
+                            "u_measurement_top",
+                        ],
+                        id: Wellen((1273)),
+                    ),
+                    name: "start",
+                    id: Wellen((8680)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "start",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
             (34): Variable((
                 variable_ref: (
                     path: (
@@ -1788,11 +1827,11 @@
                 name: Some("5_mmio_config"),
             )),
         },
-        display_item_ref_counter: 67,
+        display_item_ref_counter: 68,
         viewports: [
             (
-                curr_left: (-0.0125),
-                curr_right: (0.05),
+                curr_left: (0.01716162754127811),
+                curr_right: (0.01718672433436172),
                 target_left: (0.0),
                 target_right: (1.0),
                 move_start_left: (0.0),
@@ -1802,7 +1841,7 @@
             ),
         ],
         cursor: Some((1, [
-            797855,
+            798165,
         ])),
         markers: {
             6: (1, [
@@ -1830,10 +1869,10 @@
                 95,
             ]),
         },
-        focused_item: None,
+        focused_item: Some((42)),
         focused_transaction: (None, None),
         default_variable_name_type: Unique,
-        scroll_offset: 0.0,
+        scroll_offset: 103.0785,
         display_variable_indices: true,
         graphics: {},
     )),

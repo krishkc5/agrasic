@@ -181,22 +181,26 @@ module agriasic_imem #(
   // register file). The ORDER is what makes it safe:
   //
   //   1. A global clock gate on "any write this cycle" -> clk_int.
-  //   2. Write data, address and byte enables REGISTERED on clk_int. This is
-  //      the critical step: the latches are transparent during the clk_int HIGH
-  //      phase and these flops update on its RISING edge, so a latch sees
-  //      stable data for its entire open window. Driving latches from
-  //      combinational inputs instead is how latch arrays corrupt data.
-  //   3. A per-word clock gate off the registered address.
-  //   4. The latch, with registered byte enables picking lanes. A latch holds
-  //      when not written, so unwritten lanes need no feedback mux -- which is
-  //      the whole reason this is cheaper than flops.
+  //   2. Write data REGISTERED on clk_int. This is the critical step for the
+  //      data: the latches are transparent during the clk_int HIGH phase and
+  //      this flop updates on its RISING edge, so a latch sees stable data for
+  //      its entire open window. Driving latch data from combinational inputs
+  //      instead is how latch arrays corrupt data.
+  //   3. One clock gate per word PER BYTE LANE, enabled by the UNREGISTERED
+  //      word address AND that lane's write enable. A clock-gating cell samples
+  //      its enable while the clock is low, so these must be this cycle's
+  //      values; the gate then opens exactly the lanes this write touches.
+  //   4. The latch, enabled directly by its lane clock. A latch holds when not
+  //      written, so unwritten lanes need no feedback mux -- which is the whole
+  //      reason this is cheaper than flops.
   //
   // The array keeps the SAME NAME as the flop path so every testbench
   // hierarchical reference works against either build.
   //
-  // Cost to the back end: prim_clock_gating must map to a real ICG cell, and
-  // STA must treat these as latches with time borrowing. Both are already true
-  // because of the Ibex latch register file.
+  // Cost to the back end: prim_clock_gating must map to a real ICG cell
+  // (4*NUM_WORDS + 1 of them here), and STA must treat these as latches with
+  // time borrowing. Both are already true because of the Ibex latch register
+  // file.
   // ---------------------------------------------------------------------------
   localparam int unsigned AddrW = AddrMsb - AddrLsb + 1;
 
@@ -210,40 +214,43 @@ module agriasic_imem #(
     .clk_i (clk), .en_i (any_write), .test_en_i (1'b0), .clk_o (clk_int)
   );
 
-  // Data and lane enables are registered; the ADDRESS is deliberately not.
-  // The per-word gate below must see the address combinationally, the way
-  // ibex_register_file_latch does: a clock-gating cell samples its enable
-  // while the clock is low, so a registered address would arrive a cycle too
-  // late and every write would land at the previous address.
+  // Data is registered; the ADDRESS and the LANE ENABLES deliberately are
+  // not. Both feed clock-gate enables below, and a clock-gating cell samples
+  // its enable while the clock is low, so registered versions would arrive a
+  // cycle too late and every write would land at the previous address/lanes.
+  //
+  // The lane enables must go INTO the gate, not be ANDed with the word clock
+  // afterwards. A registered we_q updates on the same clk_int edge that opens
+  // the latch, so word_clk & we_q glitches the latch enable for clk-to-q and
+  // can open a lane this write does not touch (STA reports it as a clock
+  // gating setup/hold check that no amount of buffering can close).
   logic [31:0] din_q;
-  logic [3:0]  we_q;
 
   always_ff @(posedge clk_int or negedge rst_n) begin
-    if (!rst_n) begin
-      din_q <= 32'd0; we_q <= 4'd0;
-    end else begin
-      din_q <= din_i; we_q <= we_i;
-    end
+    if (!rst_n) din_q <= 32'd0;
+    else        din_q <= din_i;
   end
 
-  logic [NUM_WORDS-1:0] word_clk;
+  logic [NUM_WORDS-1:0][3:0] lane_clk;
 
   for (genvar w = 0; w < NUM_WORDS; w++) begin : gen_word
-    prim_clock_gating u_cg_word (
-      .clk_i (clk_int), .en_i (word_addr == AddrW'(w)), .test_en_i (1'b0),
-      .clk_o (word_clk[w])
-    );
+    wire word_sel = (word_addr == AddrW'(w));
+
+    for (genvar b = 0; b < 4; b++) begin : gen_lane
+      prim_clock_gating u_cg_lane (
+        .clk_i (clk_int), .en_i (word_sel && we_i[b]), .test_en_i (1'b0),
+        .clk_o (lane_clk[w][b])
+      );
+    end
     // KEEP always_latch -- same LRM 9.2.2.4 conflict with the initial preload
     // as the flop path above (always_latch carries the same single-process
     // restriction), and the same answer: waive or blackbox, never downgrade
     // to a plain `always`.
     always_latch begin
-      if (word_clk[w]) begin
-        if (we_q[0]) mem_array[w][7:0]   = din_q[7:0];
-        if (we_q[1]) mem_array[w][15:8]  = din_q[15:8];
-        if (we_q[2]) mem_array[w][23:16] = din_q[23:16];
-        if (we_q[3]) mem_array[w][31:24] = din_q[31:24];
-      end
+      if (lane_clk[w][0]) mem_array[w][7:0]   = din_q[7:0];
+      if (lane_clk[w][1]) mem_array[w][15:8]  = din_q[15:8];
+      if (lane_clk[w][2]) mem_array[w][23:16] = din_q[23:16];
+      if (lane_clk[w][3]) mem_array[w][31:24] = din_q[31:24];
     end
   end
 

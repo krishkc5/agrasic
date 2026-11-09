@@ -71,8 +71,21 @@ set_output_delay -clock flash_sck 2.0 \
     [get_ports {gpio_flash_mosi_o gpio_flash_cs_n_o}]
 # <<PLACEHOLDER>> MISO capture depends on the chosen flash part's t_V plus
 # board delay. 10 ns is a generic SPI NOR figure; confirm against the datasheet.
-set_input_delay -clock flash_sck -max 10.0 [get_ports gpio_flash_miso_i]
-set_input_delay -clock flash_sck -min  0.0 [get_ports gpio_flash_miso_i]
+#
+# The flash runs SPI mode 0: it changes MISO after SCK FALLS, and
+# agriasic_spi_boot samples it on the clk edge that raises SCK again, i.e.
+# (eng_div+1) clk cycles later -- 8 at the clk/16 boot rate. So the input delay
+# is referenced to the FALLING edge and the capture is a multicycle path.
+# Without this, STA times MISO from the rising edge into the very next clk edge
+# (one clk period), which a 10 ns t_V can never meet.
+#
+# If firmware selects a faster divider, these must match the FASTEST one in
+# use: setup = eng_div+1, hold = eng_div. At eng_div = 0 (SCK = clk/2) half an
+# SCK period is a single clk cycle and a 10 ns t_V cannot be met at all.
+set_input_delay -clock flash_sck -clock_fall -max 10.0 [get_ports gpio_flash_miso_i]
+set_input_delay -clock flash_sck -clock_fall -min  0.0 [get_ports gpio_flash_miso_i]
+set_multicycle_path -setup -end 8 -from [get_ports gpio_flash_miso_i]
+set_multicycle_path -hold  -end 7 -from [get_ports gpio_flash_miso_i]
 
 # -----------------------------------------------------------------------------
 # 5. JTAG

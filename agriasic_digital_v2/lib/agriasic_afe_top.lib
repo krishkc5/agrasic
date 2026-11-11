@@ -1,0 +1,229 @@
+/*
+ * ============================================================================
+ * agriasic_afe_top.lib  --  TEMPLATE. NOT CHARACTERISED. REPLACE ENTIRELY.
+ * ============================================================================
+ *
+ * This exists so the synthesis and STA flows can LINK against the analog
+ * front-end macro today, before the analog team delivers the real library.
+ * Every number below is a placeholder. The pin list is NOT: it is the
+ * contract, and it must match rtl/analog/agriasic_afe_top.sv and
+ * docs/interface_contract.md, "Analog front-end interface (Rev 5,
+ * tetrapolar)". If the delivered macro's pins differ from these, the wrapper
+ * does not link and that is the intended behaviour -- fix the contract, not
+ * the symptom.
+ *
+ * WHAT TO REPLACE, in rough order of how much it can hurt you:
+ *   1. The timing arc on afe_adc_comp_o. The 4.5 ns below is simply
+ *      CDAC_SETTLE_NS + COMP_REGEN_NS from the behavioural model, which are
+ *      themselves placeholders (GAP-A3). This number sets the minimum
+ *      REG_CONV the digital must program; getting it wrong produces silent
+ *      conversion errors, not a timing violation.
+ *   2. area. 0.0 makes every area report wrong and every floorplan
+ *      optimistic.
+ *   3. Input pin capacitances. 5 fF flat is a guess; the CDAC code bus in
+ *      particular drives switch gates and is likely far heavier.
+ *   4. Leakage and internal power. Absent entirely here.
+ *
+ * WHAT A .lib DOES NOT GIVE YOU: simulation. Ask the analog team for all
+ * four of .lib (this file), LEF (place and route), GDS, and a Verilog
+ * functional view. Until the last one exists,
+ * rtl/analog/agriasic_afe_top.sv is the simulation stand-in.
+ *
+ * USE (Design Compiler):
+ *   set link_library [concat $link_library [list lib/agriasic_afe_top.db]]
+ *   # lc_shell:  read_lib lib/agriasic_afe_top.lib ; write_lib ... -format db
+ *   set_dont_touch [get_cells u_afe]
+ *
+ * Note that the digital synthesis target remains agriasic_digital_rv32i_top,
+ * where the AFE is not instantiated at all and afe_adc_comp_i is a top-level
+ * input constrained by set_input_delay. This library is only needed when
+ * synthesising or doing STA on agriasic_asic_top.
+ * ============================================================================
+ */
+
+library (agriasic_afe_top) {
+
+  technology (cmos);
+  delay_model             : table_lookup;
+  revision                : "0.1-template";
+  date                    : "2026-11-10";
+  comment                 : "PLACEHOLDER -- replace with the characterised library";
+
+  time_unit               : "1ns";
+  voltage_unit            : "1V";
+  current_unit            : "1mA";
+  pulling_resistance_unit : "1kohm";
+  leakage_power_unit      : "1nW";
+  capacitive_load_unit (1, pf);
+
+  /* PLACEHOLDER: single corner only. The real delivery needs at least
+     slow/typical/fast, matched to the digital library's corners. */
+  nom_process     : 1.0;
+  nom_temperature : 25.0;
+  nom_voltage     : 1.8;
+
+  voltage_map (VDDA, 1.8);
+  voltage_map (VSSA, 0.0);
+
+  operating_conditions (typical) {
+    process     : 1.0;
+    temperature : 25.0;
+    voltage     : 1.8;
+    tree_type   : balanced_tree;
+  }
+  default_operating_conditions : typical;
+
+  default_max_transition : 1.0;
+  default_input_pin_cap  : 0.005;   /* PLACEHOLDER: 5 fF flat */
+  default_output_pin_cap : 0.0;
+  default_fanout_load    : 1.0;
+
+  input_threshold_pct_fall  : 50.0;
+  input_threshold_pct_rise  : 50.0;
+  output_threshold_pct_fall : 50.0;
+  output_threshold_pct_rise : 50.0;
+  slew_lower_threshold_pct_fall : 30.0;
+  slew_lower_threshold_pct_rise : 30.0;
+  slew_upper_threshold_pct_fall : 70.0;
+  slew_upper_threshold_pct_rise : 70.0;
+
+  /* Bus types for the three vectored contract pins. */
+  type (afe_bus8) {
+    base_type : array;  data_type : bit;
+    bit_width : 8;  bit_from : 7;  bit_to : 0;  downto : true;
+  }
+  type (afe_bus3) {
+    base_type : array;  data_type : bit;
+    bit_width : 3;  bit_from : 2;  bit_to : 0;  downto : true;
+  }
+  type (afe_bus2) {
+    base_type : array;  data_type : bit;
+    bit_width : 2;  bit_from : 1;  bit_to : 0;  downto : true;
+  }
+
+  /* PLACEHOLDER table. Two trivially small index points, flat values: this
+     is a constant-delay stand-in, not a characterisation. */
+  lu_table_template (afe_placeholder_delay) {
+    variable_1 : input_net_transition;
+    variable_2 : total_output_net_capacitance;
+    index_1 ("0.050, 0.500");
+    index_2 ("0.005, 0.050");
+  }
+
+  /* --------------------------------------------------------------------- */
+  cell (agriasic_afe_top) {
+
+    is_macro_cell : true;
+    dont_touch    : true;
+    dont_use      : true;
+    interface_timing : true;
+
+    /* PLACEHOLDER. The sampling + SAR subsystem has a real footprint and 0.0
+       will quietly make every area and utilisation number wrong. */
+    area : 0.0;
+
+    pg_pin (vdda_i) { voltage_name : VDDA; pg_type : primary_power;  }
+    pg_pin (vssa_i) { voltage_name : VSSA; pg_type : primary_ground; }
+
+    /* ---- Digital inputs: the interface contract ------------------------ */
+
+    bus (afe_sine_code_i) {
+      bus_type : afe_bus8;  direction : input;
+      capacitance : 0.005;                       /* PLACEHOLDER */
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    bus (afe_adc_dac_i) {
+      bus_type : afe_bus8;  direction : input;
+      /* PLACEHOLDER, and the one most likely to be badly wrong: these bits
+         drive the CDAC's reference switches, not ordinary logic gates. */
+      capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    bus (afe_mux_sel_i) {
+      bus_type : afe_bus2;  direction : input;
+      capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    bus (afe_tia_rf_i) {
+      bus_type : afe_bus3;  direction : input;
+      capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    pin (afe_sample_i) {
+      direction : input;  capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    pin (afe_adc_enable_i) {
+      direction : input;  capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    pin (afe_conv_start_i) {
+      direction : input;  capacitance : 0.005;
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+    }
+
+    /* ---- Digital output ------------------------------------------------- */
+
+    pin (afe_adc_comp_o) {
+      direction : output;
+      max_capacitance : 0.050;                   /* PLACEHOLDER */
+      related_power_pin : vdda_i;  related_ground_pin : vssa_i;
+
+      /* PLACEHOLDER ARC -- see the header. 4.5 ns is CDAC_SETTLE_NS +
+         COMP_REGEN_NS from the behavioural model, i.e. a guess twice over.
+         It is modelled from the CODE EDGE because the digital boundary has
+         no per-trial reference-switch enable; if the real macro needs one,
+         the usable window is SHORTER than this (GAP-A3).
+         non_unate: a comparator decision is not monotonic in any one code
+         bit. */
+      timing () {
+        related_pin  : "afe_adc_dac_i";
+        timing_sense : non_unate;
+        timing_type  : combinational;
+        cell_rise  (afe_placeholder_delay) { values ("4.500, 4.500", "4.500, 4.500"); }
+        cell_fall  (afe_placeholder_delay) { values ("4.500, 4.500", "4.500, 4.500"); }
+        rise_transition (afe_placeholder_delay) { values ("0.100, 0.100", "0.100, 0.100"); }
+        fall_transition (afe_placeholder_delay) { values ("0.100, 0.100", "0.100, 0.100"); }
+      }
+      timing () {
+        related_pin  : "afe_conv_start_i";
+        timing_sense : non_unate;
+        timing_type  : combinational;
+        cell_rise  (afe_placeholder_delay) { values ("4.500, 4.500", "4.500, 4.500"); }
+        cell_fall  (afe_placeholder_delay) { values ("4.500, 4.500", "4.500, 4.500"); }
+        rise_transition (afe_placeholder_delay) { values ("0.100, 0.100", "0.100, 0.100"); }
+        fall_transition (afe_placeholder_delay) { values ("0.100, 0.100", "0.100, 0.100"); }
+      }
+    }
+
+    /* ---- Analog boundary ------------------------------------------------
+       Declared so the macro links and so the pin list is complete. A Liberty
+       model carries no analog behaviour: the electrodes and references are
+       connected in the chip assembly and verified in the analog flow, not
+       here. e4_iin_i is a CURRENT input and vin_t_i has no route to the
+       converter at all (GAP-A7). ------------------------------------------ */
+
+    pin (e1_drive_o) { direction : output; is_analog : true;
+                       related_power_pin : vdda_i; related_ground_pin : vssa_i; }
+    pin (e2_sense_i) { direction : input;  is_analog : true; }
+    pin (e3_sense_i) { direction : input;  is_analog : true; }
+    pin (e4_iin_i)   { direction : input;  is_analog : true; }
+    pin (vin_t_i)    { direction : input;  is_analog : true; }
+
+    /* GAP-A1: whether these are pads or come from an on-die bandgap is not
+       recorded anywhere. Modelled as pins here, which is the assumption that
+       fails loudly if wrong. */
+    pin (vrefh_i)    { direction : input;  is_analog : true; }
+    pin (vrefl_i)    { direction : input;  is_analog : true; }
+    pin (vcm_i)      { direction : input;  is_analog : true; }
+    pin (ibias_i)    { direction : input;  is_analog : true; }
+
+  } /* cell */
+
+} /* library */

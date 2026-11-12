@@ -240,10 +240,12 @@ approximate) in simulation. As of Phase 6, N is set indirectly over SPI via
 **`adc_comp_i` convention.** `1` = input ≥ current trial code (keep the bit,
 it's a valid lower bound); `0` = input < current trial code (clear the bit,
 it overshot). This is a **timed, unsynchronized** path — the controller
-guarantees `REG_CONV` cycles of comparator regeneration time between
-presenting a trial and sampling the decision (see the register map). Do not
-add a synchronizer to this signal; that would defeat the point of a timed
-interface.
+holds each trial code for at least `REG_CONV + 3` clk cycles before sampling the
+decision (`S_TRIAL_SET`, `REG_CONV + 1` cycles of `S_TRIAL_WAIT`,
+`S_TRIAL_EVAL`; see the register map). The code comes straight from a
+register and changes once per trial, so it is glitch-free for that whole
+window. Do not add a synchronizer to this signal; that would defeat the
+point of a timed interface.
 
 ## SPI protocol
 - Mode: SPI mode-0 (`CPOL=0`, `CPHA=0`)
@@ -514,7 +516,7 @@ off-chip in a test configuration.
 | `afe_mux_sel_o[1:0]` | out | Analog mux: 0 = dV (differential PGA on E2/E3), 1 = return current (TIA on E4). Stable for the whole conversion. |
 | `afe_sample_o` | out | Track-and-hold strobe. Fires ONCE per phase point and freezes **both** channels' S/H simultaneously. |
 | `afe_adc_enable_o` | out | High for the duration of each conversion (comparator bias/power gate). |
-| `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. |
+| `afe_adc_dac_o[7:0]` | out | SAR trial code to the ADC's internal DAC. Registered: changes once per trial and is then stable for at least `REG_CONV + 3` clk cycles. |
 | `afe_adc_comp_i` | in | One comparator decision: 1 = input >= trial code. Timed, unsynchronized — `REG_CONV` must cover regeneration at the worst corner. |
 | `afe_conv_start_o` | out | One-cycle pulse marking the start of each conversion, issued **after** the `mux_settle` wait rather than at request acceptance, so it lands once the mux and S/H have settled onto the ADC input. One per conversion, so two per `afe_sample_o` strobe. |
 | `afe_tia_rf_o[2:0]` | out | TIA feedback resistor: **three switch wires**, same decode. **RV32I top only** --- see the note above. |

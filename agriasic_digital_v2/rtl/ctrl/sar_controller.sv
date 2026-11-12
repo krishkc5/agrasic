@@ -42,6 +42,17 @@
 //     settled onto the ADC input.
 //   - Runs 8 bit trials MSB first, each gated by conv_cycles_i regeneration
 //     cycles, to build the digitized code entirely from adc_comp_i decisions.
+//   - Drives adc_dac_o straight from a register that changes once per trial
+//     (at acceptance for the first trial, otherwise on the S_TRIAL_EVAL ->
+//     S_TRIAL_SET edge) and then holds through S_TRIAL_WAIT and S_TRIAL_EVAL.
+//     A trial code therefore stands for at least conv_cycles_i + 3 cycles
+//     before its decision is sampled, and nothing moves on the CDAC while the
+//     comparator is resolving. (It used to be decoded from state_q, whose
+//     WAIT -> EVAL step, 3'b011 -> 3'b100, flips every state bit at once and
+//     could briefly drop the bit under test at the start of EVAL -- the last
+//     cycle before the decision is taken.) Chip-level STA times the DAC ->
+//     comparator -> flop loop as a multicycle path on the strength of this
+//     (asic-top design/chip_afe.sdc).
 //   - Presents the converged code on code_o with sample_done_o.
 //
 // Rev 5 change -- two channels, one converter:
@@ -126,8 +137,12 @@ module sar_controller #(
 
   // adc_dac_o presents the trial code (decided bits plus the bit under test)
   // for every state past acceptance; at idle it holds the last converged code,
-  // a deterministic and harmless value since adc_enable_o is low.
-  assign adc_dac_o = (state_q == S_IDLE) ? dac_reg_q : (dac_reg_q | trial_mask);
+  // a deterministic and harmless value since adc_enable_o is low. It is a
+  // register, loaded wherever dac_reg_q / bit_idx_q / state_q are, with the
+  // value those are about to take -- so it shows each code in the same cycle
+  // the old combinational decode did, with no extra latency, and only a flop
+  // between it and the pin. See the header bullet for why.
+  localparam logic [ADC_WIDTH-1:0] MSB_MASK = {1'b1, {(ADC_WIDTH-1){1'b0}}};
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -139,6 +154,7 @@ module sar_controller #(
       busy_o        <= 1'b0;
       bit_idx_q     <= '1;
       dac_reg_q     <= '0;
+      adc_dac_o     <= '0;
       regen_cnt_q   <= 8'd0;
       code_o        <= '0;
       overrange_o   <= 1'b0;
@@ -155,6 +171,7 @@ module sar_controller #(
         // they are is harmless -- the next conversion re-drives the mux and
         // re-strobes the hold before trial 1.
         state_q       <= S_IDLE;
+        adc_dac_o     <= dac_reg_q;   // the idle value
         busy_o        <= 1'b0;
         adc_enable_o  <= 1'b0;
         conv_start_o  <= 1'b0;
@@ -179,6 +196,7 @@ module sar_controller #(
             mux_sel_o    <= channel_i;
             bit_idx_q    <= BIT_IDX_W'(ADC_WIDTH - 1);
             dac_reg_q    <= '0;
+            adc_dac_o    <= MSB_MASK;   // first trial: no bits decided, MSB under test
             regen_cnt_q  <= mux_settle_cycles_i;
             state_q      <= S_MUX_WAIT;
           end
@@ -201,8 +219,8 @@ module sar_controller #(
         end
 
         S_TRIAL_SET: begin
-          // adc_dac_o already presents this trial combinationally (see the
-          // assign above); this state just loads the regeneration wait.
+          // adc_dac_o already presents this trial (it was loaded on the edge
+          // into this state); this state just loads the regeneration wait.
           regen_cnt_q <= conv_cycles_i;
           state_q     <= S_TRIAL_WAIT;
         end
@@ -219,6 +237,7 @@ module sar_controller #(
           dac_reg_q <= eval_code;
           if (bit_idx_q == '0) begin
             // Last bit decided: eval_code is the converged result.
+            adc_dac_o     <= eval_code;   // the idle value
             code_o        <= eval_code;
             overrange_o   <= (eval_code == '0) || (&eval_code);
             busy_o        <= 1'b0;
@@ -227,13 +246,31 @@ module sar_controller #(
             state_q       <= S_IDLE;
           end else begin
             bit_idx_q <= bit_idx_q - 1'b1;
+            // next trial: this decision folded in, the next bit down under test
+            adc_dac_o <= eval_code | (trial_mask >> 1);
             state_q   <= S_TRIAL_SET;
           end
         end
 
-        default: state_q <= S_IDLE;
+        default: begin
+          state_q   <= S_IDLE;
+          adc_dac_o <= dac_reg_q;   // the idle value
+        end
       endcase
     end
   end
+
+`ifndef SYNTHESIS
+  // adc_dac_o must show exactly what the combinational decode it replaced
+  // would have, every cycle: the registered version is meant to change WHEN
+  // the code is driven (only a flop in front of the pin), never WHAT it is.
+  always_ff @(posedge clk) begin
+    if (rst_n)
+      assert (adc_dac_o == ((state_q == S_IDLE) ? dac_reg_q : (dac_reg_q | trial_mask)))
+        else $error("sar_controller: adc_dac_o 0x%02h, expected trial code 0x%02h (state %0d)",
+                    adc_dac_o, (state_q == S_IDLE) ? dac_reg_q : (dac_reg_q | trial_mask),
+                    state_q);
+  end
+`endif
 
 endmodule

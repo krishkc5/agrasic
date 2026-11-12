@@ -257,9 +257,17 @@ module tb_agriasic_digital_top;
   // Rev 5: the analog mux must be stable for the whole conversion it belongs
   // to -- a mux change between the settle wait and the last bit trial would
   // digitise a mixture of the two channels.
+  //
+  // The antecedent is $past(state_q), not the live state_q. sar_controller
+  // drives mux_sel_o from channel_i and moves state_q to S_MUX_WAIT on the
+  // SAME edge when it accepts a conversion, so testing the live state makes
+  // the antecedent true on that acceptance edge, while $stable still sees
+  // the mux change -- flagging the cycle BEFORE the conversion the mux
+  // belongs to. Starting the check one cycle later still covers the entire
+  // settle wait and every bit trial, which is what the property means.
   property p_mux_stable_during_conversion;
     @(posedge clk) disable iff (!rst_n)
-      (3'(dut.u_sar_controller.state_q) != 3'd0) |-> $stable(mux_sel_o);
+      ($past(3'(dut.u_sar_controller.state_q)) != 3'd0) |-> $stable(mux_sel_o);
   endproperty
   assert property (p_mux_stable_during_conversion)
     else $error("MUX_FAIL: afe_mux_sel_o changed during a conversion");

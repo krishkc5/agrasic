@@ -10,7 +10,7 @@ wave_setup tb_rst_sync rst_sync
 cp "$BASE/tb/tb_rst_sync.sv" .
 cp "$BASE/rtl/rst_sync.sv" .
 
-verilator $WAVE_ARGS --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_rst_sync -o sim_rst \
   tb_rst_sync.sv rst_sync.sv > build.log 2>&1 \

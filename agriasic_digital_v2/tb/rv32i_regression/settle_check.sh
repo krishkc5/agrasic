@@ -12,7 +12,7 @@ cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" \
    "$BASE/rtl/ctrl/sar_controller.sv" .
 
-verilator $WAVE_ARGS --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_settle_timing -o sim_settle \
   tb_settle_timing.sv agriasic_digital_top.sv measurement_fsm.sv \

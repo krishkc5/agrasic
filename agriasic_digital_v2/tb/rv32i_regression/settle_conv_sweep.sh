@@ -11,7 +11,7 @@ wave_setup tb_settle_conv_sweep settle_conv_sweep
 cp "$BASE/tb/tb_settle_conv_sweep.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" "$BASE/rtl/ctrl/sar_controller.sv" .
-verilator $WAVE_ARGS --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_settle_conv_sweep -o sim_settle_conv_sweep \
   tb_settle_conv_sweep.sv agriasic_digital_top.sv measurement_fsm.sv \
   excitation_ctrl.sv sar_controller.sv > build.log 2>&1 \

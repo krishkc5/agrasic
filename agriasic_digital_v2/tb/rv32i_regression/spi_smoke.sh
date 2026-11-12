@@ -13,7 +13,7 @@ cp "$BASE/tb/smoke/tb_agriasic_digital_spi_top.sv" .
 cp "$BASE/rtl/agriasic_digital_spi_top.sv" "$BASE/rtl/agriasic_digital_top.sv" "$BASE/rtl/rst_sync.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" .
 cp "$BASE/rtl/ctrl/sar_controller.sv" "$BASE/rtl/ctrl/spi_slave.sv" "$BASE/rtl/ctrl/regfile.sv" .
-verilator $WAVE_ARGS --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY -Wno-UNOPTFLAT \
   --top-module tb_agriasic_digital_spi_top -o sim_spi \
   tb_agriasic_digital_spi_top.sv agriasic_digital_spi_top.sv agriasic_digital_top.sv rst_sync.sv \

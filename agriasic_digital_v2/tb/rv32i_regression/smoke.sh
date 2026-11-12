@@ -16,7 +16,7 @@ wave_setup tb_agriasic_digital_top smoke
 cp "$BASE/tb/smoke/tb_agriasic_digital_top.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" "$BASE/rtl/ctrl/sar_controller.sv" .
-verilator $WAVE_ARGS --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_agriasic_digital_top -o sim_smoke \
   tb_agriasic_digital_top.sv agriasic_digital_top.sv measurement_fsm.sv \
   excitation_ctrl.sv sar_controller.sv > build.log 2>&1 \

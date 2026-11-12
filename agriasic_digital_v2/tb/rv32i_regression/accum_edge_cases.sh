@@ -11,7 +11,7 @@ wave_setup tb_accum_edge_cases accum_edge_cases
 cp "$BASE/tb/tb_accum_edge_cases.sv" .
 cp "$BASE/rtl/agriasic_digital_top.sv" .
 cp "$BASE/rtl/ctrl/measurement_fsm.sv" "$BASE/rtl/ctrl/excitation_ctrl.sv" "$BASE/rtl/ctrl/sar_controller.sv" .
-verilator $WAVE_ARGS --binary --timing -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_accum_edge_cases -o sim_accum_edge \
   tb_accum_edge_cases.sv agriasic_digital_top.sv measurement_fsm.sv \
   excitation_ctrl.sv sar_controller.sv > build.log 2>&1 \

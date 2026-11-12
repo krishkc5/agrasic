@@ -10,7 +10,7 @@ wave_setup tb_excitation_drive excitation_drive
 cp "$BASE/tb/tb_excitation_drive.sv" .
 cp "$BASE/rtl/ctrl/excitation_ctrl.sv" .
 
-verilator $WAVE_ARGS --binary --timing -j 4 \
+verilator $WAVE_ARGS --binary --timing --assert -j 4 \
   -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-TIMESCALEMOD -Wno-INITIALDLY \
   --top-module tb_excitation_drive -o sim_exc \
   tb_excitation_drive.sv excitation_ctrl.sv > build.log 2>&1 \

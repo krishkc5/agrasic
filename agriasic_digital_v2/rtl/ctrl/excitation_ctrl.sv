@@ -125,7 +125,21 @@ module excitation_ctrl #(
     endcase
   endfunction
 
-  wire signed [DAC_WIDTH:0] delta_full = cos_delta(phase_q);
+  // The phase the always_ff below loads at the next edge.
+  logic [3:0] phase_d;
+  always_comb begin
+    if (!enable_i)                 phase_d = 4'd0;
+    else if (!tick)                phase_d = phase_q;
+    else if (phase_q == PHASE_MAX) phase_d = 4'd0;
+    else                           phase_d = phase_q + 4'd1;
+  end
+
+  // sine_code_o is registered and loaded with the code for phase_d, so it
+  // shows the code for phase_q in the same cycle phase_q does. Driving the DAC
+  // straight from a flop keeps it glitch-free when the phase steps (a decoded
+  // code passes through intermediate values that the DAC would turn into
+  // spikes on E1) and leaves the AFE output path as clk-to-Q only.
+  wire signed [DAC_WIDTH:0] delta_full = cos_delta(phase_d);
   wire signed [DAC_WIDTH:0] delta_att  = delta_full >>> amplitude_i;
 
   // Mid-code plus the (attenuated) excursion, in one extra bit of signed
@@ -136,9 +150,15 @@ module excitation_ctrl #(
 
   // Idle parks at mid-code (VCM): the drive buffer holds the electrode at the
   // common mode rather than at a rail when no measurement is running.
-  always_comb begin
-    if (!enable_i) sine_code_o = DAC_WIDTH'(MID);
-    else           sine_code_o = DAC_WIDTH'(code_signed);
+  // enable_i and amplitude_i are inputs, so their next values are not known
+  // here: a change to either reaches sine_code_o one cycle after it would
+  // have reached a decoded code. Both change only at run start and stop or
+  // under firmware control, and measurement_fsm waits whole settle periods
+  // after enabling before it samples.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)         sine_code_o <= DAC_WIDTH'(MID);
+    else if (!enable_i) sine_code_o <= DAC_WIDTH'(MID);
+    else                sine_code_o <= DAC_WIDTH'(code_signed);
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -176,6 +196,30 @@ module excitation_ctrl #(
     for (int k = 0; k < 8; k++) begin
       assert (cos_delta(4'(k)) == -cos_delta(4'(k + 8)))
         else $error("excitation_ctrl: cosine table not antisymmetric at k=%0d", k);
+    end
+  end
+
+  // The registered code must equal the code decoded from the current phase
+  // on every cycle where enable_i and amplitude_i held their values from the
+  // cycle before (the only cycles it is allowed to lag; see above).
+  logic                  chk_valid_q, chk_enable_q;
+  logic [1:0]            chk_amplitude_q;
+  logic [DAC_WIDTH-1:0]  chk_code_now;
+  wire signed [DAC_WIDTH:0] chk_code_signed =
+      $signed({1'b0, DAC_WIDTH'(MID)}) + (cos_delta(phase_q) >>> amplitude_i);
+  assign chk_code_now = enable_i ? DAC_WIDTH'(chk_code_signed) : DAC_WIDTH'(MID);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      chk_valid_q <= 1'b0;
+    end else begin
+      chk_valid_q     <= 1'b1;
+      chk_enable_q    <= enable_i;
+      chk_amplitude_q <= amplitude_i;
+      if (chk_valid_q && enable_i == chk_enable_q && amplitude_i == chk_amplitude_q)
+        assert (sine_code_o == chk_code_now)
+          else $error("excitation_ctrl: sine_code_o 0x%02h, expected 0x%02h for phase %0d",
+                      sine_code_o, chk_code_now, phase_q);
     end
   end
 `endif

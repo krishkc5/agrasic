@@ -131,10 +131,11 @@ set_input_delay -clock clk -min 0.5 [get_ports afe_adc_comp_i]
 #   afe_sample_o    one strobe per phase point, freezes BOTH channels
 # <<PLACEHOLDER>> 1.7 ns of every clk cycle is left to the AFE side (routing to
 # the macro + its input stage) until analog characterises its inputs (GAP-2).
-# It was 2.0; 1.7 is what the current implementation meets: afe_sine_code_o is
-# combinational from the measurement FSM and arrives at 4.291 ns in view_wc,
-# against 6.25 - 1.7 - 0.25 (uncertainty) = 4.30 ns. That is 9 ps of slack, so
-# any logic added in front of afe_sine_code_o will fail here first.
+# It was 2.0. It came down to 1.7 while afe_sine_code_o was decoded from the
+# measurement FSM (4.29 to 4.45 ns in view_wc against 6.25 - 1.7 - 0.25 =
+# 4.30 ns, varying from route to route). afe_sine_code_o and afe_adc_dac_o
+# now come straight from flops, so their paths are clock tree, clk-to-Q and
+# routing to the port.
 # asic-top's design/chip_afe.sdc AFE_IN_BUDGET must equal this value.
 set_output_delay -clock clk 1.7 [get_ports {afe_sine_code_o[*] afe_adc_dac_o[*]}]
 set_output_delay -clock clk 1.7 [get_ports {afe_adc_enable_o afe_sample_o afe_conv_start_o}]

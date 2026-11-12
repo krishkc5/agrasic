@@ -512,7 +512,7 @@ off-chip in a test configuration.
 
 | Signal | Dir | Meaning |
 |---|---|---|
-| `afe_sine_code_o[7:0]` | out | Sine DAC code, offset binary, mid-code 128 = VCM (0.9 V). 16-point cosine, one code per phase state. |
+| `afe_sine_code_o[7:0]` | out | Sine DAC code, offset binary, mid-code 128 = VCM (0.9 V). 16-point cosine, one code per phase state. Registered and glitch-free: changes only on a phase step, or one cycle after the excitation is enabled, disabled or its amplitude changes. |
 | `afe_mux_sel_o[1:0]` | out | Analog mux: 0 = dV (differential PGA on E2/E3), 1 = return current (TIA on E4). Stable for the whole conversion. |
 | `afe_sample_o` | out | Track-and-hold strobe. Fires ONCE per phase point and freezes **both** channels' S/H simultaneously. |
 | `afe_adc_enable_o` | out | High for the duration of each conversion (comparator bias/power gate). |

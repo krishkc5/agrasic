@@ -720,7 +720,7 @@ def measurement_fsm_rev5_states():
     c.box(300, 2500, 4500, 400, "Four accumulators, eight conversions per accumulation pair", [
         "dv_i  = sum( dV(0deg) - dV(180deg) )            cur_i = sum( I(0deg) - I(180deg) )",
         "dv_q  = sum( dV(90deg) - dV(270deg) )           cur_q = sum( I(90deg) - I(270deg) )",
-        "Z(f) = (dv_i + j dv_q) / (cur_i + j cur_q)          <-  computed HOST-side, never on die"],
+        "Z(f) = (dv_i - j dv_q) / (cur_i - j cur_q) x R_T / A_V   <-  computed HOST-side, never on die"],
         fill=INK, head_size=26, line_size=21, lead=42)
     c.note(2970, "point_q walks PT_0 -> PT_180 -> PT_90 -> PT_270; 4 phase points x 2 channels "
                  "= 8 conversions per accumulation pair.")

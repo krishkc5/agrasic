@@ -555,7 +555,21 @@ taken when `busy` falls):
     dv_i  = sum( dV(0deg)  - dV(180deg) )      cur_i = sum( I(0deg)  - I(180deg) )
     dv_q  = sum( dV(90deg) - dV(270deg) )      cur_q = sum( I(90deg) - I(270deg) )
 
-Impedance is computed off-die: Z(f) = (dv_i + j*dv_q) / (cur_i + j*cur_q).
+Impedance is computed off-die:
+
+    Z(f) = (dv_i - j*dv_q) / (cur_i - j*cur_q) * R_T / A_V
+
+The minus signs follow from the excitation being a cosine and Q being
+D(90deg) - D(270deg): for a channel reading |H| cos(wt + phi), I is
+2|H| cos(phi) and Q is -2|H| sin(phi), so its phasor is proportional to
+I - jQ. Writing I + jQ instead returns the complex conjugate, which turns a
+capacitive soil into an inductive one. The converter scale and the pair
+count cancel between the channels; A_V (voltage-path gain) and R_T (the
+selected transimpedance) do not, nor does either path's phase at the sweep
+frequency, which is de-embedded with them. Both paths are non-inverting in
+the 2026-11-20 AFE model: a current into E4 raises the current channel's
+code. `tb/tb_agriasic_asic_top.sv` checks this formula end to end against a
+known load.
 
 **Simultaneous sample-and-hold is confirmed, not an assumption.** This
 paragraph previously listed it as an open analog decision. The ADC progress

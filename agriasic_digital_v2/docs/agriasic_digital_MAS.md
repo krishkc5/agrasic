@@ -1830,8 +1830,12 @@ two channels = **eight conversions**, feeding four accumulators:
    dv_i  = Σ( dV(0°)  − dV(180°) )        cur_i = Σ( I(0°)  − I(180°) )
    dv_q  = Σ( dV(90°) − dV(270°) )        cur_q = Σ( I(90°) − I(270°) )
 
-   Z(f) = (dv_i + j·dv_q) / (cur_i + j·cur_q)     ← computed HOST-side
+   Z(f) = (dv_i − j·dv_q) / (cur_i − j·cur_q) · R_T / A_V     ← computed HOST-side
 ```
+
+The minus signs are not a typo: with a cosine excitation and Q = D(90°) −
+D(270°), each channel's phasor is I − jQ, and I + jQ would give the complex
+conjugate of Z. See `docs/interface_contract.md`.
 
 #### State machine
 

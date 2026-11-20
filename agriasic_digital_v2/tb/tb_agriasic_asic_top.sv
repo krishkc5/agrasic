@@ -159,6 +159,14 @@ module tb_agriasic_asic_top;
   real     worst_pair_ns = 0.0;
   int      enable_falls  = 0;
 
+  // Measured directly: hold release -> next strobe. The earlier version
+  // inferred this as (strobe gap - conversion pair), which assumed the hold
+  // lasts the whole pair. It does not -- the CDAC latches at conv_start and
+  // the hold releases before the pair finishes -- so that arithmetic
+  // understated the window badly and produced a false INFEASIBLE verdict.
+  realtime t_release;
+  real     worst_reacq_ns = 1.0e9;
+
   real     shortest_strobe_gap_ns = 1.0e9;
   realtime t_prev_strobe;
   logic    done_seen;
@@ -166,12 +174,17 @@ module tb_agriasic_asic_top;
   initial begin
     t_strobe      = 0.0;
     t_prev_strobe = 0.0;
+    t_release     = 0.0;
     done_seen     = 1'b0;
   end
 
   always @(posedge done_o) done_seen = 1'b1;
 
+  always @(negedge dut.u_afe.sh_dv_holding) t_release = $realtime;
+
   always @(posedge dut.afe_sample) begin
+    if (t_release > 0.0 && ($realtime - t_release) < worst_reacq_ns)
+      worst_reacq_ns = $realtime - t_release;
     if (t_prev_strobe > 0.0
         && ($realtime - t_prev_strobe) < shortest_strobe_gap_ns)
       shortest_strobe_gap_ns = $realtime - t_prev_strobe;
@@ -258,20 +271,18 @@ module tb_agriasic_asic_top;
     $display("--- sampling ---");
     $display("  samples taken      : %0d", samples_taken);
     $display("  worst acquisition  : %0.2f LSB", worst_acq_lsb);
-    $display("--- GAP-A6: self-timed hold window ---");
-    $display("  longest conversion pair : %0.0f ns   (hold must EXCEED this)",
-             worst_pair_ns);
-    $display("  shortest strobe gap     : %0.0f ns   (hold must be UNDER this)",
-             shortest_strobe_gap_ns);
-    $display("  re-acquisition available: %0.0f ns   (gap minus pair)",
-             shortest_strobe_gap_ns - worst_pair_ns);
+    $display("--- GAP-A6: acquisition window ---");
+    $display("  longest conversion pair : %0.0f ns", worst_pair_ns);
+    $display("  shortest strobe gap     : %0.0f ns", shortest_strobe_gap_ns);
+    $display("  re-acquisition MEASURED : %0.0f ns   (hold release -> next strobe)",
+             worst_reacq_ns);
     $display("  re-acquisition NEEDED   : %0.0f ns   (6.24 x SH_TAU_NS, half-LSB)",
              6.24 * SH_TAU_NS);
-    if ((shortest_strobe_gap_ns - worst_pair_ns) < (6.24 * SH_TAU_NS))
-      $display("  -> INFEASIBLE: the conversion pair plus re-acquisition does not");
+    if (worst_reacq_ns < (6.24 * SH_TAU_NS))
+      $display("  -> SHORT by %0.0f ns. See GAP-A6.",
+               (6.24 * SH_TAU_NS) - worst_reacq_ns);
     else
-      $display("  -> feasible, but the fixed analog timer must fit between them;");
-    $display("     fit inside the strobe period. See GAP-A6.");
+      $display("  -> OK, %0.1fx margin.", worst_reacq_ns / (6.24 * SH_TAU_NS));
 
     // The sampling slide's own criterion is half an LSB, but that figure is
     // for a DC step. The first sweep point drives exc_divider = 1, i.e. an

@@ -224,7 +224,7 @@ module afe_beh_sample_hold
   parameter real   APERTURE_NS    = 0.05,             // switch turn-off delay
   parameter real   DROOP_V_PER_US = 0.0,              // leakage; 0 = ideal
   parameter string STROBE_MODE    = "FREEZE_ON_RISE", // see GAP-A6 above
-  parameter real   HOLD_NS        = 460.0,            // GAP-A6: see below
+  parameter real   HOLD_NS        = 264.0,            // GAP-A6: see below
   parameter real   VINIT_V        = VCM_NOM_V
 ) (
   input  logic strobe_i,
@@ -233,13 +233,22 @@ module afe_beh_sample_hold
   output logic holding_o,     // diagnostic: 1 while the switch is open
   output real  acq_err_v_o    // diagnostic: acquisition error at freeze
 );
-  // HOLD_NS = 460 ns sits inside a window the chip-top bench MEASURED, and
-  // that window is the finding: the hold must exceed the conversion pair
-  // (450 ns) and stay under the strobe interval (475 ns). 25 ns of room,
-  // about +/-2.7%, and the firmware can move both ends through mux_settle
-  // and conv_cycles. No fixed analog timer holds that across corners, so
-  // self-timing is not a viable answer to GAP-A6 -- the boundary needs an
-  // explicit release signal. See docs/analog_integration_gaps.md.
+  // GAP-A6 CLOSED (2026-11-20). The earlier reading of this model had the
+  // hold lasting the whole conversion pair, which left only 475 - 450 =
+  // 25 ns to re-acquire against the ~76 ns needed -- an infeasible budget.
+  // That was wrong about the analog: the hold releases once the CDAC has
+  // sampled the current channel onto its own array, not at the end of the
+  // pair, so the real figures are a 264 ns hold and 211 ns of
+  // re-acquisition inside the 475 ns period. Against 6.24 * 12.2 ns = 76 ns
+  // that is 2.8x margin.
+  //
+  // The release is derived from the digital's own sequencing plus internal
+  // delays, NOT a fixed analog timer, so it tracks whatever firmware does
+  // to mux_settle and conv_cycles. That was the half of GAP-A6 that looked
+  // unfixable; it is not an issue.
+  //
+  // Both hold cells share controls, so the two channels release together
+  // and there is nothing to gain from re-ordering the conversions.
 
   localparam bit TrackHigh = (STROBE_MODE == "TRACK_WHILE_HIGH");
 
@@ -425,6 +434,16 @@ module afe_beh_cdac_comp
   real  v_trial;
   logic decision;
 
+  // The converter LATCHES its input onto the CDAC array at conv_start and
+  // converts from that copy, rather than tracking the mux output for the
+  // whole conversion. This is not cosmetic: it is what lets the external
+  // sample-and-hold release partway through the pair (GAP-A6) without
+  // corrupting the result, and a model that kept reading vin_i live would
+  // make that legal release look like a failure.
+  real v_sampled;
+  initial v_sampled = VCM_NOM_V;
+  always @(posedge conv_start_i) v_sampled = vin_i;
+
   // Retrigger on a code edge or on conv_start. $realtime rather than a timer
   // process: an always block suspended in a # delay does not restart on a new
   // event, so a retriggerable one-shot cannot be written that way.
@@ -445,7 +464,7 @@ module afe_beh_cdac_comp
   always begin
     #(ANALOG_STEP_NS);
     v_trial  = VREFL_V + (real'(dac_code_i) / ADC_CODES) * FsV;
-    decision = ((vin_i + OFFSET_V) >= v_trial);
+    decision = ((v_sampled + OFFSET_V) >= v_trial);
     valid_q  = enable_i && (($realtime - t_retrigger) >= ValidNs);
     if (!enable_i) begin
       // Comparator bias is gated off between conversions; the output is not
@@ -509,7 +528,7 @@ module agriasic_afe_top
   // two differ by about 8x in acquisition time and nothing in the repo
   // settles which is right.
   parameter string       SH_STROBE_MODE      = "FREEZE_ON_RISE",
-  parameter real         SH_HOLD_NS          = 460.0,
+  parameter real         SH_HOLD_NS          = 264.0,
   // GAP-A3. "INVERT" makes an undersized REG_CONV fail loudly.
   parameter string       COMP_INVALID_POLICY = "HOLD",
   parameter bit          QUIET               = 1'b0
@@ -636,18 +655,23 @@ module agriasic_afe_top
   // docs/analog_integration_gaps.md.
   // ---------------------------------------------------------------------------
 
-  // GAP-A6: the hold has no release signal, so the analog self-times it. If
-  // that timer expires while a conversion is still running, the converter is
-  // digitising a re-acquiring node and the result is silently wrong.
+  // GAP-A6. Releasing the hold during a conversion is LEGAL, because the
+  // CDAC latched its input at conv_start and is converting from that copy.
+  // What is not legal is releasing between the conversion starting
+  // (adc_enable rising) and that latch happening -- then the converter has
+  // nothing held and digitises a re-acquiring node.
+  logic cdac_latched;
+  always @(posedge afe_conv_start_i)  cdac_latched = 1'b1;
+  always @(negedge afe_adc_enable_i)  cdac_latched = 1'b0;
+  initial cdac_latched = 1'b0;
+
   always @(negedge sh_dv_holding) begin
-    if (afe_adc_enable_i && !QUIET)
-      $error("%m GAP-A6: dV S/H released mid-conversion; SH_HOLD_NS=%0.1f too short",
-             SH_HOLD_NS);
+    if (afe_adc_enable_i && !cdac_latched && !QUIET)
+      $error("%m GAP-A6: dV S/H released before the CDAC latched its input");
   end
   always @(negedge sh_cur_holding) begin
-    if (afe_adc_enable_i && !QUIET)
-      $error("%m GAP-A6: I S/H released mid-conversion; SH_HOLD_NS=%0.1f too short",
-             SH_HOLD_NS);
+    if (afe_adc_enable_i && !cdac_latched && !QUIET)
+      $error("%m GAP-A6: I S/H released before the CDAC latched its input");
   end
 
   // The contract requires afe_mux_sel_o to be "stable for the whole

@@ -1,20 +1,30 @@
 // -----------------------------------------------------------------------------
 // Chip-top testbench: firmware, digital and the analog front-end macro all in
-// the loop. The electrodes are driven by a soil model that responds to the
-// chip's OWN excitation output, so for the first time the conversion result
-// depends on analog behaviour rather than on a lookup keyed to FSM state.
+// the loop, driving a tetrapolar electrode load that responds to the chip's
+// OWN excitation output.
 //
-// WHAT THIS CHECKS, AND WHAT IT DELIBERATELY DOES NOT.
-// It checks that the chip boots, sequences measurements, and converts a real
-// analog response without tripping any of the macro's integration checks,
-// and it reports the sampling accuracy in LSBs.
+// WHAT THIS CHECKS
+//   * the chip boots, sequences measurements and converts a real analog
+//     response;
+//   * every SAR result equals the code the AFE model's comparator input
+//     implies (the comparator timing works with sar_controller);
+//   * the held voltage and current survive until each is converted;
+//   * no conversion lands on code 0 or 255 (the load is sized to stay in
+//     range, so a clipped code means something upstream is wrong);
+//   * END TO END: the impedance the chip reports, dV / I from its own I/Q
+//     accumulators, matches the impedance of the inner soil segment, at the
+//     first PointsChecked sweep points.
 //
-// It does NOT check exact I/Q values. Those would require reimplementing the
-// demodulation here, and the numbers would only be as trustworthy as the
-// placeholder analog constants they came from (see
-// docs/analog_integration_gaps.md). tb_agriasic_rv32i_e2e.sv remains the
-// bench that checks exact accumulator arithmetic, using a fixed-code ADC
-// model -- the two are complementary and neither replaces the other.
+// The impedance check folds in the AFE model's own fitted amplifier response
+// (one voltage-path pole, two equal current-path poles) because the real
+// system de-embeds exactly that off die. What remains is quantisation,
+// sampling of the 16-step excitation and the model's arithmetic, so the
+// tolerance below is for gross breakage, not a precision claim. The model is
+// the 2026-11-20 analog handoff: see rtl/analog/README.md for what it does
+// and does not represent.
+//
+// tb_agriasic_rv32i_e2e.sv remains the bench that checks exact accumulator
+// arithmetic, using a fixed-code ADC model.
 //
 // Needs --timing: the AFE boundary has no clock.
 // -----------------------------------------------------------------------------
@@ -23,8 +33,13 @@
 module tb_agriasic_asic_top;
   import agriasic_afe_pkg::*;
 
-  localparam real ClkNs = 6.25;    // 160 MHz
+  localparam real ClkNs     = 6.25;    // 160 MHz
   localparam int  TimeoutUs = 500;
+  // Sweep points checked: 10 MHz, 1 MHz and 312.5 kHz. Each lower point
+  // costs roughly 3x the simulated time of the one above it.
+  localparam int  PointsChecked = 3;
+  localparam real ZMagTol       = 0.10;  // fraction
+  localparam real ZPhaseTolDeg  = 10.0;
 
   logic clk = 1'b0;
   logic rst_n;
@@ -33,47 +48,53 @@ module tb_agriasic_asic_top;
   always #(ClkNs / 2.0) clk = ~clk;
 
   // ---------------------------------------------------------------------------
-  // Soil model. A parallel RC between the drive electrode and ground: the
-  // voltage sensed across the inner electrode pair is in phase with the
-  // drive, the return current leads it. That phase split is the whole point
-  // of the tetrapolar measurement, so a purely resistive model would not
-  // exercise the I/Q accumulation meaningfully.
+  // Electrode load, wired the way the tetrapolar probe is:
   //
-  // These values are illustrative. Real soil response is outside anything
-  // this tree models.
+  //   E1 --Rc-- [seg] --E2-- [seg] --E3-- [seg] --Rc-- E4 (TIA input, at VCM)
+  //
+  // Each soil segment is SoilSegOhm in parallel with SoilSegF; the contacts
+  // are resistive. One current flows through the whole chain, and dV is taken
+  // across the middle segment only, so the impedance the chip should report
+  // is exactly one segment's, whatever the contacts do -- which is the point
+  // of measuring with four electrodes.
+  //
+  // Sized for the AFE model's full scales at the firmware's settings (TIA
+  // code 001, full excitation amplitude): the current peaks near 210 uA at
+  // 10 MHz against +/-305 uA full scale, and dV at the converter stays within
+  // about 60 codes of mid-scale. Illustrative values, not a soil
+  // characterisation.
   // ---------------------------------------------------------------------------
-  localparam real SoilROhm   = 50.0e3;
-  localparam real SoilCFarad = 2.0e-9;
-  localparam real SenseFrac  = 0.05;    // dV across the inner pair / drive
+  localparam real ContactOhm = 1.0e3;
+  localparam real SoilSegOhm = 330.0;
+  localparam real SoilSegF   = 150.0e-12;
 
   real e1_drive;                        // from the chip
   real e2_sense, e3_sense, e4_iin;
   real vin_t = 0.90;
 
-  real v_drive_q, v_drive_prev, i_cap, i_res;
+  // All three segments carry the same current, so they share one state: the
+  // voltage across each. With v_d the drive about VCM,
+  //   i = (v_d - 3 v_seg) / (2 Rc),   C dv_seg/dt = i - v_seg / R,
+  // stepped exactly for an input held over the step.
+  real v_seg = 0.0;
+  real v_d, v_inf;
+  localparam real SegRate =
+      (3.0 / (2.0 * ContactOhm) + 1.0 / SoilSegOhm) / SoilSegF;   // 1/s
 
   initial begin
-    v_drive_prev = VCM_NOM_V;
-    e2_sense     = VCM_NOM_V;
-    e3_sense     = VCM_NOM_V;
-    e4_iin       = 0.0;
+    e2_sense = VCM_NOM_V;
+    e3_sense = VCM_NOM_V;
+    e4_iin   = 0.0;
   end
 
   always begin
     #(ANALOG_STEP_NS);
-    v_drive_q = e1_drive - VCM_NOM_V;             // excitation about VCM
-
-    // i = v/R + C dv/dt, differentiated on the model timestep (ns -> s).
-    i_res  = v_drive_q / SoilROhm;
-    i_cap  = SoilCFarad * (v_drive_q - (v_drive_prev - VCM_NOM_V))
-           / (ANALOG_STEP_NS * 1.0e-9);
-    e4_iin = i_res + i_cap;
-
-    // Differential sense across the inner electrode pair, in phase.
-    e2_sense = VCM_NOM_V + 0.5 * SenseFrac * v_drive_q;
-    e3_sense = VCM_NOM_V - 0.5 * SenseFrac * v_drive_q;
-
-    v_drive_prev = e1_drive;
+    v_d   = e1_drive - VCM_NOM_V;
+    v_inf = (v_d / (2.0 * ContactOhm)) / (3.0 / (2.0 * ContactOhm) + 1.0 / SoilSegOhm);
+    v_seg = v_inf + (v_seg - v_inf) * $exp(-SegRate * ANALOG_STEP_NS * 1.0e-9);
+    e4_iin   = (v_d - 3.0 * v_seg) / (2.0 * ContactOhm);   // amperes, into E4
+    e2_sense = e1_drive - e4_iin * ContactOhm - v_seg;
+    e3_sense = e2_sense - v_seg;
   end
 
   // ---------------------------------------------------------------------------
@@ -130,63 +151,79 @@ module tb_agriasic_asic_top;
   );
 
   // ---------------------------------------------------------------------------
-  // Sampling accuracy, accumulated across the run. The macro reports each
-  // freeze; this keeps the worst case so the run ends with one number.
+  // Converter checks, against the AFE model's own sampler
+  // (dut.u_afe.chain.sense): what it held at each strobe, what it handed the
+  // comparator at each capture, and what the SAR returned.
   // ---------------------------------------------------------------------------
-  real worst_acq_lsb = 0.0;
-  int  samples_taken = 0;
+  int  samples_taken = 0, captures = 0, conversions = 0;
+  int  hold_lost = 0, code_mismatch = 0, clipped = 0;
+  real strobe_v, strobe_i, cap_v;
+  logic [1:0] cap_sel;
 
-  function automatic real abs_lsb(input real err_v);
-    return (err_v < 0.0) ? (-err_v / ADC_LSB_V) : (err_v / ADC_LSB_V);
-  endfunction
+  always @(posedge dut.u_afe.chain.sense.holding) samples_taken++;
 
-  always @(posedge dut.u_afe.sh_dv_holding) begin
-    samples_taken++;
-    if (abs_lsb(dut.u_afe.acq_err_dv) > worst_acq_lsb)
-      worst_acq_lsb = abs_lsb(dut.u_afe.acq_err_dv);
-    if (abs_lsb(dut.u_afe.acq_err_cur) > worst_acq_lsb)
-      worst_acq_lsb = abs_lsb(dut.u_afe.acq_err_cur);
+  always @(posedge dut.afe_sample) begin
+    #0.001;                             // after the model's capture, same step
+    strobe_v = dut.u_afe.chain.sense.held_v;
+    strobe_i = dut.u_afe.chain.sense.held_i;
+  end
+
+  always @(posedge dut.u_afe.chain.sense.armed) begin
+    captures++;
+    cap_v   = dut.u_afe.chain.sense.adc_v;
+    cap_sel = dut.u_afe.chain.sense.selected;
+    if ((cap_sel == 2'd0 && cap_v != strobe_v) || (cap_sel == 2'd1 && cap_v != strobe_i)) begin
+      hold_lost++;
+      if (hold_lost <= 3)
+        $display("HOLD_LOST: channel %0d captured %0.4f V, held %0.4f V at the strobe",
+                 cap_sel, cap_v, (cap_sel == 2'd0) ? strobe_v : strobe_i);
+    end
+  end
+
+  always @(posedge clk) begin
+    if (dut.u_digital.u_measurement_top.u_sar_controller.sample_done_o) begin
+      int  ideal, got;
+      real x;
+      conversions++;
+      // Comparator: 1 = input >= VREFL + code * LSB, so the binary search
+      // converges on floor((v - VREFL) / LSB), clamped to the code range.
+      x     = (cap_v - VREFL_NOM_V) / ADC_LSB_V;
+      ideal = (x < 0.0) ? 0 : ((x >= 255.0) ? 255 : int'($floor(x)));
+      got   = int'(dut.u_digital.u_measurement_top.u_sar_controller.code_o);
+      if (got == 0 || got == 255) clipped++;
+      if (got != ideal) begin
+        code_mismatch++;
+        if (code_mismatch <= 5)
+          $display("CODE_MISMATCH: channel %0d input %0.4f V -> expected %0d, SAR %0d",
+                   cap_sel, cap_v, ideal, got);
+      end
+    end
   end
 
   // ---------------------------------------------------------------------------
-  // GAP-A6, second half: how long must the self-timed hold actually last?
-  // There is no release signal on the boundary, so the analog needs a fixed
-  // timer that outlasts a whole conversion PAIR -- strobe, dV conversion,
-  // current conversion. Measured here rather than estimated, because the
-  // window depends on the mux_settle and conv_cycles the firmware programs.
+  // Acquisition window (GAP-A6, closed): hold release -> next strobe, and the
+  // strobe spacing. Reported for comparison with the analog S/H
+  // characterisation; this AFE model tracks ideally, so it cannot itself say
+  // whether the window is long enough (GAP-A2).
   // ---------------------------------------------------------------------------
-  realtime t_strobe;
+  realtime t_strobe, t_release, t_prev_strobe;
   real     worst_pair_ns = 0.0;
-  int      enable_falls  = 0;
-
-  // Measured directly: hold release -> next strobe. The earlier version
-  // inferred this as (strobe gap - conversion pair), which assumed the hold
-  // lasts the whole pair. It does not -- the CDAC latches at conv_start and
-  // the hold releases before the pair finishes -- so that arithmetic
-  // understated the window badly and produced a false INFEASIBLE verdict.
-  realtime t_release;
   real     worst_reacq_ns = 1.0e9;
-
   real     shortest_strobe_gap_ns = 1.0e9;
-  realtime t_prev_strobe;
-  logic    done_seen;
+  int      enable_falls = 0;
 
   initial begin
     t_strobe      = 0.0;
     t_prev_strobe = 0.0;
     t_release     = 0.0;
-    done_seen     = 1'b0;
   end
 
-  always @(posedge done_o) done_seen = 1'b1;
-
-  always @(negedge dut.u_afe.sh_dv_holding) t_release = $realtime;
+  always @(negedge dut.u_afe.chain.sense.holding) t_release = $realtime;
 
   always @(posedge dut.afe_sample) begin
     if (t_release > 0.0 && ($realtime - t_release) < worst_reacq_ns)
       worst_reacq_ns = $realtime - t_release;
-    if (t_prev_strobe > 0.0
-        && ($realtime - t_prev_strobe) < shortest_strobe_gap_ns)
+    if (t_prev_strobe > 0.0 && ($realtime - t_prev_strobe) < shortest_strobe_gap_ns)
       shortest_strobe_gap_ns = $realtime - t_prev_strobe;
     t_prev_strobe = $realtime;
     t_strobe      = $realtime;
@@ -197,12 +234,82 @@ module tb_agriasic_asic_top;
     if (t_strobe > 0.0) begin
       enable_falls++;
       // Second falling edge = both conversions of the pair are done.
-      if (enable_falls == 2) begin
-        if (($realtime - t_strobe) > worst_pair_ns)
-          worst_pair_ns = $realtime - t_strobe;
-      end
+      if (enable_falls == 2 && ($realtime - t_strobe) > worst_pair_ns)
+        worst_pair_ns = $realtime - t_strobe;
     end
   end
+
+  // ---------------------------------------------------------------------------
+  // End-to-end impedance
+  //
+  // Per pair the accumulators hold I = D(0) - D(180) and Q = D(90) - D(270),
+  // so a channel's phasor is proportional to I - jQ. The converter scale and
+  // pair count cancel between the two channels, leaving
+  //   Z = (dv_i - j dv_q) / (cur_i - j cur_q) * R_T / A_V,
+  // with A_V and R_T the AFE model's fitted gains. Both paths are
+  // non-inverting in this model. Its fitted poles make the reading
+  //   Z_seg(f) * H_v(f) / H_i(f),  H_v = 1/(1 + jwTv),  H_i = 1/(1 + jwTi)^2,
+  // which is what the expected value below includes.
+  // ---------------------------------------------------------------------------
+  localparam real Pi = 3.14159265358979;
+
+  function automatic real phase_deg(input real re, input real im);
+    return $atan2(im, re) * 180.0 / Pi;
+  endfunction
+
+  int z_fail = 0;
+
+  task automatic check_impedance(input int n_div);
+    real f, w, wrc, zr, zi, a, b, er, ei, t, mr, mi, nr, ni, d, rt, tt, av, tv;
+    real mag_err, ph_err;
+    // Current-path gain and pole for the TIA code the firmware selected.
+    case (dut.afe_tia_rf)
+      3'b001:  begin rt = dut.u_afe.chain.TIA_G0; tt = dut.u_afe.chain.TIA_T0; end
+      3'b010:  begin rt = dut.u_afe.chain.TIA_G1; tt = dut.u_afe.chain.TIA_T1; end
+      3'b100:  begin rt = dut.u_afe.chain.TIA_G2; tt = dut.u_afe.chain.TIA_T2; end
+      default: begin rt = dut.u_afe.chain.TIA_G3; tt = dut.u_afe.chain.TIA_T3; end
+    endcase
+    av = dut.u_afe.chain.PGA_GAIN;
+    tv = dut.u_afe.chain.PGA_TAU_NS;
+
+    f   = 1.0e9 / (ClkNs * 16.0 * real'(n_div));
+    w   = 2.0 * Pi * f;
+    // Z_seg = R / (1 + jwRC)
+    wrc = w * SoilSegOhm * SoilSegF;
+    zr  = SoilSegOhm / (1.0 + wrc * wrc);
+    zi  = -SoilSegOhm * wrc / (1.0 + wrc * wrc);
+    // times (1 + jwTi)^2 / (1 + jwTv)
+    t   = w * tt * 1.0e-9;
+    a   = 1.0 - t * t;  b = 2.0 * t;                  // (1 + jt)^2
+    er  = zr * a - zi * b;  ei = zr * b + zi * a;
+    t   = w * tv * 1.0e-9;
+    d   = 1.0 + t * t;
+    zr  = (er + ei * t) / d;  zi = (ei - er * t) / d;  // / (1 + jt)
+
+    // Measured: (dv_i - j dv_q) / (cur_i - j cur_q) * R_T / A_V
+    nr = real'(res_dv_i);   ni = -real'(res_dv_q);
+    d  = real'(res_cur_i) * real'(res_cur_i) + real'(res_cur_q) * real'(res_cur_q);
+    if (d == 0.0) begin
+      z_fail++;
+      $display("FAIL: N=%0d current accumulators are zero", n_div);
+      return;
+    end
+    mr = (nr * real'(res_cur_i) + ni * (-real'(res_cur_q))) / d;
+    mi = (ni * real'(res_cur_i) - nr * (-real'(res_cur_q))) / d;
+    mr = mr * rt / av;  mi = mi * rt / av;
+
+    mag_err = $sqrt(mr * mr + mi * mi) / $sqrt(zr * zr + zi * zi) - 1.0;
+    ph_err  = phase_deg(mr, mi) - phase_deg(zr, zi);
+    if (ph_err > 180.0)  ph_err -= 360.0;
+    if (ph_err < -180.0) ph_err += 360.0;
+
+    $display("  N=%0d, %0.1f kHz: |Z| %0.1f ohm (expected %0.1f, error %0.1f %%), phase %0.2f deg (expected %0.2f, error %0.2f deg)",
+             n_div, f / 1.0e3, $sqrt(mr * mr + mi * mi), $sqrt(zr * zr + zi * zi),
+             100.0 * mag_err, phase_deg(mr, mi), phase_deg(zr, zi), ph_err);
+    if (mag_err > ZMagTol || mag_err < -ZMagTol
+        || ph_err > ZPhaseTolDeg || ph_err < -ZPhaseTolDeg)
+      z_fail++;
+  endtask
 
   // ---------------------------------------------------------------------------
   // Stimulus
@@ -217,6 +324,10 @@ module tb_agriasic_asic_top;
       $display("ok  : %s", what);
     end
   endtask
+
+  int measurements = 0;
+  int points_seen  = 0;
+  int last_div     = -1;
 
   initial begin
     // Reset sequence copied from tb_agriasic_rv32i_e2e.sv, and it is NOT
@@ -241,71 +352,52 @@ module tb_agriasic_asic_top;
     $display("[TB] releasing start, firmware begins");
     start_i = 1'b1;
 
-    // Scoped to the FIRST measurement, not the whole sweep. The firmware's
-    // 3-point sweep runs up to 8,000,000 cycles because the 1 kHz point's
-    // settle alone is 320,000 -- 50 ms of wall-clock analog stepping, which
-    // this bench has no reason to pay. tb_agriasic_rv32i_e2e.sv covers the
-    // full sweep with a digital ADC model; what is being proved here is that
-    // a real analog response converts correctly at all.
+    // Every measurement of the first PointsChecked sweep points, checked as
+    // it completes. The lower points are left to tb_agriasic_rv32i_e2e.sv:
+    // the 1 kHz point alone settles for 320,000 cycles.
+    $display("--- end-to-end impedance, per measurement ---");
     fork
       begin
-        wait (done_o === 1'b1);
-        $display("[TB] first measurement completed");
+        forever begin
+          @(posedge done_o);
+          @(posedge clk);                   // shadow registers copied
+          @(posedge clk);                   // (no repeat: Verilator LIFETIME inside fork)
+          if (int'(cfg_div) != last_div) begin
+            if (points_seen == PointsChecked) break;
+            points_seen++;
+            last_div = int'(cfg_div);
+          end
+          measurements++;
+          check_impedance(int'(cfg_div));
+        end
       end
       begin
         #(TimeoutUs * 1000.0);
         errs++;
-        $display("FAIL: timed out after %0d us waiting for the first measurement",
-                 TimeoutUs);
+        $display("FAIL: timed out after %0d us", TimeoutUs);
       end
     join_any
     disable fork;
 
-    repeat (10) @(posedge clk);
-
-    $display("--- results (first measurement) ---");
-    $display("  dv_i  = %0d", res_dv_i);
-    $display("  dv_q  = %0d", res_dv_q);
-    $display("  cur_i = %0d", res_cur_i);
-    $display("  cur_q = %0d", res_cur_q);
-    $display("--- sampling ---");
-    $display("  samples taken      : %0d", samples_taken);
-    $display("  worst acquisition  : %0.2f LSB", worst_acq_lsb);
-    $display("--- GAP-A6: acquisition window ---");
+    $display("--- converter ---");
+    $display("  strobes %0d, captures %0d, conversions %0d", samples_taken, captures, conversions);
+    $display("--- acquisition window (GAP-A6) ---");
     $display("  longest conversion pair : %0.0f ns", worst_pair_ns);
     $display("  shortest strobe gap     : %0.0f ns", shortest_strobe_gap_ns);
-    $display("  re-acquisition MEASURED : %0.0f ns   (hold release -> next strobe)",
+    $display("  hold release -> strobe  : %0.0f ns (model S/H tracks ideally; see GAP-A2)",
              worst_reacq_ns);
-    $display("  re-acquisition NEEDED   : %0.0f ns   (6.24 x SH_TAU_NS, half-LSB)",
-             6.24 * SH_TAU_NS);
-    if (worst_reacq_ns < (6.24 * SH_TAU_NS))
-      $display("  -> SHORT by %0.0f ns. See GAP-A6.",
-               (6.24 * SH_TAU_NS) - worst_reacq_ns);
-    else
-      $display("  -> OK, %0.1fx margin.", worst_reacq_ns / (6.24 * SH_TAU_NS));
 
-    // The sampling slide's own criterion is half an LSB, but that figure is
-    // for a DC step. The first sweep point drives exc_divider = 1, i.e. an
-    // excitation around 10 MHz, where the 7.2 ns S/H time constant is no
-    // longer negligible against the signal's slew rate and the tracking lag
-    // becomes the dominant error. Reported either way; the assertion uses a
-    // looser bound so it catches gross breakage rather than failing on a
-    // real and expected frequency effect. See GAP-A2.
-    if (samples_taken > 0) begin
-      $display("  half-LSB criterion : %s",
-               (worst_acq_lsb < 0.5) ? "met" : "NOT met (tracking lag, see GAP-A2)");
-    end
-
-    expect_true(done_seen,         "measurement completed");
-    expect_true(samples_taken > 0, "the AFE was strobed at least once");
-    // Guarded: with no samples this would otherwise pass vacuously.
-    expect_true(samples_taken > 0 && worst_acq_lsb < 2.0,
-                "acquisition error under 2 LSB");
-    // One accumulation pair is four phase points, so four strobes. That is a
-    // real liveness check on the analog path. The accumulator VALUES are
-    // printed but not asserted -- see this file's header for why exact I/Q
-    // is out of scope here.
-    expect_true(samples_taken >= 4, "at least one full accumulation pair sampled");
+    expect_true(measurements >= PointsChecked, $sformatf("%0d measurements completed over %0d sweep points",
+                                                         measurements, points_seen));
+    expect_true(conversions > 0 && code_mismatch == 0,
+                $sformatf("every SAR code equals the AFE model's ideal code (%0d mismatches)", code_mismatch));
+    expect_true(hold_lost == 0,
+                $sformatf("held V and I survive until their conversions (%0d lost)", hold_lost));
+    expect_true(clipped == 0,
+                $sformatf("no conversion at code 0 or 255 (%0d)", clipped));
+    expect_true(measurements > 0 && z_fail == 0,
+                $sformatf("reported impedance within %0.0f %% and %0.0f deg of the soil segment (%0d outside)",
+                          100.0 * ZMagTol, ZPhaseTolDeg, z_fail));
 
     if (errs == 0) $display("TB_ASIC_TOP: PASS");
     else           $display("TB_ASIC_TOP: FAIL (%0d)", errs);

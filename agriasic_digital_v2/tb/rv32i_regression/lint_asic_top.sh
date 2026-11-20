@@ -21,6 +21,6 @@ echo "=== ASIC chip top (digital + AFE behavioural macro) ==="
 verilator --lint-only --timing -Wno-fatal -Wno-TIMESCALEMOD \
   -DAGRIASIC_AFE_BEHAVIORAL \
   --top-module agriasic_asic_top \
-  $IBEX_ARGS agriasic_afe_pkg.sv agriasic_afe_top.sv agriasic_asic_top.sv $AGRIASIC_RV32I_SOURCES \
+  $IBEX_ARGS agriasic_afe_pkg.sv agriasic_afe_top.sv sh_adc_behavioral.sv agriasic_asic_top.sv $AGRIASIC_RV32I_SOURCES \
   2>&1 | grep -vE "^%Warning-(UNUSEDPARAM|UNUSEDSIGNAL|DECLFILENAME)" | grep -E "^%" | head -50
 echo "=== asic top lint done ==="

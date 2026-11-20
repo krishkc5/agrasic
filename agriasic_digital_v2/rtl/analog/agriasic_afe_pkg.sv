@@ -9,6 +9,20 @@
 // placeholder rather than a measurement it carries a GAP-A<n> tag that is
 // written up in docs/analog_integration_gaps.md. Replace placeholders from
 // the analog team's characterisation, not by guessing.
+//
+// WHAT STILL READS THIS (2026-11-20). The AFE model in agriasic_afe_top.sv is
+// now the analog team's full-chain handoff, which carries its own fitted
+// gains, poles and delays as module parameters and does not import this
+// package. Only the chip-top testbench does, for the supplies, references,
+// converter scale, bias and model step it drives the macro with -- and the
+// model checks those against its own nominal values at time zero.
+//
+// The sample-and-hold, voltage-path, current-path, excitation and converter-
+// timing sections below are the LAST CHARACTERISED numbers the previous
+// model was built on, kept as the record behind the GAP-A<n> entries. They do
+// not describe the model in simulation: its voltage gain is 4.81x and its
+// TIA codes 001/010/100/111 are 1637/12236/204999/1446 ohm, fitted at 10 MHz
+// to an earlier compensation experiment (rtl/analog/README.md).
 // -----------------------------------------------------------------------------
 `timescale 1ns / 1ps
 

@@ -8,6 +8,22 @@ Each live gap is reflected in the model: either a placeholder parameter whose
 value is a guess, or a check that fires. Fixing one means replacing a number
 or answering a question — not changing the model's structure.
 
+**2026-11-20: the model is now the analog team's full-chain handoff** (see
+`rtl/analog/README.md`). It changes how several entries below show up in
+simulation:
+
+- **A2** cannot appear: the new S/H tracks ideally, so the chip-top bench no
+  longer reports an acquisition error. The figures in A2 come from the
+  previous model.
+- **A4 / A8**: the handoff gives code `111` 1446 Ω and fits every current
+  setting with two equal poles, but at 10 MHz only and against an earlier
+  compensation experiment, not the restructured r59 path A8 asks for.
+- **A5** is unchanged: ±0.45 V and 2 ns are still placeholders in the new
+  model.
+- The previous model's live checks are gone. The chip-top bench now checks
+  converter results, hold integrity, clipping and end-to-end impedance
+  against the new model's sampler instead.
+
 The digital boundary itself is not in question. It is the eight signals of
 `docs/interface_contract.md`, "Analog front-end interface (Rev 5,
 tetrapolar)", and the model implements exactly those.

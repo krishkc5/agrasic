@@ -24,7 +24,7 @@ verilator --binary --timing --assert -Wno-fatal -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC
   --top-module tb_agriasic_asic_top \
   -o sim_asic_top \
   $IBEX_ARGS \
-  agriasic_afe_pkg.sv agriasic_afe_top.sv agriasic_asic_top.sv \
+  agriasic_afe_pkg.sv agriasic_afe_top.sv sh_adc_behavioral.sv agriasic_asic_top.sv \
   tb_agriasic_asic_top.sv $AGRIASIC_RV32I_SOURCES \
   2>&1 | grep -E "^%(Error|Warning)|error:" | grep -vE "UNUSED(PARAM|SIGNAL)|DECLFILENAME|UNOPTFLAT" | head -20 || true
 echo "=== running ==="
